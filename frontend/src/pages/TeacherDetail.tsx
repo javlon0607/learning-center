@@ -114,8 +114,16 @@ export function TeacherDetail() {
             <div className="flex items-center gap-3">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
               <div>
-                <span className="font-semibold">{formatCurrency(teacher.salary_amount)}</span>
-                <span className="text-muted-foreground ml-1">({teacher.salary_type})</span>
+                <span className="font-semibold">
+                  {teacher.salary_type === 'per_student'
+                    ? `${teacher.salary_amount}%`
+                    : formatCurrency(teacher.salary_amount)}
+                </span>
+                <span className="text-muted-foreground ml-1">
+                  {teacher.salary_type === 'per_student'
+                    ? 'per student'
+                    : `(${teacher.salary_type})`}
+                </span>
               </div>
             </div>
           </CardContent>

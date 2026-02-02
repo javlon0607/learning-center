@@ -70,13 +70,16 @@ export function Reports() {
     queryFn: () => auditLogApi.getList({ limit: '100' }),
   })
 
-  const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0)
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
-  const netProfit = totalPayments - totalExpenses
+  const totalPayments = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+  const netProfit = Number.isFinite(totalPayments) && Number.isFinite(totalExpenses)
+    ? totalPayments - totalExpenses
+    : 0
 
   // Group expenses by category for pie chart
   const expensesByCategory = expenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + e.amount
+    const amt = Number(e.amount) || 0
+    acc[e.category] = (acc[e.category] || 0) + amt
     return acc
   }, {} as Record<string, number>)
 
@@ -87,7 +90,8 @@ export function Reports() {
 
   // Group payments by method
   const paymentsByMethod = payments.reduce((acc, p) => {
-    acc[p.method] = (acc[p.method] || 0) + p.amount
+    const amt = Number(p.amount) || 0
+    acc[p.method] = (acc[p.method] || 0) + amt
     return acc
   }, {} as Record<string, number>)
 
@@ -134,7 +138,7 @@ export function Reports() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalPayments)}
+              {formatCurrency(Number.isFinite(totalPayments) ? totalPayments : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               {payments.length} payments
@@ -149,7 +153,7 @@ export function Reports() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(totalExpenses)}
+              {formatCurrency(Number.isFinite(totalExpenses) ? totalExpenses : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
               {expenses.length} expenses
@@ -168,10 +172,10 @@ export function Reports() {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(netProfit)}
+              {formatCurrency(Number.isFinite(netProfit) ? netProfit : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Margin: {totalPayments > 0 ? ((netProfit / totalPayments) * 100).toFixed(1) : 0}%
+              Margin: {Number(totalPayments) > 0 && Number.isFinite(netProfit) ? ((netProfit / totalPayments) * 100).toFixed(1) : 0}%
             </p>
           </CardContent>
         </Card>

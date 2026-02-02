@@ -53,13 +53,36 @@ function auth() {
         header('Location: /index.php');
         exit;
     }
+    // Re-check is_active so deactivated users are logged out on next request
+    $userId = $_SESSION['user']['id'] ?? null;
+    if ($userId) {
+        try {
+            $stmt = db()->prepare("SELECT is_active FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $row = $stmt->fetch();
+            if ($row && isset($row['is_active']) && ($row['is_active'] === false || $row['is_active'] === 'f' || $row['is_active'] === 0)) {
+                unset($_SESSION['user'], $_SESSION['last_activity']);
+                if (IS_API) {
+                    header('Content-Type: application/json');
+                    http_response_code(403);
+                    die(json_encode(['error' => 'Account is deactivated.', 'code' => 'ACCOUNT_DEACTIVATED']));
+                }
+                header('Location: /index.php');
+                exit;
+            }
+        } catch (Exception $e) { /* ignore */ }
+    }
 }
 
 function requireRole($allowed) {
     auth();
-    $role = $_SESSION['user']['role'] ?? 'user';
+    $roleStr = $_SESSION['user']['role'] ?? 'user';
+    $userRoles = array_map('trim', explode(',', $roleStr));
+    $userRoles = array_filter($userRoles);
+    if (empty($userRoles)) $userRoles = ['user'];
     $allowed = is_array($allowed) ? $allowed : [$allowed];
-    if (!in_array($role, $allowed)) {
+    $hasAny = count(array_intersect($userRoles, $allowed)) > 0;
+    if (!$hasAny) {
         if (IS_API) {
             header('Content-Type: application/json');
             http_response_code(403);
@@ -99,7 +122,11 @@ function initDB() {
         username VARCHAR(50) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         name VARCHAR(100),
-        role VARCHAR(20) DEFAULT 'user',
+        role VARCHAR(100) DEFAULT 'user',
+        email VARCHAR(100),
+        phone VARCHAR(20),
+        is_active BOOLEAN DEFAULT true,
+        last_login TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     
@@ -177,6 +204,24 @@ function initDB() {
     foreach(explode(';', $sql) as $query) {
         if (trim($query)) db()->exec($query);
     }
+
+    // Ensure users table has email, phone, is_active, last_login, teacher_id (for existing DBs)
+    $userColumns = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(100)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP",
+    ];
+    try {
+        db()->exec("ALTER TABLE users ADD COLUMN IF NOT EXISTS teacher_id INT");
+    } catch (PDOException $e) { /* ignore */ }
+    try {
+        db()->exec("ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(100)");
+    } catch (PDOException $e) { /* ignore */ }
+    foreach ($userColumns as $alter) {
+        try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }
+    }
+
     $additions = __DIR__ . '/schema_additions.sql';
     if (file_exists($additions)) {
         $addSql = file_get_contents($additions);

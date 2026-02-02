@@ -30,7 +30,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
 import { Plus, Search, Loader2 } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
 
 const categories = [
   { value: 'rent', label: 'Rent' },
@@ -48,6 +48,7 @@ export function Expenses() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [amount, setAmount] = useState<number>(0)
 
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expenses'],
@@ -76,9 +77,14 @@ export function Expenses() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    const amountValue = parseAmountFromInput((formData.get('amount') as string) ?? '')
+    if (amountValue <= 0) {
+      toast({ title: 'Enter a valid amount', variant: 'destructive' })
+      return
+    }
     const data = {
       category: formData.get('category') as string,
-      amount: Number(formData.get('amount')),
+      amount: amountValue,
       description: formData.get('description') as string,
       expense_date: formData.get('expense_date') as string,
     }
@@ -161,7 +167,7 @@ export function Expenses() {
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setAmount(0); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Expense</DialogTitle>
@@ -189,9 +195,11 @@ export function Expenses() {
                   <Input
                     id="amount"
                     name="amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={formatAmountForInput(amount)}
+                    onChange={(e) => setAmount(parseAmountFromInput(e.target.value))}
                     required
                   />
                 </div>

@@ -23,7 +23,11 @@ $path = preg_replace('#^api/?(index\.php/?)?#', '', $path);
 $segments = $path ? explode('/', $path) : [];
 $resource = $segments[0] ?? '';
 $id = isset($segments[1]) && ctype_digit($segments[1]) ? (int)$segments[1] : null;
+// sub: third segment, or second if it's not a numeric id (e.g. dashboard/stats, reports/payments)
 $sub = $segments[2] ?? '';
+if ($sub === '' && isset($segments[1]) && !ctype_digit($segments[1])) {
+    $sub = $segments[1];
+}
 
 $input = [];
 if (in_array($method, ['POST', 'PUT']) && strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
@@ -45,14 +49,18 @@ try {
     switch ($resource) {
         case 'login':
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
-            $stmt = db()->prepare("SELECT id, username, password, name, role FROM users WHERE username = ?");
+            $stmt = db()->prepare("SELECT id, username, password, name, role, is_active FROM users WHERE username = ?");
             $stmt->execute([$input['username'] ?? '']);
             $u = $stmt->fetch();
             if (!$u || !password_verify($input['password'] ?? '', $u['password'])) {
                 jsonError('Invalid credentials', 401);
                 break;
             }
-            unset($u['password']);
+            if (isset($u['is_active']) && ($u['is_active'] === false || $u['is_active'] === 'f' || $u['is_active'] === 0)) {
+                jsonError('Account is deactivated. Contact an administrator.', 403);
+                break;
+            }
+            unset($u['password'], $u['is_active']);
             $u['id'] = (int)$u['id'];
             $_SESSION['user'] = $u;
             $_SESSION['last_activity'] = time();
@@ -111,13 +119,34 @@ try {
                 $stmt = db()->query("SELECT * FROM teachers ORDER BY created_at DESC");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO teachers (first_name, last_name, phone, email, subjects, salary_type, salary_amount, status) VALUES (?,?,?,?,?,?,?,?)");
-                $stmt->execute([
-                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['subjects'] ?? '', $input['salary_type'] ?? 'fixed', $input['salary_amount'] ?? 0, $input['status'] ?? 'active'
-                ]);
-                activityLog('create', 'teacher', db()->lastInsertId());
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $userId = isset($input['user_id']) ? (int)$input['user_id'] : null;
+                if ($userId) {
+                    $u = db()->prepare("SELECT id, name FROM users WHERE id = ?");
+                    $u->execute([$userId]);
+                    $userRow = $u->fetch();
+                    if (!$userRow || !trim($userRow['name'] ?? '')) {
+                        jsonError('User not found or has no name', 400);
+                        break;
+                    }
+                    $fullName = trim($userRow['name']);
+                    $parts = preg_split('/\s+/', $fullName, 2);
+                    $firstName = $parts[0] ?? $fullName;
+                    $lastName = $parts[1] ?? '';
+                    $subjects = $input['subjects'] ?? '';
+                    $salaryType = $input['salary_type'] ?? 'fixed';
+                    $salaryAmount = (float)($input['salary_amount'] ?? 0);
+                    $status = $input['status'] ?? 'active';
+                    $stmt = db()->prepare("INSERT INTO teachers (first_name, last_name, phone, email, subjects, salary_type, salary_amount, status) VALUES (?,?,?,?,?,?,?,?)");
+                    $stmt->execute([$firstName, $lastName, '', '', $subjects, $salaryType, $salaryAmount, $status]);
+                    $teacherId = (int)db()->lastInsertId();
+                    try {
+                        db()->prepare("UPDATE users SET teacher_id = ? WHERE id = ?")->execute([$teacherId, $userId]);
+                    } catch (PDOException $e) { /* ignore if column missing */ }
+                    activityLog('create', 'teacher', $teacherId);
+                    jsonResponse(['id' => $teacherId]);
+                } else {
+                    jsonError('Select a user with teacher role to add as teacher', 400);
+                }
             } elseif ($id && $method === 'PUT') {
                 $stmt = db()->prepare("UPDATE teachers SET first_name=?, last_name=?, phone=?, email=?, subjects=?, salary_type=?, salary_amount=?, status=? WHERE id=?");
                 $stmt->execute([
@@ -321,8 +350,12 @@ try {
         case 'leads':
             requireRole(['admin', 'manager']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT * FROM leads ORDER BY created_at DESC");
-                jsonResponse($stmt->fetchAll());
+                try {
+                    $stmt = db()->query("SELECT * FROM leads ORDER BY created_at DESC");
+                    jsonResponse($stmt->fetchAll());
+                } catch (PDOException $e) {
+                    jsonResponse([]);
+                }
             } elseif ($method === 'POST') {
                 $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date) VALUES (?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
@@ -443,21 +476,28 @@ try {
         case 'dashboard':
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($sub === 'stats') {
-                $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active'")->fetchColumn();
-                $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
-                $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active'")->fetchColumn();
-                $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
-                $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
-                $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial')")->fetchColumn();
-                jsonResponse([
-                    'students' => (int)$students,
-                    'teachers' => (int)$teachers,
-                    'groups' => (int)$groups,
-                    'revenue' => (float)$revenue,
-                    'expenses' => (float)$expenses,
-                    'profit' => (float)$revenue - (float)$expenses,
-                    'leads_pending' => (int)$leads
-                ]);
+                try {
+                    $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active'")->fetchColumn();
+                    $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
+                    $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active'")->fetchColumn();
+                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $leads = 0;
+                    try {
+                        $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial')")->fetchColumn();
+                    } catch (PDOException $e) {}
+                    jsonResponse([
+                        'students' => (int)$students,
+                        'teachers' => (int)$teachers,
+                        'groups' => (int)$groups,
+                        'revenue' => (float)$revenue,
+                        'expenses' => (float)$expenses,
+                        'profit' => (float)$revenue - (float)$expenses,
+                        'leads_pending' => (int)$leads
+                    ]);
+                } catch (PDOException $e) {
+                    jsonResponse(['students' => 0, 'teachers' => 0, 'groups' => 0, 'revenue' => 0, 'expenses' => 0, 'profit' => 0, 'leads_pending' => 0]);
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -500,28 +540,67 @@ try {
             break;
 
         case 'users':
-            requireRole(['admin']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT id, username, name, role, email, phone, is_active, last_login, created_at FROM users ORDER BY created_at DESC");
-                jsonResponse($stmt->fetchAll());
+                requireRole(['admin', 'manager', 'accountant']);
+                try {
+                    $stmt = db()->query("SELECT u.id, u.username, u.name, u.role, u.teacher_id, u.email, u.phone, u.is_active, u.last_login, u.created_at, t.first_name || ' ' || t.last_name AS teacher_name FROM users u LEFT JOIN teachers t ON u.teacher_id = t.id ORDER BY u.created_at DESC");
+                } catch (PDOException $e) {
+                    $stmt = db()->query("SELECT id, username, name, role, email, phone, is_active, last_login, created_at FROM users ORDER BY created_at DESC");
+                }
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$r) {
+                    if (!isset($r['teacher_id'])) $r['teacher_id'] = null;
+                    if (!isset($r['teacher_name'])) $r['teacher_name'] = null;
+                }
+                jsonResponse($rows);
             } elseif ($method === 'POST') {
+                requireRole(['admin']);
+                $role = $input['role'] ?? 'user';
+                if (is_array($role)) $role = implode(',', array_map('trim', $role));
+                $role = trim((string)$role) ?: 'user';
+                $name = trim($input['name'] ?? '');
+                $teacherId = isset($input['teacher_id']) ? (int)$input['teacher_id'] : null;
                 $password = password_hash($input['password'] ?? 'password', PASSWORD_DEFAULT);
-                $stmt = db()->prepare("INSERT INTO users (username, password, name, role, email, phone, is_active) VALUES (?,?,?,?,?,?,?)");
-                $stmt->execute([
-                    $input['username'] ?? '', $password, $input['name'] ?? '',
-                    $input['role'] ?? 'user', $input['email'] ?? '', $input['phone'] ?? '', true
-                ]);
+                try {
+                    $stmt = db()->prepare("INSERT INTO users (username, password, name, role, teacher_id, email, phone, is_active) VALUES (?,?,?,?,?,?,?,?)");
+                    $stmt->execute([
+                        $input['username'] ?? '', $password, $name,
+                        $role, $teacherId, $input['email'] ?? '', $input['phone'] ?? '', true
+                    ]);
+                } catch (PDOException $e) {
+                    $stmt = db()->prepare("INSERT INTO users (username, password, name, role, email, phone, is_active) VALUES (?,?,?,?,?,?,?)");
+                    $stmt->execute([
+                        $input['username'] ?? '', $password, $name,
+                        $role, $input['email'] ?? '', $input['phone'] ?? '', true
+                    ]);
+                }
                 activityLog('create', 'user', db()->lastInsertId());
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'PUT') {
+                requireRole(['admin']);
+                $role = $input['role'] ?? null;
+                if ($role !== null && is_array($role)) $role = implode(',', array_map('trim', $role));
+                if ($role !== null) $role = trim((string)$role) ?: null;
+                $teacherId = isset($input['teacher_id']) ? (int)$input['teacher_id'] : null;
+                $name = isset($input['name']) ? trim($input['name']) : null;
                 $fields = ['name', 'role', 'email', 'phone', 'is_active'];
                 $sets = [];
                 $params = [];
+                if ($name !== null) { $sets[] = "name = ?"; $params[] = $name; }
                 foreach ($fields as $f) {
+                    if ($f === 'name' && $name !== null) continue;
                     if (isset($input[$f])) {
                         $sets[] = "$f = ?";
-                        $params[] = $input[$f];
+                        if ($f === 'is_active') {
+                            $params[] = ($input[$f] === true || $input[$f] === 'true' || $input[$f] === 1 || $input[$f] === '1') ? 'true' : 'false';
+                        } else {
+                            $params[] = $input[$f];
+                        }
                     }
+                }
+                if (array_key_exists('teacher_id', $input)) {
+                    $sets[] = "teacher_id = ?";
+                    $params[] = $input['teacher_id'] ? (int)$input['teacher_id'] : null;
                 }
                 if (!empty($input['password'])) {
                     $sets[] = "password = ?";
@@ -535,6 +614,7 @@ try {
                 }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                requireRole(['admin']);
                 db()->prepare("DELETE FROM users WHERE id = ? AND id != ?")->execute([$id, $_SESSION['user']['id']]);
                 activityLog('delete', 'user', $id);
                 jsonResponse(['ok' => true]);
@@ -575,12 +655,16 @@ try {
         case 'settings':
             requireRole(['admin']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT key, value, description FROM settings ORDER BY key");
-                $settings = [];
-                foreach ($stmt->fetchAll() as $row) {
-                    $settings[$row['key']] = $row['value'];
+                try {
+                    $stmt = db()->query("SELECT key, value, description FROM settings ORDER BY key");
+                    $settings = [];
+                    foreach ($stmt->fetchAll() as $row) {
+                        $settings[$row['key']] = $row['value'];
+                    }
+                    jsonResponse($settings);
+                } catch (PDOException $e) {
+                    jsonResponse([]);
                 }
-                jsonResponse($settings);
             } elseif ($method === 'PUT') {
                 foreach ($input as $key => $value) {
                     $stmt = db()->prepare("UPDATE settings SET value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?");
@@ -639,25 +723,29 @@ try {
         case 'audit-log':
             requireRole(['admin', 'manager', 'accountant']);
             if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
-            $entityType = $_GET['entity_type'] ?? null;
-            $entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : null;
-            $limit = min(500, max(1, (int)($_GET['limit'] ?? 100)));
-            $q = "SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.old_values, a.new_values, a.ip_address, a.created_at, u.name AS changed_by_name, u.username AS changed_by_username
-                  FROM audit_log a
-                  LEFT JOIN users u ON a.user_id = u.id
-                  WHERE 1=1";
-            $params = [];
-            if ($entityType) { $q .= " AND a.entity_type = ?"; $params[] = $entityType; }
-            if ($entityId) { $q .= " AND a.entity_id = ?"; $params[] = $entityId; }
-            $q .= " ORDER BY a.created_at DESC LIMIT " . $limit;
-            $stmt = db()->prepare($q);
-            $stmt->execute($params);
-            $rows = $stmt->fetchAll();
-            foreach ($rows as &$row) {
-                if (!empty($row['old_values']) && is_string($row['old_values'])) $row['old_values'] = json_decode($row['old_values'], true);
-                if (!empty($row['new_values']) && is_string($row['new_values'])) $row['new_values'] = json_decode($row['new_values'], true);
+            try {
+                $entityType = $_GET['entity_type'] ?? null;
+                $entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : null;
+                $limit = min(500, max(1, (int)($_GET['limit'] ?? 100)));
+                $q = "SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.old_values, a.new_values, a.ip_address, a.created_at, u.name AS changed_by_name, u.username AS changed_by_username
+                      FROM audit_log a
+                      LEFT JOIN users u ON a.user_id = u.id
+                      WHERE 1=1";
+                $params = [];
+                if ($entityType) { $q .= " AND a.entity_type = ?"; $params[] = $entityType; }
+                if ($entityId) { $q .= " AND a.entity_id = ?"; $params[] = $entityId; }
+                $q .= " ORDER BY a.created_at DESC LIMIT " . $limit;
+                $stmt = db()->prepare($q);
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$row) {
+                    if (!empty($row['old_values']) && is_string($row['old_values'])) $row['old_values'] = json_decode($row['old_values'], true);
+                    if (!empty($row['new_values']) && is_string($row['new_values'])) $row['new_values'] = json_decode($row['new_values'], true);
+                }
+                jsonResponse($rows);
+            } catch (PDOException $e) {
+                jsonResponse([]);
             }
-            jsonResponse($rows);
             break;
 
         default:

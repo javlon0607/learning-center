@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { MainLayout } from '@/components/layout/MainLayout'
+import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Students } from '@/pages/Students'
@@ -38,7 +39,9 @@ function App() {
           <Route path="salaries" element={<Salaries />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
-          <Route path="settings/users" element={<Users />} />
+          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+            <Route path="settings/users" element={<Users />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

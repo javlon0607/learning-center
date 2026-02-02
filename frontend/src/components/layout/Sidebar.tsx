@@ -22,7 +22,7 @@ const navigation = [
   { name: 'Groups', href: '/groups', icon: GraduationCap, roles: ['admin', 'manager', 'teacher', 'accountant'] },
   { name: 'Teachers', href: '/teachers', icon: UserCog, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Leads', href: '/leads', icon: UserPlus, roles: ['admin', 'manager'] },
-  { name: 'Attendance', href: '/attendance', icon: Calendar, roles: ['admin', 'manager', 'teacher'] },
+  { name: 'Attendance', href: '/attendance', icon: Calendar, roles: ['admin', 'manager', 'teacher', 'accountant'] },
   { name: 'Payments', href: '/payments', icon: CreditCard, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Expenses', href: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Salaries', href: '/salaries', icon: DollarSign, roles: ['admin', 'accountant'] },

@@ -102,7 +102,7 @@ export const teachersApi = {
 
   getById: (id: number) => api.get<Teacher>(`/teachers/${id}`),
 
-  create: (data: Omit<Teacher, 'id' | 'created_at'>) =>
+  create: (data: { user_id: number; subjects?: string; salary_type?: Teacher['salary_type']; salary_amount?: number; status?: Teacher['status'] }) =>
     api.post<{ id: number }>('/teachers', data),
 
   update: (id: number, data: Partial<Teacher>) =>
@@ -213,6 +213,19 @@ export const reportsApi = {
     api.get<{ from: string; to: string; income: number; expense: number }>('/reports/income-expense', { from, to }),
 }
 
+// Users API (admin only)
+export const usersApi = {
+  getAll: () => api.get<User[]>('/users'),
+
+  create: (data: { username: string; password: string; name: string; role: string | UserRole[]; teacher_id?: number | null; email?: string; phone?: string }) =>
+    api.post<{ id: number }>('/users', data),
+
+  update: (id: number, data: Partial<Pick<User, 'name' | 'role' | 'email' | 'phone' | 'is_active' | 'teacher_id'>> & { password?: string }) =>
+    api.put<{ ok: boolean }>(`/users/${id}`, data),
+
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/users/${id}`),
+}
+
 // Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries)
 export const auditLogApi = {
   getList: (params?: { entity_type?: string; entity_id?: string; limit?: string }) =>
@@ -220,11 +233,16 @@ export const auditLogApi = {
 }
 
 // Types
+export type UserRole = 'admin' | 'manager' | 'teacher' | 'accountant' | 'user'
+
 export interface User {
   id: number
   username: string
   name: string
-  role: 'admin' | 'manager' | 'teacher' | 'accountant' | 'user'
+  /** Comma-separated roles, e.g. "admin,teacher" */
+  role: string
+  teacher_id?: number | null
+  teacher_name?: string | null
   email?: string
   phone?: string
   is_active?: boolean

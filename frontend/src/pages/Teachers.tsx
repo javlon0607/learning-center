@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { teachersApi, Teacher } from '@/lib/api'
+import { teachersApi, usersApi, Teacher } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -57,19 +57,35 @@ export function Teachers() {
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null)
+  const [salaryType, setSalaryType] = useState<Teacher['salary_type']>('fixed')
+  const [addSalaryType, setAddSalaryType] = useState<Teacher['salary_type']>('fixed')
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
 
   const { data: teachers = [], isLoading } = useQuery({
     queryKey: ['teachers'],
     queryFn: teachersApi.getAll,
   })
 
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.getAll,
+    enabled: formOpen && !selectedTeacher,
+  })
+
+  const usersWithTeacherRole = users.filter((u) => {
+    const roles = (u.role || '').split(',').map((r) => r.trim())
+    return roles.includes('teacher') && (u.teacher_id == null || u.teacher_id === 0)
+  })
+
   const createTeacher = useMutation({
-    mutationFn: (data: Omit<Teacher, 'id' | 'created_at'>) =>
+    mutationFn: (data: { user_id: number; subjects?: string; salary_type?: Teacher['salary_type']; salary_amount?: number; status?: Teacher['status'] }) =>
       teachersApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       toast({ title: 'Teacher created successfully' })
       setFormOpen(false)
+      setSelectedUserId(null)
     },
   })
 
@@ -100,25 +116,41 @@ export function Teachers() {
       t.subjects?.toLowerCase().includes(search.toLowerCase())
   )
 
+  useEffect(() => {
+    if (formOpen) {
+      setSalaryType(selectedTeacher?.salary_type || 'fixed')
+      if (!selectedTeacher) setSelectedUserId(null)
+    }
+  }, [formOpen, selectedTeacher])
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const data = {
-      first_name: formData.get('first_name') as string,
-      last_name: formData.get('last_name') as string,
-      phone: formData.get('phone') as string,
-      email: formData.get('email') as string,
-      subjects: formData.get('subjects') as string,
+    if (selectedTeacher) {
+      const data = {
+        first_name: formData.get('first_name') as string,
+        last_name: formData.get('last_name') as string,
+        phone: formData.get('phone') as string,
+        email: formData.get('email') as string,
+        subjects: formData.get('subjects') as string,
+        salary_type: (formData.get('salary_type') as Teacher['salary_type']) || 'fixed',
+        salary_amount: Number(formData.get('salary_amount')) || 0,
+        status: (formData.get('status') as Teacher['status']) || 'active',
+      }
+      updateTeacher.mutate({ id: selectedTeacher.id, data })
+      return
+    }
+    if (!selectedUserId) {
+      toast({ title: 'Select a user with teacher role', variant: 'destructive' })
+      return
+    }
+    createTeacher.mutate({
+      user_id: selectedUserId,
+      subjects: (formData.get('subjects') as string) || '',
       salary_type: (formData.get('salary_type') as Teacher['salary_type']) || 'fixed',
       salary_amount: Number(formData.get('salary_amount')) || 0,
       status: (formData.get('status') as Teacher['status']) || 'active',
-    }
-
-    if (selectedTeacher) {
-      updateTeacher.mutate({ id: selectedTeacher.id, data })
-    } else {
-      createTeacher.mutate(data)
-    }
+    })
   }
 
   return (
@@ -187,9 +219,15 @@ export function Teachers() {
                     <TableCell>{teacher.subjects || '-'}</TableCell>
                     <TableCell>
                       <div>
-                        <span className="font-medium">{formatCurrency(teacher.salary_amount)}</span>
+                        <span className="font-medium">
+                          {teacher.salary_type === 'per_student'
+                            ? `${teacher.salary_amount}%`
+                            : formatCurrency(teacher.salary_amount)}
+                        </span>
                         <span className="text-muted-foreground text-sm ml-1">
-                          ({teacher.salary_type})
+                          {teacher.salary_type === 'per_student'
+                            ? 'per student'
+                            : `(${teacher.salary_type})`}
                         </span>
                       </div>
                     </TableCell>
@@ -248,97 +286,201 @@ export function Teachers() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="first_name">First Name *</Label>
-                  <Input
-                    id="first_name"
-                    name="first_name"
-                    defaultValue={selectedTeacher?.first_name}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="last_name">Last Name *</Label>
-                  <Input
-                    id="last_name"
-                    name="last_name"
-                    defaultValue={selectedTeacher?.last_name}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    defaultValue={selectedTeacher?.phone}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    defaultValue={selectedTeacher?.email}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subjects">Subjects</Label>
-                <Input
-                  id="subjects"
-                  name="subjects"
-                  placeholder="e.g., Math, English, Science"
-                  defaultValue={selectedTeacher?.subjects}
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="salary_type">Salary Type</Label>
-                  <Select name="salary_type" defaultValue={selectedTeacher?.salary_type || 'fixed'}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixed">Fixed</SelectItem>
-                      <SelectItem value="hourly">Hourly</SelectItem>
-                      <SelectItem value="per_student">Per Student</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="salary_amount">Salary Amount</Label>
-                  <Input
-                    id="salary_amount"
-                    name="salary_amount"
-                    type="number"
-                    step="0.01"
-                    defaultValue={selectedTeacher?.salary_amount || 0}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select name="status" defaultValue={selectedTeacher?.status || 'active'}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              {!selectedTeacher ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Select user (teacher role, not yet a teacher) *</Label>
+                    <Select
+                      value={selectedUserId != null ? String(selectedUserId) : ''}
+                      onValueChange={(v) => setSelectedUserId(v ? Number(v) : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select user..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {usersWithTeacherRole.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name || u.username} ({u.username})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {usersWithTeacherRole.length === 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        No users with teacher role that are not yet linked to a teacher. Add a user with teacher role in Settings → Users.
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subjects">Subjects</Label>
+                    <Input
+                      id="subjects"
+                      name="subjects"
+                      placeholder="e.g., Math, English, Science"
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Salary Type</Label>
+                      <Select
+                        name="salary_type"
+                        value={addSalaryType}
+                        onValueChange={(v) => setAddSalaryType(v as Teacher['salary_type'])}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixed</SelectItem>
+                          <SelectItem value="hourly">Hourly</SelectItem>
+                          <SelectItem value="per_student">Per Student</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="salary_amount">
+                        {addSalaryType === 'per_student'
+                          ? 'Percentage per student (%)'
+                          : 'Salary Amount'}
+                      </Label>
+                      <Input
+                        id="salary_amount"
+                        name="salary_amount"
+                        type="number"
+                        step={addSalaryType === 'per_student' ? '0.1' : '0.01'}
+                        min="0"
+                        max={addSalaryType === 'per_student' ? '100' : undefined}
+                        defaultValue="0"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select name="status" defaultValue="active">
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="first_name">First Name *</Label>
+                      <Input
+                        id="first_name"
+                        name="first_name"
+                        defaultValue={selectedTeacher?.first_name}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="last_name">Last Name *</Label>
+                      <Input
+                        id="last_name"
+                        name="last_name"
+                        defaultValue={selectedTeacher?.last_name}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input
+                        id="phone"
+                        name="phone"
+                        defaultValue={selectedTeacher?.phone}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        defaultValue={selectedTeacher?.email}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subjects">Subjects</Label>
+                    <Input
+                      id="subjects"
+                      name="subjects"
+                      placeholder="e.g., Math, English, Science"
+                      defaultValue={selectedTeacher?.subjects}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="salary_type">Salary Type</Label>
+                      <Select
+                        name="salary_type"
+                        value={salaryType}
+                        onValueChange={(value) =>
+                          setSalaryType(value as Teacher['salary_type'])
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixed</SelectItem>
+                          <SelectItem value="hourly">Hourly</SelectItem>
+                          <SelectItem value="per_student">Per Student</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="salary_amount">
+                        {salaryType === 'per_student'
+                          ? 'Percentage per student (%)'
+                          : 'Salary Amount'}
+                      </Label>
+                      <Input
+                        id="salary_amount"
+                        name="salary_amount"
+                        type="number"
+                        step={salaryType === 'per_student' ? '0.1' : '0.01'}
+                        min="0"
+                        max={salaryType === 'per_student' ? '100' : undefined}
+                        defaultValue={selectedTeacher?.salary_amount || 0}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select name="status" defaultValue={selectedTeacher?.status || 'active'}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createTeacher.isPending || updateTeacher.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  createTeacher.isPending ||
+                  updateTeacher.isPending ||
+                  (!selectedTeacher && !selectedUserId)
+                }
+              >
                 {(createTeacher.isPending || updateTeacher.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}

@@ -55,8 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function hasRole(roles: string | string[]) {
     if (!user) return false
+    const userRoles = (user.role || 'user').split(',').map((r) => r.trim()).filter(Boolean)
+    if (userRoles.length === 0) userRoles.push('user')
     const allowedRoles = Array.isArray(roles) ? roles : [roles]
-    return allowedRoles.includes(user.role)
+    return allowedRoles.some((r) => userRoles.includes(r))
   }
 
   return (

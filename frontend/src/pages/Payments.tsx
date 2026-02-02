@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { paymentsApi, studentsApi, groupsApi, Payment } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -30,13 +31,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
 import { Plus, Search, Loader2 } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
 
 export function Payments() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [amountStr, setAmountStr] = useState('')
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payments'],
@@ -73,13 +75,31 @@ export function Payments() {
       p.group_name?.toLowerCase().includes(search.toLowerCase())
   )
 
+  function handleAmountChange(value: string) {
+    const cleaned = value.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')
+    const parts = cleaned.split('.')
+    // Allow only one decimal point; preserve trailing zeros (e.g. 1.00, 10, 0.50)
+    const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned
+    flushSync(() => setAmountStr(sanitized))
+  }
+
+  function handleAmountBlur() {
+    const parsed = parseAmountFromInput(amountStr)
+    setAmountStr(parsed === 0 ? '' : formatAmountForInput(parsed) || formatCurrency(parsed))
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    const amountValue = parseAmountFromInput((formData.get('amount') as string) ?? '')
+    if (amountValue <= 0) {
+      toast({ title: 'Enter a valid amount', variant: 'destructive' })
+      return
+    }
     const data = {
       student_id: Number(formData.get('student_id')),
       group_id: formData.get('group_id') ? Number(formData.get('group_id')) : undefined,
-      amount: Number(formData.get('amount')),
+      amount: amountValue,
       payment_date: formData.get('payment_date') as string,
       method: (formData.get('method') as Payment['method']) || 'cash',
       notes: formData.get('notes') as string,
@@ -161,7 +181,7 @@ export function Payments() {
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setAmountStr(''); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
@@ -204,9 +224,12 @@ export function Payments() {
                   <Input
                     id="amount"
                     name="amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={amountStr}
+                    onChange={(e) => handleAmountChange(e.target.value)}
+                    onBlur={handleAmountBlur}
                     required
                   />
                 </div>
