@@ -5,7 +5,7 @@ define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_PORT', getenv('DB_PORT') ?: '5432');
 define('DB_NAME', getenv('DB_NAME') ?: 'learning_crm');
 define('DB_USER', getenv('DB_USER') ?: 'postgres');
-define('DB_PASS', getenv('DB_PASS') ?: 'postgres123');
+define('DB_PASS', getenv('DB_PASS') ?: 'admin');
 define('SESSION_TIMEOUT_MINUTES', (int)(getenv('SESSION_TIMEOUT') ?: 30));
 if (!defined('IS_API')) {
     $uri = $_SERVER['REQUEST_URI'] ?? '';

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(wc:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(timeout 10 npm run dev:*)"
     ]
   }
 }

@@ -1,7 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
-import { LegacyAcademyLogo } from '@/components/layout/LegacyAcademyLogo'
 import {
   LayoutDashboard,
   Users,
@@ -14,6 +13,7 @@ import {
   BarChart3,
   Settings,
   UserPlus,
+  ChevronRight,
 } from 'lucide-react'
 
 const navigation = [
@@ -37,36 +37,59 @@ export function Sidebar() {
   const filteredNavigation = navigation.filter(item => hasRole(item.roles))
 
   return (
-    <div className="flex h-full w-64 flex-col bg-slate-900">
-      <div className="flex h-16 items-center px-4">
-        <LegacyAcademyLogo variant="light" height={40} className="w-full max-w-[180px]" />
+    <div className="flex h-full w-64 flex-col bg-navy-950">
+      {/* Logo Section */}
+      <div className="flex h-20 items-center justify-center px-4 border-b border-white/10">
+        <img
+          src="/2.jpg"
+          alt="Legacy Academy"
+          className="h-14 w-auto rounded-lg"
+          draggable={false}
+        />
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {filteredNavigation.map((item) => {
-          const isActive = location.pathname === item.href ||
-            (item.href !== '/' && location.pathname.startsWith(item.href))
-          return (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={cn(
-                'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              )}
-            >
-              <item.icon
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto px-3 py-6">
+        <div className="space-y-1">
+          {filteredNavigation.map((item) => {
+            const isActive = location.pathname === item.href ||
+              (item.href !== '/' && location.pathname.startsWith(item.href))
+            return (
+              <Link
+                key={item.name}
+                to={item.href}
                 className={cn(
-                  'mr-3 h-5 w-5 flex-shrink-0',
-                  isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'
+                  'group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
+                  isActive
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
                 )}
-              />
-              {item.name}
-            </Link>
-          )
-        })}
+              >
+                <div className="flex items-center">
+                  <item.icon
+                    className={cn(
+                      'mr-3 h-5 w-5 flex-shrink-0 transition-colors',
+                      isActive ? 'text-gold-400' : 'text-white/50 group-hover:text-white/80'
+                    )}
+                  />
+                  {item.name}
+                </div>
+                {isActive && (
+                  <ChevronRight className="h-4 w-4 text-white/60" />
+                )}
+              </Link>
+            )
+          })}
+        </div>
       </nav>
+
+      {/* Footer */}
+      <div className="px-4 py-4 border-t border-white/10">
+        <div className="flex items-center gap-3 px-2">
+          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-xs text-white/50">System Online</span>
+        </div>
+      </div>
     </div>
   )
 }

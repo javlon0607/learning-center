@@ -1,5 +1,4 @@
 import { useAuth } from '@/contexts/AuthContext'
-import { LegacyAcademyLogo } from '@/components/layout/LegacyAcademyLogo'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { LogOut, User, Bell } from 'lucide-react'
+import { LogOut, User, Bell, Search, ChevronDown } from 'lucide-react'
 
 export function Header() {
   const { user, logout } = useAuth()
@@ -22,44 +21,75 @@ export function Header() {
     .toUpperCase()
     .slice(0, 2) || 'U'
 
+  const getRoleBadgeColor = (role?: string) => {
+    switch (role) {
+      case 'admin': return 'bg-navy-100 text-navy-700'
+      case 'manager': return 'bg-blue-100 text-blue-700'
+      case 'teacher': return 'bg-green-100 text-green-700'
+      case 'accountant': return 'bg-amber-100 text-amber-700'
+      default: return 'bg-gray-100 text-gray-700'
+    }
+  }
+
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-white px-6">
-      <div className="flex items-center gap-4">
-        <LegacyAcademyLogo variant="dark" height={36} className="rounded-lg overflow-hidden" />
-        <span className="text-sm text-slate-500 hidden sm:inline">Management</span>
+    <header className="flex h-16 items-center justify-between border-b border-border/60 bg-card px-6 shadow-sm">
+      {/* Left side - Search */}
+      <div className="flex items-center gap-4 flex-1">
+        <div className="relative max-w-md w-full hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search students, groups, teachers..."
+            className="w-full h-10 pl-10 pr-4 rounded-lg bg-muted/50 border-0 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-background transition-colors"
+          />
+        </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />
+      {/* Right side - Actions */}
+      <div className="flex items-center gap-2">
+        {/* Notifications */}
+        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-lg">
+          <Bell className="h-5 w-5 text-muted-foreground" />
+          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
         </Button>
 
+        {/* Divider */}
+        <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
+
+        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-blue-600 text-white text-sm">
+            <Button variant="ghost" className="flex items-center gap-3 h-10 pl-2 pr-3 rounded-lg hover:bg-muted/50">
+              <Avatar className="h-8 w-8 ring-2 ring-primary/10">
+                <AvatarFallback className="bg-navy-950 text-white text-sm font-medium">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-left md:block">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+                <p className="text-sm font-medium leading-tight">{user?.name}</p>
+                <span className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded capitalize ${getRoleBadgeColor(user?.role)}`}>
+                  {user?.role}
+                </span>
               </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground hidden md:block" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              </div>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
-              Profile
+              Profile Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-600">
+            <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
               <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

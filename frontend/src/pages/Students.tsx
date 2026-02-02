@@ -78,30 +78,34 @@ export function Students() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Students</h1>
-          <p className="text-muted-foreground">Manage your students</p>
+          <h1 className="text-2xl font-bold text-foreground">Students</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage and track all student records
+          </p>
         </div>
-        <Button onClick={() => setFormOpen(true)}>
+        <Button onClick={() => setFormOpen(true)} className="bg-navy-950 hover:bg-navy-900">
           <Plus className="mr-2 h-4 w-4" />
           Add Student
         </Button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-card rounded-xl border border-border/60">
+        <div className="relative flex-1 w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search students..."
+            placeholder="Search by name, phone, or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -112,11 +116,46 @@ export function Students() {
             <SelectItem value="suspended">Suspended</SelectItem>
           </SelectContent>
         </Select>
+        {(search || statusFilter !== 'all') && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch('')
+              setStatusFilter('all')
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Clear filters
+          </Button>
+        )}
       </div>
 
+      {/* Results */}
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading students...</p>
+        </div>
+      ) : students.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-4 bg-card rounded-xl border border-border/60">
+          <div className="p-4 rounded-full bg-muted">
+            <Search className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div className="text-center">
+            <h3 className="font-medium text-foreground">No students found</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {search || statusFilter !== 'all'
+                ? 'Try adjusting your search or filter criteria'
+                : 'Get started by adding your first student'}
+            </p>
+          </div>
+          {!search && statusFilter === 'all' && (
+            <Button onClick={() => setFormOpen(true)} className="mt-2">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Student
+            </Button>
+          )}
         </div>
       ) : (
         <StudentTable
