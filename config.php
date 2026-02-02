@@ -77,6 +77,21 @@ function activityLog($action, $entity = null, $entityId = null, $details = null)
     } catch (Exception $e) { /* ignore */ }
 }
 
+/**
+ * Audit log: who changed, before/after values, timestamp.
+ * Use for Payments, Discounts, Attendance, Salaries.
+ */
+function auditLog($action, $entityType, $entityId, $oldValues = null, $newValues = null) {
+    $userId = $_SESSION['user']['id'] ?? null;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $oldJson = $oldValues !== null ? json_encode($oldValues, JSON_UNESCAPED_UNICODE) : null;
+    $newJson = $newValues !== null ? json_encode($newValues, JSON_UNESCAPED_UNICODE) : null;
+    try {
+        $stmt = db()->prepare("INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $action, $entityType, $entityId, $oldJson, $newJson, $ip]);
+    } catch (Exception $e) { /* ignore */ }
+}
+
 function initDB() {
     $sql = "
     CREATE TABLE IF NOT EXISTS users (

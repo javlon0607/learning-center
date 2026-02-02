@@ -213,6 +213,12 @@ export const reportsApi = {
     api.get<{ from: string; to: string; income: number; expense: number }>('/reports/income-expense', { from, to }),
 }
 
+// Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries)
+export const auditLogApi = {
+  getList: (params?: { entity_type?: string; entity_id?: string; limit?: string }) =>
+    api.get<AuditLogEntry[]>('/audit-log', params as Record<string, string> | undefined),
+}
+
 // Types
 export interface User {
   id: number
@@ -353,4 +359,19 @@ export interface DashboardStats {
   expenses: number
   profit: number
   leads_pending: number
+}
+
+/** Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries). */
+export interface AuditLogEntry {
+  id: number
+  user_id: number | null
+  action: string
+  entity_type: string
+  entity_id: number | null
+  old_values: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  ip_address: string | null
+  created_at: string
+  changed_by_name: string | null
+  changed_by_username: string | null
 }

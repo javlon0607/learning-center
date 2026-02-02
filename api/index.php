@@ -188,16 +188,121 @@ try {
                 $stmt = db()->query("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id ORDER BY p.payment_date DESC LIMIT 500");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
+                $newPayload = [
+                    'student_id' => (int)($input['student_id'] ?? 0),
+                    'group_id' => $input['group_id'] ? (int)$input['group_id'] : null,
+                    'amount' => (float)($input['amount'] ?? 0),
+                    'payment_date' => $input['payment_date'] ?? date('Y-m-d'),
+                    'method' => $input['method'] ?? 'cash',
+                    'notes' => $input['notes'] ?? ''
+                ];
                 $stmt = db()->prepare("INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes) VALUES (?,?,?,?,?,?)");
                 $stmt->execute([
-                    (int)($input['student_id'] ?? 0), $input['group_id'] ? (int)$input['group_id'] : null,
-                    (float)($input['amount'] ?? 0), $input['payment_date'] ?? date('Y-m-d'), $input['method'] ?? 'cash', $input['notes'] ?? ''
+                    $newPayload['student_id'], $newPayload['group_id'], $newPayload['amount'], $newPayload['payment_date'], $newPayload['method'], $newPayload['notes']
                 ]);
                 $pid = db()->lastInsertId();
                 $invNo = 'INV-' . date('Ymd') . '-' . str_pad($pid, 4, '0', STR_PAD_LEFT);
                 try { db()->prepare("INSERT INTO payment_invoices (payment_id, invoice_no) VALUES (?,?)")->execute([$pid, $invNo]); } catch (Exception $e) {}
+                $newPayload['id'] = (int)$pid;
+                auditLog('create', 'payment', (int)$pid, null, $newPayload);
                 activityLog('create', 'payment', $pid);
                 jsonResponse(['id' => (int)$pid, 'invoice_no' => $invNo]);
+            } elseif ($id && $method === 'PUT') {
+                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ?");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Payment not found', 404); break; }
+                $oldValues = [
+                    'student_id' => (int)$oldRow['student_id'],
+                    'group_id' => $oldRow['group_id'] !== null ? (int)$oldRow['group_id'] : null,
+                    'amount' => (float)$oldRow['amount'],
+                    'payment_date' => $oldRow['payment_date'],
+                    'method' => $oldRow['method'],
+                    'notes' => (string)$oldRow['notes']
+                ];
+                $newValues = [
+                    'student_id' => (int)($input['student_id'] ?? $oldRow['student_id']),
+                    'group_id' => isset($input['group_id']) ? ($input['group_id'] ? (int)$input['group_id'] : null) : $oldValues['group_id'],
+                    'amount' => (float)($input['amount'] ?? $oldRow['amount']),
+                    'payment_date' => $input['payment_date'] ?? $oldRow['payment_date'],
+                    'method' => $input['method'] ?? $oldRow['method'],
+                    'notes' => $input['notes'] ?? $oldRow['notes']
+                ];
+                db()->prepare("UPDATE payments SET student_id=?, group_id=?, amount=?, payment_date=?, method=?, notes=? WHERE id=?")
+                    ->execute([$newValues['student_id'], $newValues['group_id'], $newValues['amount'], $newValues['payment_date'], $newValues['method'], $newValues['notes'], $id]);
+                auditLog('update', 'payment', (int)$id, $oldValues, $newValues);
+                activityLog('update', 'payment', $id);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'discounts':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method === 'GET') {
+                $paymentId = isset($_GET['payment_id']) ? (int)$_GET['payment_id'] : null;
+                $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+                if ($paymentId) {
+                    $stmt = db()->prepare("SELECT d.* FROM discounts d WHERE d.payment_id = ? ORDER BY d.created_at DESC");
+                    $stmt->execute([$paymentId]);
+                } elseif ($studentId) {
+                    $stmt = db()->prepare("SELECT d.*, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id WHERE d.student_id = ? ORDER BY d.created_at DESC");
+                    $stmt->execute([$studentId]);
+                } else {
+                    $stmt = db()->query("SELECT d.*, p.student_id, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id ORDER BY d.created_at DESC LIMIT 500");
+                }
+                jsonResponse($stmt->fetchAll());
+            } elseif ($method === 'POST') {
+                $newPayload = [
+                    'payment_id' => (int)($input['payment_id'] ?? 0),
+                    'student_id' => isset($input['student_id']) ? (int)$input['student_id'] : null,
+                    'discount_type' => $input['discount_type'] ?? 'fixed',
+                    'amount' => (float)($input['amount'] ?? 0),
+                    'reason' => $input['reason'] ?? ''
+                ];
+                $stmt = db()->prepare("INSERT INTO discounts (payment_id, student_id, discount_type, amount, reason) VALUES (?,?,?,?,?)");
+                $stmt->execute([$newPayload['payment_id'], $newPayload['student_id'], $newPayload['discount_type'], $newPayload['amount'], $newPayload['reason']]);
+                $did = db()->lastInsertId();
+                $newPayload['id'] = (int)$did;
+                auditLog('create', 'discount', (int)$did, null, $newPayload);
+                jsonResponse(['id' => (int)$did]);
+            } elseif ($id && $method === 'PUT') {
+                $old = db()->prepare("SELECT id, payment_id, student_id, discount_type, amount, reason FROM discounts WHERE id = ?");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Discount not found', 404); break; }
+                $oldValues = [
+                    'payment_id' => (int)$oldRow['payment_id'],
+                    'student_id' => $oldRow['student_id'] !== null ? (int)$oldRow['student_id'] : null,
+                    'discount_type' => $oldRow['discount_type'],
+                    'amount' => (float)$oldRow['amount'],
+                    'reason' => (string)$oldRow['reason']
+                ];
+                $newValues = [
+                    'payment_id' => (int)($input['payment_id'] ?? $oldRow['payment_id']),
+                    'student_id' => isset($input['student_id']) ? ($input['student_id'] ? (int)$input['student_id'] : null) : $oldValues['student_id'],
+                    'discount_type' => $input['discount_type'] ?? $oldRow['discount_type'],
+                    'amount' => (float)($input['amount'] ?? $oldRow['amount']),
+                    'reason' => $input['reason'] ?? $oldRow['reason']
+                ];
+                db()->prepare("UPDATE discounts SET payment_id=?, student_id=?, discount_type=?, amount=?, reason=? WHERE id=?")
+                    ->execute([$newValues['payment_id'], $newValues['student_id'], $newValues['discount_type'], $newValues['amount'], $newValues['reason'], $id]);
+                auditLog('update', 'discount', (int)$id, $oldValues, $newValues);
+                jsonResponse(['ok' => true]);
+            } elseif ($id && $method === 'DELETE') {
+                $old = db()->prepare("SELECT id, payment_id, student_id, discount_type, amount, reason FROM discounts WHERE id = ?");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Discount not found', 404); break; }
+                $oldValues = [
+                    'payment_id' => (int)$oldRow['payment_id'],
+                    'student_id' => $oldRow['student_id'] !== null ? (int)$oldRow['student_id'] : null,
+                    'discount_type' => $oldRow['discount_type'],
+                    'amount' => (float)$oldRow['amount'],
+                    'reason' => (string)$oldRow['reason']
+                ];
+                db()->prepare("DELETE FROM discounts WHERE id = ?")->execute([$id]);
+                auditLog('delete', 'discount', (int)$id, $oldValues, null);
+                jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
 
@@ -262,12 +367,27 @@ try {
                 $date = $input['date'] ?? date('Y-m-d');
                 $group = (int)($input['group_id'] ?? 0);
                 $rows = $input['rows'] ?? [];
+                $fetchOld = db()->prepare("SELECT id, student_id, group_id, attendance_date, status FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
                 foreach ($rows as $r) {
                     $sid = (int)($r['student_id'] ?? 0);
                     $status = $r['status'] ?? 'present';
                     if (!$sid || !$group) continue;
+                    $fetchOld->execute([$sid, $group, $date]);
+                    $oldRow = $fetchOld->fetch();
                     db()->prepare("INSERT INTO attendance (student_id, group_id, attendance_date, status) VALUES (?,?,?,?) ON CONFLICT (student_id, group_id, attendance_date) DO UPDATE SET status = ?")
                         ->execute([$sid, $group, $date, $status, $status]);
+                    $oldStatus = $oldRow ? $oldRow['status'] : null;
+                    if ($oldStatus !== $status) {
+                        $attendanceId = $oldRow ? (int)$oldRow['id'] : 0;
+                        if (!$attendanceId) {
+                            $getId = db()->prepare("SELECT id FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
+                            $getId->execute([$sid, $group, $date]);
+                            $attendanceId = (int)$getId->fetchColumn();
+                        }
+                        $oldValues = $oldRow ? ['student_id' => (int)$oldRow['student_id'], 'group_id' => (int)$oldRow['group_id'], 'attendance_date' => $oldRow['attendance_date'], 'status' => $oldRow['status']] : null;
+                        $newValues = ['student_id' => $sid, 'group_id' => $group, 'attendance_date' => $date, 'status' => $status];
+                        auditLog($oldStatus === null ? 'create' : 'update', 'attendance', $attendanceId, $oldValues, $newValues);
+                    }
                 }
                 activityLog('attendance_save', 'attendance', null, json_encode(['date' => $date, 'group_id' => $group]));
                 jsonResponse(['ok' => true]);
@@ -289,10 +409,33 @@ try {
                 $total = $base + $bonus - $ded;
                 $stmt = db()->prepare("INSERT INTO salary_slips (teacher_id, period_start, period_end, base_amount, bonus, deduction, total_amount, status, notes) VALUES (?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([$tid, $start, $end, $base, $bonus, $ded, $total, $input['status'] ?? 'pending', $input['notes'] ?? '']);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $sid = db()->lastInsertId();
+                $newPayload = [
+                    'teacher_id' => $tid,
+                    'period_start' => $start,
+                    'period_end' => $end,
+                    'base_amount' => $base,
+                    'bonus' => $bonus,
+                    'deduction' => $ded,
+                    'total_amount' => $total,
+                    'status' => $input['status'] ?? 'pending',
+                    'notes' => $input['notes'] ?? ''
+                ];
+                $newPayload['id'] = (int)$sid;
+                auditLog('create', 'salary_slip', (int)$sid, null, $newPayload);
+                jsonResponse(['id' => (int)$sid]);
             } elseif ($id && $method === 'PUT') {
-                $stmt = db()->prepare("UPDATE salary_slips SET status=?, paid_at=? WHERE id=?");
-                $stmt->execute([$input['status'] ?? 'pending', $input['paid_at'] ?? null, $id]);
+                $old = db()->prepare("SELECT id, status, paid_at FROM salary_slips WHERE id = ?");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Salary slip not found', 404); break; }
+                $oldValues = ['status' => $oldRow['status'], 'paid_at' => $oldRow['paid_at']];
+                $newStatus = $input['status'] ?? $oldRow['status'];
+                $newPaidAt = isset($input['paid_at']) ? $input['paid_at'] : $oldRow['paid_at'];
+                db()->prepare("UPDATE salary_slips SET status=?, paid_at=? WHERE id=?")
+                    ->execute([$newStatus, $newPaidAt, $id]);
+                $newValues = ['status' => $newStatus, 'paid_at' => $newPaidAt];
+                auditLog('update', 'salary_slip', (int)$id, $oldValues, $newValues);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -491,6 +634,30 @@ try {
                 $stmt = db()->query("SELECT id, first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, created_at FROM students ORDER BY last_name, first_name");
                 jsonResponse($stmt->fetchAll());
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'audit-log':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $entityType = $_GET['entity_type'] ?? null;
+            $entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : null;
+            $limit = min(500, max(1, (int)($_GET['limit'] ?? 100)));
+            $q = "SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.old_values, a.new_values, a.ip_address, a.created_at, u.name AS changed_by_name, u.username AS changed_by_username
+                  FROM audit_log a
+                  LEFT JOIN users u ON a.user_id = u.id
+                  WHERE 1=1";
+            $params = [];
+            if ($entityType) { $q .= " AND a.entity_type = ?"; $params[] = $entityType; }
+            if ($entityId) { $q .= " AND a.entity_id = ?"; $params[] = $entityId; }
+            $q .= " ORDER BY a.created_at DESC LIMIT " . $limit;
+            $stmt = db()->prepare($q);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as &$row) {
+                if (!empty($row['old_values']) && is_string($row['old_values'])) $row['old_values'] = json_decode($row['old_values'], true);
+                if (!empty($row['new_values']) && is_string($row['new_values'])) $row['new_values'] = json_decode($row['new_values'], true);
+            }
+            jsonResponse($rows);
             break;
 
         default:

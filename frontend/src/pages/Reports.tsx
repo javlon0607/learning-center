@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { reportsApi } from '@/lib/api'
+import { reportsApi, auditLogApi, type AuditLogEntry } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,8 +27,15 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { Download, TrendingUp, TrendingDown } from 'lucide-react'
+import { Download, TrendingUp, TrendingDown, History } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+
+function formatAuditValues(obj: Record<string, unknown> | null): string {
+  if (!obj || typeof obj !== 'object') return '—'
+  return Object.entries(obj)
+    .map(([k, v]) => `${k}: ${v === null || v === undefined ? '—' : String(v)}`)
+    .join(', ')
+}
 
 const COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
 
@@ -56,6 +63,11 @@ export function Reports() {
     queryKey: ['reports', 'summary', dateFrom, dateTo],
     queryFn: () => reportsApi.getIncomeExpense(dateFrom, dateTo),
     enabled: !!dateFrom && !!dateTo,
+  })
+
+  const { data: auditLog = [], isLoading: auditLoading } = useQuery({
+    queryKey: ['audit-log'],
+    queryFn: () => auditLogApi.getList({ limit: '100' }),
   })
 
   const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0)
@@ -170,6 +182,7 @@ export function Reports() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="audit">Change history</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
@@ -319,6 +332,71 @@ export function Reports() {
                           <TableCell>{expense.description || '-'}</TableCell>
                           <TableCell className="text-right font-medium text-red-600">
                             {formatCurrency(expense.amount)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="audit" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Change history
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Who changed Payments, Discounts, Attendance, Salaries — with before/after values and timestamp.
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              {auditLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Who changed</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Before</TableHead>
+                      <TableHead>After</TableHead>
+                      <TableHead>Timestamp</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditLog.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          No change history yet
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      auditLog.map((entry: AuditLogEntry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell className="font-medium">
+                            {entry.changed_by_name || entry.changed_by_username || `User #${entry.user_id ?? '?'}`}
+                          </TableCell>
+                          <TableCell>
+                            <span className="capitalize">{entry.entity_type}</span>
+                            {entry.entity_id != null && ` #${entry.entity_id}`}
+                          </TableCell>
+                          <TableCell className="capitalize">{entry.action}</TableCell>
+                          <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={formatAuditValues(entry.old_values)}>
+                            {formatAuditValues(entry.old_values)}
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate text-xs" title={formatAuditValues(entry.new_values)}>
+                            {formatAuditValues(entry.new_values)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground whitespace-nowrap">
+                            {formatDate(entry.created_at)} {new Date(entry.created_at).toLocaleTimeString()}
                           </TableCell>
                         </TableRow>
                       ))
