@@ -1,9 +1,11 @@
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Student } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
+import { DateInput } from '@/components/ui/date-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -57,6 +59,7 @@ export function StudentForm({
     setValue,
     watch,
     reset,
+    control,
     formState: { errors },
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -122,10 +125,16 @@ export function StudentForm({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="dob">Date of Birth</Label>
-                <Input
-                  id="dob"
-                  type="date"
-                  {...register('dob')}
+                <Controller
+                  name="dob"
+                  control={control}
+                  render={({ field }) => (
+                    <DateInput
+                      id="dob"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </div>
               <div className="space-y-2">
@@ -150,10 +159,16 @@ export function StudentForm({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input
-                  id="phone"
-                  {...register('phone')}
-                  placeholder="Enter phone number"
+                <Controller
+                  name="phone"
+                  control={control}
+                  render={({ field }) => (
+                    <PhoneInput
+                      id="phone"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </div>
               <div className="space-y-2">
@@ -181,10 +196,16 @@ export function StudentForm({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="parent_phone">Parent/Guardian Phone</Label>
-                <Input
-                  id="parent_phone"
-                  {...register('parent_phone')}
-                  placeholder="Enter parent phone"
+                <Controller
+                  name="parent_phone"
+                  control={control}
+                  render={({ field }) => (
+                    <PhoneInput
+                      id="parent_phone"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </div>
             </div>

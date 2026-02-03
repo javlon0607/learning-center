@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teachersApi, usersApi, Teacher } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -60,6 +61,7 @@ export function Teachers() {
   const [salaryType, setSalaryType] = useState<Teacher['salary_type']>('fixed')
   const [addSalaryType, setAddSalaryType] = useState<Teacher['salary_type']>('fixed')
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const [formPhone, setFormPhone] = useState('')
 
   const { data: teachers = [], isLoading } = useQuery({
     queryKey: ['teachers'],
@@ -119,6 +121,7 @@ export function Teachers() {
   useEffect(() => {
     if (formOpen) {
       setSalaryType(selectedTeacher?.salary_type || 'fixed')
+      setFormPhone(selectedTeacher?.phone || '')
       if (!selectedTeacher) setSelectedUserId(null)
     }
   }, [formOpen, selectedTeacher])
@@ -130,7 +133,7 @@ export function Teachers() {
       const data = {
         first_name: formData.get('first_name') as string,
         last_name: formData.get('last_name') as string,
-        phone: formData.get('phone') as string,
+        phone: formPhone,
         email: formData.get('email') as string,
         subjects: formData.get('subjects') as string,
         salary_type: (formData.get('salary_type') as Teacher['salary_type']) || 'fixed',
@@ -332,7 +335,6 @@ export function Teachers() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="fixed">Fixed</SelectItem>
-                          <SelectItem value="hourly">Hourly</SelectItem>
                           <SelectItem value="per_student">Per Student</SelectItem>
                         </SelectContent>
                       </Select>
@@ -392,10 +394,10 @@ export function Teachers() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone</Label>
-                      <Input
+                      <PhoneInput
                         id="phone"
-                        name="phone"
-                        defaultValue={selectedTeacher?.phone}
+                        value={formPhone}
+                        onChange={setFormPhone}
                       />
                     </div>
                     <div className="space-y-2">
@@ -432,7 +434,6 @@ export function Teachers() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="fixed">Fixed</SelectItem>
-                          <SelectItem value="hourly">Hourly</SelectItem>
                           <SelectItem value="per_student">Per Student</SelectItem>
                         </SelectContent>
                       </Select>

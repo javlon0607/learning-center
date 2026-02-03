@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { expensesApi, Expense } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -49,6 +50,7 @@ export function Expenses() {
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [amount, setAmount] = useState<number>(0)
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0])
 
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expenses'],
@@ -86,9 +88,10 @@ export function Expenses() {
       category: formData.get('category') as string,
       amount: amountValue,
       description: formData.get('description') as string,
-      expense_date: formData.get('expense_date') as string,
+      expense_date: expenseDate,
     }
     createExpense.mutate(data)
+    setExpenseDate(new Date().toISOString().split('T')[0])
   }
 
   return (
@@ -205,11 +208,10 @@ export function Expenses() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="expense_date">Date *</Label>
-                  <Input
+                  <DateInput
                     id="expense_date"
-                    name="expense_date"
-                    type="date"
-                    defaultValue={new Date().toISOString().split('T')[0]}
+                    value={expenseDate}
+                    onChange={setExpenseDate}
                     required
                   />
                 </div>

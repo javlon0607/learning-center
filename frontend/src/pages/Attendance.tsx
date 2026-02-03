@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { attendanceApi, groupsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { DateInput } from '@/components/ui/date-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Select,
@@ -111,11 +110,10 @@ export function Attendance() {
         </div>
         <div className="space-y-2">
           <Label>Date</Label>
-          <Input
-            type="date"
+          <DateInput
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-[180px]"
+            onChange={setSelectedDate}
+            className="w-[140px]"
           />
         </div>
       </div>

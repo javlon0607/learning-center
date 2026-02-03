@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsApi, Student, enrollmentsApi } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
 
-export function useStudents(params?: { status?: string; search?: string }) {
+export function useStudents(params?: { status?: string; search?: string; group_id?: string }) {
   return useQuery({
     queryKey: ['students', params],
     queryFn: () => studentsApi.getAll(params),

@@ -28,8 +28,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowLeft, Users, DollarSign, User, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 const statusColors = {
@@ -46,6 +47,7 @@ export function GroupDetail() {
   const groupId = Number(id)
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState<string>('')
+  const [discountPercentage, setDiscountPercentage] = useState<string>('0')
 
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
@@ -71,13 +73,14 @@ export function GroupDetail() {
   )
 
   const enrollStudent = useMutation({
-    mutationFn: ({ studentId, groupId }: { studentId: number; groupId: number }) =>
-      enrollmentsApi.create(studentId, groupId),
+    mutationFn: ({ studentId, groupId, discountPct }: { studentId: number; groupId: number; discountPct: number }) =>
+      enrollmentsApi.create(studentId, groupId, discountPct),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['enrollments'] })
       toast({ title: 'Student enrolled successfully' })
       setEnrollDialogOpen(false)
       setSelectedStudentId('')
+      setDiscountPercentage('0')
     },
   })
 
@@ -174,6 +177,8 @@ export function GroupDetail() {
             <TableHeader>
               <TableRow>
                 <TableHead>Student Name</TableHead>
+                <TableHead>Discount</TableHead>
+                <TableHead>Monthly Rate</TableHead>
                 <TableHead>Enrolled Date</TableHead>
                 <TableHead className="w-[70px]"></TableHead>
               </TableRow>
@@ -181,76 +186,141 @@ export function GroupDetail() {
             <TableBody>
               {enrollments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     No students enrolled
                   </TableCell>
                 </TableRow>
               ) : (
-                enrollments.map((enrollment) => (
-                  <TableRow key={enrollment.id}>
-                    <TableCell>
-                      <button
-                        onClick={() => navigate(`/students/${enrollment.student_id}`)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {enrollment.student_name}
-                      </button>
-                    </TableCell>
-                    <TableCell>{enrollment.enrolled_at}</TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => unenrollStudent.mutate(enrollment.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                enrollments.map((enrollment) => {
+                  const discount = enrollment.discount_percentage || 0
+                  const monthlyRate = group.price * (1 - discount / 100)
+                  return (
+                    <TableRow key={enrollment.id}>
+                      <TableCell>
+                        <button
+                          onClick={() => navigate(`/students/${enrollment.student_id}`)}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {enrollment.student_name}
+                        </button>
+                      </TableCell>
+                      <TableCell>
+                        {discount > 0 ? (
+                          <Badge variant="secondary" className="text-green-600">
+                            {discount}% off
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium text-green-600">
+                        {formatCurrency(monthlyRate)}
+                      </TableCell>
+                      <TableCell>{enrollment.enrolled_at}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => unenrollStudent.mutate(enrollment.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      <Dialog open={enrollDialogOpen} onOpenChange={setEnrollDialogOpen}>
+      <Dialog open={enrollDialogOpen} onOpenChange={(open) => {
+        setEnrollDialogOpen(open)
+        if (!open) {
+          setSelectedStudentId('')
+          setDiscountPercentage('0')
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enroll Student</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Label>Select Student</Label>
-            <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-              <SelectTrigger className="mt-2">
-                <SelectValue placeholder="Choose a student" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableStudents.map((student) => (
-                  <SelectItem key={student.id} value={student.id.toString()}>
-                    {student.first_name} {student.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {availableStudents.length === 0 && (
-              <p className="text-sm text-muted-foreground mt-2">
-                No available students to enroll
-              </p>
-            )}
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Select Student</Label>
+              <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose a student" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStudents.map((student) => (
+                    <SelectItem key={student.id} value={student.id.toString()}>
+                      {student.first_name} {student.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {availableStudents.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No available students to enroll
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="discount">Discount % (0–100)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={discountPercentage}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '' || v === '-') {
+                      setDiscountPercentage(v)
+                      return
+                    }
+                    const n = Number(v)
+                    if (!Number.isFinite(n)) return
+                    setDiscountPercentage(String(Math.max(0, Math.min(100, n))))
+                  }}
+                  className="w-24"
+                />
+                <Percent className="h-4 w-4 text-muted-foreground" />
+              </div>
+              {Number(discountPercentage) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Student will pay {formatCurrency(group.price * (1 - Number(discountPercentage) / 100))} per month
+                  <span className="text-green-600"> ({discountPercentage}% off)</span>
+                </p>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEnrollDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() =>
+              onClick={() => {
+                const pct = Number(discountPercentage)
+                if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+                  toast({
+                    title: 'Invalid discount',
+                    description: 'Discount must be between 0 and 100%.',
+                    variant: 'destructive',
+                  })
+                  return
+                }
                 enrollStudent.mutate({
                   studentId: Number(selectedStudentId),
                   groupId,
+                  discountPct: pct,
                 })
-              }
+              }}
               disabled={!selectedStudentId || enrollStudent.isPending}
             >
               Enroll

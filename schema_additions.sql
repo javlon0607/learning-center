@@ -1,4 +1,3 @@
--- New tables for TRD (existing tables unchanged)
 CREATE TABLE IF NOT EXISTS leads (
     id SERIAL PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,

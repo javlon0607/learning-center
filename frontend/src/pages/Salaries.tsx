@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { salarySlipsApi, teachersApi, SalarySlip } from '@/lib/api'
+import { salarySlipsApi, teachersApi, SalarySlip, TeacherSalaryPreview } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +37,11 @@ export function Salaries() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [selectedTeacherId, setSelectedTeacherId] = useState('')
+  const [baseAmount, setBaseAmount] = useState('')
+  const [salaryPreview, setSalaryPreview] = useState<TeacherSalaryPreview | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
 
   const { data: salarySlips = [], isLoading } = useQuery({
     queryKey: ['salary-slips'],
@@ -55,6 +60,10 @@ export function Salaries() {
       queryClient.invalidateQueries({ queryKey: ['salary-slips'] })
       toast({ title: 'Salary slip created successfully' })
       setFormOpen(false)
+      setSalaryMonth(new Date().toISOString().slice(0, 7))
+      setSelectedTeacherId('')
+      setBaseAmount('')
+      setSalaryPreview(null)
     },
   })
 
@@ -67,6 +76,46 @@ export function Salaries() {
     },
   })
 
+  // Fetch salary preview when teacher and month are selected
+  useEffect(() => {
+    if (!selectedTeacherId || !salaryMonth) {
+      setSalaryPreview(null)
+      return
+    }
+    const teacher = teachers.find((t) => t.id === Number(selectedTeacherId))
+    if (!teacher) {
+      setSalaryPreview(null)
+      return
+    }
+
+    // For fixed salary, we can set it directly without API call
+    if (teacher.salary_type === 'fixed') {
+      setBaseAmount(String(teacher.salary_amount ?? 0))
+      setSalaryPreview({
+        teacher_id: teacher.id,
+        month: salaryMonth,
+        salary_type: 'fixed',
+        salary_percentage: 0,
+        collected_amount: 0,
+        base_amount: teacher.salary_amount ?? 0
+      })
+      return
+    }
+
+    // For per_student, fetch the calculated amount from API
+    setLoadingPreview(true)
+    salarySlipsApi.preview(Number(selectedTeacherId), salaryMonth)
+      .then((preview) => {
+        setSalaryPreview(preview)
+        setBaseAmount(String(preview.base_amount))
+      })
+      .catch(() => {
+        setSalaryPreview(null)
+        setBaseAmount('')
+      })
+      .finally(() => setLoadingPreview(false))
+  }, [selectedTeacherId, salaryMonth, teachers])
+
   const filteredSlips = salarySlips.filter(
     (s) =>
       s.teacher_name?.toLowerCase().includes(search.toLowerCase())
@@ -75,11 +124,21 @@ export function Salaries() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+
+    const month = salaryMonth
+    const [yearStr, monthStr] = month.split('-')
+    const year = Number(yearStr)
+    const monthNum = Number(monthStr)
+    const periodStart = month ? `${month}-01` : ''
+    const periodEnd = month
+      ? new Date(year, monthNum, 0).toISOString().split('T')[0]
+      : ''
+
     const data = {
       teacher_id: Number(formData.get('teacher_id')),
-      period_start: formData.get('period_start') as string,
-      period_end: formData.get('period_end') as string,
-      base_amount: Number(formData.get('base_amount')),
+      period_start: periodStart,
+      period_end: periodEnd,
+      base_amount: Number(baseAmount || 0),
       bonus: Number(formData.get('bonus')) || 0,
       deduction: Number(formData.get('deduction')) || 0,
       status: 'pending' as const,
@@ -190,39 +249,62 @@ export function Salaries() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="teacher_id">Teacher *</Label>
-                <Select name="teacher_id" required>
+                <Select
+                  name="teacher_id"
+                  required
+                  value={selectedTeacherId}
+                  onValueChange={setSelectedTeacherId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select teacher" />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.filter(t => t.status === 'active').map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id.toString()}>
-                        {teacher.first_name} {teacher.last_name} - {formatCurrency(teacher.salary_amount)} ({teacher.salary_type})
+                        {teacher.first_name} {teacher.last_name} - {formatCurrency(teacher.salary_amount)} ({teacher.salary_type === 'per_student' ? `${teacher.salary_amount}%` : 'fixed'})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="period_start">Period Start *</Label>
-                  <Input
-                    id="period_start"
-                    name="period_start"
-                    type="date"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="period_end">Period End *</Label>
-                  <Input
-                    id="period_end"
-                    name="period_end"
-                    type="date"
-                    required
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="salary_month">Month *</Label>
+                <Input
+                  id="salary_month"
+                  type="month"
+                  value={salaryMonth}
+                  onChange={(e) => setSalaryMonth(e.target.value)}
+                  required
+                />
               </div>
+              {/* Salary Preview Info */}
+              {loadingPreview && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Calculating salary...
+                </div>
+              )}
+              {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'per_student' && (
+                <div className="rounded-md bg-blue-50 p-3 text-sm space-y-1">
+                  <p className="font-medium text-blue-900">Per-Student Salary Calculation</p>
+                  <p className="text-blue-700">
+                    Collected payments: <span className="font-semibold">{formatCurrency(salaryPreview.collected_amount)}</span>
+                  </p>
+                  <p className="text-blue-700">
+                    Teacher rate: <span className="font-semibold">{salaryPreview.salary_percentage}%</span>
+                  </p>
+                  <p className="text-blue-700">
+                    Calculated base: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
+                  </p>
+                </div>
+              )}
+              {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'fixed' && (
+                <div className="rounded-md bg-green-50 p-3 text-sm">
+                  <p className="text-green-700">
+                    Fixed salary: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="base_amount">Base Amount *</Label>
@@ -232,6 +314,8 @@ export function Salaries() {
                     type="number"
                     step="0.01"
                     min="0"
+                    value={baseAmount}
+                    onChange={(e) => setBaseAmount(e.target.value)}
                     required
                   />
                 </div>

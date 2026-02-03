@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { reportsApi, auditLogApi, type AuditLogEntry } from '@/lib/api'
-import { Button } from '@/components/ui/button'
+import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -27,8 +27,8 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { Download, TrendingUp, TrendingDown, History } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { TrendingUp, TrendingDown, History, Calendar, Users, Building2 } from 'lucide-react'
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 
 function formatAuditValues(obj: Record<string, unknown> | null): string {
   if (!obj || typeof obj !== 'object') return '—'
@@ -46,6 +46,7 @@ export function Reports() {
     return date.toISOString().split('T')[0]
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7))
 
   const { data: payments = [], isLoading: paymentsLoading } = useQuery({
     queryKey: ['reports', 'payments', dateFrom, dateTo],
@@ -69,6 +70,30 @@ export function Reports() {
     queryKey: ['audit-log'],
     queryFn: () => auditLogApi.getList({ limit: '100' }),
   })
+
+  const { data: monthlyReport, isLoading: monthlyLoading } = useQuery({
+    queryKey: ['reports', 'monthly', reportMonth],
+    queryFn: () => reportsApi.getMonthly(reportMonth),
+    enabled: !!reportMonth,
+  })
+
+  // Data for monthly report charts
+  const monthlyChartData = useMemo(() => {
+    if (!monthlyReport) return { barData: [], pieData: [] }
+
+    const barData = monthlyReport.groups.map(g => ({
+      name: g.group_name.length > 15 ? g.group_name.slice(0, 15) + '...' : g.group_name,
+      expected: g.expected_amount,
+      collected: g.collected_amount,
+    }))
+
+    const pieData = [
+      { name: 'Teacher Portions', value: monthlyReport.totals.teacher_portion },
+      { name: 'Center Portion', value: monthlyReport.totals.center_portion },
+    ].filter(d => d.value > 0)
+
+    return { barData, pieData }
+  }, [monthlyReport])
 
   const totalPayments = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
@@ -112,20 +137,18 @@ export function Reports() {
       <div className="flex items-end gap-4">
         <div className="space-y-2">
           <Label>From</Label>
-          <Input
-            type="date"
+          <DateInput
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="w-[180px]"
+            onChange={setDateFrom}
+            className="w-[140px]"
           />
         </div>
         <div className="space-y-2">
           <Label>To</Label>
-          <Input
-            type="date"
+          <DateInput
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="w-[180px]"
+            onChange={setDateTo}
+            className="w-[140px]"
           />
         </div>
       </div>
@@ -184,6 +207,7 @@ export function Reports() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="monthly">Monthly Report</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="audit">Change history</TabsTrigger>
@@ -251,6 +275,231 @@ export function Reports() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="monthly" className="mt-4 space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="space-y-1">
+              <Label>Select Month</Label>
+              <Input
+                type="month"
+                value={reportMonth}
+                onChange={(e) => setReportMonth(e.target.value)}
+                className="w-[200px]"
+              />
+            </div>
+          </div>
+
+          {monthlyLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+            </div>
+          ) : monthlyReport ? (
+            <>
+              {/* Summary Cards */}
+              <div className="grid gap-4 md:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Expected</CardTitle>
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(monthlyReport.totals.expected_amount)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      From {monthlyReport.totals.student_count} students
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Collected</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(monthlyReport.totals.collected_amount)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {monthlyReport.totals.payment_percentage}% collection rate
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Teacher Portions</CardTitle>
+                    <Users className="h-4 w-4 text-blue-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(monthlyReport.totals.teacher_portion)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      For per-student salary teachers
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Center Portion</CardTitle>
+                    <Building2 className="h-4 w-4 text-purple-600" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-purple-600">
+                      {formatCurrency(monthlyReport.totals.center_portion)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Remaining: {formatCurrency(monthlyReport.totals.remaining_debt)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts */}
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Collection by Group</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {monthlyChartData.barData.length > 0 ? (
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={monthlyChartData.barData}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} fontSize={12} />
+                            <YAxis />
+                            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                            <Legend />
+                            <Bar dataKey="expected" fill="#94a3b8" name="Expected" />
+                            <Bar dataKey="collected" fill="#22c55e" name="Collected" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                        No data
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {monthlyChartData.pieData.length > 0 ? (
+                      <div className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={monthlyChartData.pieData}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              outerRadius={100}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {monthlyChartData.pieData.map((_, index) => (
+                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#8b5cf6'} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                            <Legend />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                        No revenue data
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Detailed Table */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detailed Group Report</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Group</TableHead>
+                          <TableHead>Teacher</TableHead>
+                          <TableHead className="text-center">Students</TableHead>
+                          <TableHead className="text-center">Paid</TableHead>
+                          <TableHead className="text-right">Expected</TableHead>
+                          <TableHead className="text-right">Collected</TableHead>
+                          <TableHead className="text-right">Remaining</TableHead>
+                          <TableHead className="text-center">%</TableHead>
+                          <TableHead className="text-right">Teacher</TableHead>
+                          <TableHead className="text-right">Center</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {monthlyReport.groups.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                              No groups found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          <>
+                            {monthlyReport.groups.map((group) => (
+                              <TableRow key={group.group_id}>
+                                <TableCell className="font-medium">{group.group_name}</TableCell>
+                                <TableCell>{group.teacher_name}</TableCell>
+                                <TableCell className="text-center">{group.student_count}</TableCell>
+                                <TableCell className="text-center">{group.paid_student_count}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(group.expected_amount)}</TableCell>
+                                <TableCell className="text-right text-green-600">{formatCurrency(group.collected_amount)}</TableCell>
+                                <TableCell className="text-right text-orange-600">{formatCurrency(group.remaining_debt)}</TableCell>
+                                <TableCell className="text-center">
+                                  <span className={group.payment_percentage >= 80 ? 'text-green-600' : group.payment_percentage >= 50 ? 'text-yellow-600' : 'text-red-600'}>
+                                    {group.payment_percentage}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right text-blue-600">{formatCurrency(group.teacher_portion)}</TableCell>
+                                <TableCell className="text-right text-purple-600">{formatCurrency(group.center_portion)}</TableCell>
+                              </TableRow>
+                            ))}
+                            {/* Totals Row */}
+                            <TableRow className="bg-muted/50 font-bold">
+                              <TableCell>TOTAL</TableCell>
+                              <TableCell></TableCell>
+                              <TableCell className="text-center">{monthlyReport.totals.student_count}</TableCell>
+                              <TableCell className="text-center">{monthlyReport.totals.paid_student_count}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(monthlyReport.totals.expected_amount)}</TableCell>
+                              <TableCell className="text-right text-green-600">{formatCurrency(monthlyReport.totals.collected_amount)}</TableCell>
+                              <TableCell className="text-right text-orange-600">{formatCurrency(monthlyReport.totals.remaining_debt)}</TableCell>
+                              <TableCell className="text-center">{monthlyReport.totals.payment_percentage}%</TableCell>
+                              <TableCell className="text-right text-blue-600">{formatCurrency(monthlyReport.totals.teacher_portion)}</TableCell>
+                              <TableCell className="text-right text-purple-600">{formatCurrency(monthlyReport.totals.center_portion)}</TableCell>
+                            </TableRow>
+                          </>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Select a month to view report
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="payments" className="mt-4">
@@ -400,7 +649,7 @@ export function Reports() {
                             {formatAuditValues(entry.new_values)}
                           </TableCell>
                           <TableCell className="text-muted-foreground whitespace-nowrap">
-                            {formatDate(entry.created_at)} {new Date(entry.created_at).toLocaleTimeString()}
+                            {formatDateTime(entry.created_at)}
                           </TableCell>
                         </TableRow>
                       ))

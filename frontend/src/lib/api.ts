@@ -82,12 +82,12 @@ export const authApi = {
 
 // Students API
 export const studentsApi = {
-  getAll: (params?: { status?: string; search?: string }) =>
+  getAll: (params?: { status?: string; search?: string; group_id?: string }) =>
     api.get<Student[]>('/students', params),
 
   getById: (id: number) => api.get<Student>(`/students/${id}`),
 
-  create: (data: Omit<Student, 'id' | 'created_at'>) =>
+  create: (data: Omit<Student, 'id' | 'created_at' | 'groups_list' | 'enrollments' | 'current_month_debt' | 'current_month_expected' | 'current_month_paid'>) =>
     api.post<{ id: number }>('/students', data),
 
   update: (id: number, data: Partial<Student>) =>
@@ -134,8 +134,11 @@ export const enrollmentsApi = {
   getByStudent: (studentId: number) =>
     api.get<Enrollment[]>('/enrollments', { student_id: String(studentId) }),
 
-  create: (studentId: number, groupId: number) =>
-    api.post<{ ok: boolean }>('/enrollments', { student_id: studentId, group_id: groupId }),
+  create: (studentId: number, groupId: number, discountPercentage: number = 0) =>
+    api.post<{ ok: boolean }>('/enrollments', { student_id: studentId, group_id: groupId, discount_percentage: discountPercentage }),
+
+  update: (id: number, data: { discount_percentage: number }) =>
+    api.put<{ ok: boolean }>(`/enrollments/${id}`, data),
 
   delete: (id: number) => api.delete<{ ok: boolean }>(`/enrollments/${id}`),
 }
@@ -144,8 +147,14 @@ export const enrollmentsApi = {
 export const paymentsApi = {
   getAll: () => api.get<Payment[]>('/payments'),
 
-  create: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name'>) =>
+  create: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name' | 'months_covered'> & { months?: string[] }) =>
     api.post<{ id: number; invoice_no: string }>('/payments', data),
+}
+
+// Student Debt API
+export const studentDebtApi = {
+  get: (studentId: number, groupId: number, month: string) =>
+    api.get<StudentDebt>('/student-debt', { student_id: String(studentId), group_id: String(groupId), month }),
 }
 
 // Expenses API
@@ -160,7 +169,7 @@ export const expensesApi = {
 export const leadsApi = {
   getAll: () => api.get<Lead[]>('/leads'),
 
-  create: (data: Omit<Lead, 'id' | 'created_at' | 'updated_at' | 'converted_student_id'>) =>
+  create: (data: Omit<Lead, 'id' | 'created_at' | 'updated_at' | 'converted_student_id' | 'trial_group_name' | 'interaction_count'>) =>
     api.post<{ id: number }>('/leads', data),
 
   update: (id: number, data: Partial<Lead>) =>
@@ -170,6 +179,14 @@ export const leadsApi = {
 
   convert: (id: number) =>
     api.post<{ student_id: number }>(`/leads/${id}/convert`),
+
+  getStats: () => api.get<LeadStats>('/lead-stats'),
+
+  getInteractions: (leadId: number) =>
+    api.get<LeadInteraction[]>(`/leads/${leadId}/interactions`),
+
+  addInteraction: (leadId: number, data: Omit<LeadInteraction, 'id' | 'lead_id' | 'created_at' | 'created_by' | 'created_by_name'>) =>
+    api.post<{ id: number }>(`/leads/${leadId}/interactions`, data),
 }
 
 // Attendance API
@@ -193,12 +210,29 @@ export const salarySlipsApi = {
 
   update: (id: number, data: { status: string; paid_at?: string }) =>
     api.put<{ ok: boolean }>(`/salary-slips/${id}`, data),
+
+  preview: (teacherId: number, month: string) =>
+    api.get<TeacherSalaryPreview>('/teacher-salary-preview', { teacher_id: String(teacherId), month }),
 }
 
 // Dashboard API
+export interface RevenueChartData {
+  months: {
+    month: string
+    month_year: string
+    revenue: number
+    expenses: number
+    profit: number
+  }[]
+  growth_percentage: number
+}
+
 export const dashboardApi = {
   getStats: () =>
     api.get<DashboardStats>('/dashboard/stats'),
+
+  getRevenueChart: () =>
+    api.get<RevenueChartData>('/dashboard/revenue-chart'),
 }
 
 // Reports API
@@ -211,6 +245,9 @@ export const reportsApi = {
 
   getIncomeExpense: (from: string, to: string) =>
     api.get<{ from: string; to: string; income: number; expense: number }>('/reports/income-expense', { from, to }),
+
+  getMonthly: (month: string) =>
+    api.get<MonthlyReport>('/reports/monthly', { month }),
 }
 
 // Users API (admin only)
@@ -249,6 +286,13 @@ export interface User {
   last_login?: string
 }
 
+export interface StudentEnrollment {
+  group_id: number
+  group_name: string
+  price: number
+  discount: number
+}
+
 export interface Student {
   id: number
   first_name: string
@@ -267,6 +311,12 @@ export interface Student {
   status: 'active' | 'inactive' | 'graduated' | 'suspended'
   notes?: string
   created_at: string
+  // Enriched fields
+  groups_list?: string
+  enrollments?: StudentEnrollment[]
+  current_month_debt?: number
+  current_month_expected?: number
+  current_month_paid?: number
 }
 
 export interface Teacher {
@@ -276,7 +326,7 @@ export interface Teacher {
   phone?: string
   email?: string
   subjects?: string
-  salary_type: 'fixed' | 'hourly' | 'per_student'
+  salary_type: 'fixed' | 'per_student'
   salary_amount: number
   status: 'active' | 'inactive'
   created_at: string
@@ -304,7 +354,9 @@ export interface Enrollment {
   group_id: number
   student_name?: string
   group_name?: string
+  group_price?: number
   enrolled_at: string
+  discount_percentage: number
 }
 
 export interface Payment {
@@ -318,6 +370,49 @@ export interface Payment {
   method: 'cash' | 'card' | 'transfer' | 'other'
   notes?: string
   created_at: string
+  months_covered?: { month: string; amount: number }[]
+}
+
+export interface StudentDebt {
+  student_id: number
+  group_id: number
+  month: string
+  group_price: number
+  discount_percentage: number
+  monthly_debt: number
+  paid_amount: number
+  remaining_debt: number
+}
+
+export interface MonthlyReportGroup {
+  group_id: number
+  group_name: string
+  teacher_name: string
+  teacher_salary_type: string
+  teacher_salary_amount: number
+  student_count: number
+  paid_student_count: number
+  expected_amount: number
+  collected_amount: number
+  remaining_debt: number
+  payment_percentage: number
+  teacher_portion: number
+  center_portion: number
+}
+
+export interface MonthlyReport {
+  month: string
+  groups: MonthlyReportGroup[]
+  totals: {
+    student_count: number
+    paid_student_count: number
+    expected_amount: number
+    collected_amount: number
+    remaining_debt: number
+    payment_percentage: number
+    teacher_portion: number
+    center_portion: number
+  }
 }
 
 export interface Expense {
@@ -338,12 +433,46 @@ export interface Lead {
   parent_name?: string
   parent_phone?: string
   source?: string
-  status: 'new' | 'contacted' | 'trial' | 'enrolled' | 'lost'
+  status: 'new' | 'contacted' | 'interested' | 'trial_scheduled' | 'trial_completed' | 'negotiating' | 'enrolled' | 'lost' | 'postponed'
   notes?: string
   follow_up_date?: string
   converted_student_id?: number
   created_at: string
   updated_at: string
+  // Enhanced fields
+  priority?: 'hot' | 'warm' | 'cold'
+  interested_courses?: string
+  trial_date?: string
+  trial_group_id?: number
+  trial_group_name?: string
+  last_contact_date?: string
+  birth_year?: number
+  preferred_schedule?: string
+  budget?: string
+  loss_reason?: string
+  interaction_count?: number
+}
+
+export interface LeadInteraction {
+  id: number
+  lead_id: number
+  type: 'call' | 'whatsapp' | 'email' | 'meeting' | 'trial' | 'note'
+  notes?: string
+  scheduled_at?: string
+  completed_at?: string
+  created_by?: number
+  created_by_name?: string
+  created_at: string
+}
+
+export interface LeadStats {
+  by_status: Record<string, number>
+  follow_ups_today: number
+  follow_ups_overdue: number
+  trials_scheduled: number
+  hot_leads: number
+  conversions_this_month: number
+  by_source: { source: string; count: number }[]
 }
 
 export interface AttendanceRow {
@@ -367,6 +496,15 @@ export interface SalarySlip {
   paid_at?: string
   notes?: string
   created_at: string
+}
+
+export interface TeacherSalaryPreview {
+  teacher_id: number
+  month: string
+  salary_type: 'fixed' | 'per_student'
+  salary_percentage: number
+  collected_amount: number
+  base_amount: number
 }
 
 export interface DashboardStats {

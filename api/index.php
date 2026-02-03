@@ -83,12 +83,88 @@ try {
         case 'students':
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($method === 'GET') {
-                $q = "SELECT * FROM students ORDER BY created_at DESC";
+                // Build query with optional filters
+                $where = [];
                 $params = [];
-                if (!empty($_GET['status'])) { $q = "SELECT * FROM students WHERE status = ? ORDER BY created_at DESC"; $params[] = $_GET['status']; }
-                if (!empty($_GET['search'])) { $q = "SELECT * FROM students WHERE first_name ILIKE ? OR last_name ILIKE ? OR phone ILIKE ? ORDER BY created_at DESC"; $s = '%'.$_GET['search'].'%'; $params = [$s,$s,$s]; }
-                $stmt = $params ? db()->prepare($q) : db()->query($q); if ($params) $stmt->execute($params);
-                jsonResponse($stmt->fetchAll());
+                if (!empty($_GET['status'])) {
+                    $where[] = "s.status = ?";
+                    $params[] = $_GET['status'];
+                }
+                if (!empty($_GET['search'])) {
+                    $s = '%' . $_GET['search'] . '%';
+                    $where[] = "(s.first_name ILIKE ? OR s.last_name ILIKE ? OR s.phone ILIKE ? OR s.email ILIKE ?)";
+                    $params = array_merge($params, [$s, $s, $s, $s]);
+                }
+                if (!empty($_GET['group_id'])) {
+                    $where[] = "EXISTS (SELECT 1 FROM enrollments e2 WHERE e2.student_id = s.id AND e2.group_id = ?)";
+                    $params[] = (int)$_GET['group_id'];
+                }
+                $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+                // Get students with aggregated enrollment info
+                $q = "
+                    SELECT s.*,
+                        COALESCE(
+                            (SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                             FROM enrollments e
+                             JOIN groups g ON e.group_id = g.id
+                             WHERE e.student_id = s.id),
+                            ''
+                        ) AS groups_list,
+                        COALESCE(
+                            (SELECT json_agg(json_build_object('group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage))
+                             FROM enrollments e
+                             JOIN groups g ON e.group_id = g.id
+                             WHERE e.student_id = s.id),
+                            '[]'
+                        ) AS enrollments_json
+                    FROM students s
+                    $whereClause
+                    ORDER BY s.created_at DESC
+                ";
+                $stmt = $params ? db()->prepare($q) : db()->query($q);
+                if ($params) $stmt->execute($params);
+                $students = $stmt->fetchAll();
+
+                // Calculate debt for each student
+                $currentMonth = date('Y-m-01');
+                $debtStmt = db()->prepare("
+                    SELECT
+                        e.student_id,
+                        SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
+                        COALESCE(SUM(
+                            (SELECT COALESCE(SUM(pm.amount), 0)
+                             FROM payment_months pm
+                             JOIN payments p ON pm.payment_id = p.id
+                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ?)
+                        ), 0) AS paid
+                    FROM enrollments e
+                    JOIN groups g ON e.group_id = g.id
+                    WHERE e.student_id = ?
+                    GROUP BY e.student_id
+                ");
+
+                foreach ($students as &$student) {
+                    // Parse enrollments JSON
+                    $student['enrollments'] = json_decode($student['enrollments_json'], true) ?: [];
+                    unset($student['enrollments_json']);
+
+                    // Calculate current month debt
+                    $debtStmt->execute([$currentMonth, $student['id']]);
+                    $debtRow = $debtStmt->fetch();
+                    if ($debtRow) {
+                        $expected = (float)$debtRow['expected'];
+                        $paid = (float)$debtRow['paid'];
+                        $student['current_month_debt'] = round(max(0, $expected - $paid), 2);
+                        $student['current_month_expected'] = round($expected, 2);
+                        $student['current_month_paid'] = round($paid, 2);
+                    } else {
+                        $student['current_month_debt'] = 0;
+                        $student['current_month_expected'] = 0;
+                        $student['current_month_paid'] = 0;
+                    }
+                }
+                jsonResponse($students);
             } elseif ($method === 'POST') {
                 $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes) VALUES (?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
@@ -194,15 +270,23 @@ try {
                     $stmt = db()->prepare("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ?");
                     $stmt->execute([$group]);
                 } elseif ($student) {
-                    $stmt = db()->prepare("SELECT e.*, g.name AS group_name FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?");
+                    $stmt = db()->prepare("SELECT e.*, g.name AS group_name, g.price AS group_price FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?");
                     $stmt->execute([$student]);
                 } else {
                     $stmt = db()->query("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM enrollments e JOIN students s ON e.student_id = s.id JOIN groups g ON e.group_id = g.id ORDER BY e.enrolled_at DESC");
                 }
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO enrollments (student_id, group_id) VALUES (?,?) ON CONFLICT (student_id, group_id) DO NOTHING");
-                $stmt->execute([(int)($input['student_id'] ?? 0), (int)($input['group_id'] ?? 0)]);
+                $discountPct = isset($input['discount_percentage']) ? max(0, min(100, (float)$input['discount_percentage'])) : 0;
+                $stmt = db()->prepare("INSERT INTO enrollments (student_id, group_id, discount_percentage) VALUES (?,?,?) ON CONFLICT (student_id, group_id) DO UPDATE SET discount_percentage = EXCLUDED.discount_percentage");
+                $stmt->execute([(int)($input['student_id'] ?? 0), (int)($input['group_id'] ?? 0), $discountPct]);
+                jsonResponse(['ok' => true]);
+            } elseif ($id && $method === 'PUT') {
+                $discountPct = isset($input['discount_percentage']) ? max(0, min(100, (float)$input['discount_percentage'])) : null;
+                if ($discountPct !== null) {
+                    $stmt = db()->prepare("UPDATE enrollments SET discount_percentage = ? WHERE id = ?");
+                    $stmt->execute([$discountPct, $id]);
+                }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 $stmt = db()->prepare("DELETE FROM enrollments WHERE id = ?");
@@ -214,16 +298,85 @@ try {
         case 'payments':
             requireRole(['admin', 'manager', 'accountant']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id ORDER BY p.payment_date DESC LIMIT 500");
-                jsonResponse($stmt->fetchAll());
+                // Include months_covered for each payment
+                $stmt = db()->query("
+                    SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name
+                    FROM payments p
+                    JOIN students s ON p.student_id = s.id
+                    LEFT JOIN groups g ON p.group_id = g.id
+                    ORDER BY p.created_at DESC LIMIT 500
+                ");
+                $payments = $stmt->fetchAll();
+                // Fetch months for all payments
+                $paymentIds = array_column($payments, 'id');
+                $monthsMap = [];
+                if ($paymentIds) {
+                    $placeholders = implode(',', array_fill(0, count($paymentIds), '?'));
+                    $monthsStmt = db()->prepare("SELECT payment_id, for_month, amount FROM payment_months WHERE payment_id IN ($placeholders) ORDER BY for_month");
+                    $monthsStmt->execute($paymentIds);
+                    foreach ($monthsStmt->fetchAll() as $row) {
+                        $monthsMap[$row['payment_id']][] = ['month' => substr($row['for_month'], 0, 7), 'amount' => (float)$row['amount']];
+                    }
+                }
+                foreach ($payments as &$p) {
+                    $p['months_covered'] = $monthsMap[$p['id']] ?? [];
+                }
+                jsonResponse($payments);
             } elseif ($method === 'POST') {
+                $studentId = (int)($input['student_id'] ?? 0);
+                $groupId = $input['group_id'] ? (int)$input['group_id'] : null;
+                $amount = (float)($input['amount'] ?? 0);
+                $paymentDate = $input['payment_date'] ?? date('Y-m-d');
+                $method_pay = $input['method'] ?? 'cash';
+                $notes = $input['notes'] ?? '';
+                $months = $input['months'] ?? []; // array of YYYY-MM strings
+
+                // Validate months and calculate allowed amount
+                if ($groupId && !empty($months)) {
+                    // Get enrollment info
+                    $enrollStmt = db()->prepare("
+                        SELECT e.discount_percentage, g.price AS group_price
+                        FROM enrollments e
+                        JOIN groups g ON e.group_id = g.id
+                        WHERE e.student_id = ? AND e.group_id = ?
+                    ");
+                    $enrollStmt->execute([$studentId, $groupId]);
+                    $enrollment = $enrollStmt->fetch();
+                    if ($enrollment) {
+                        $groupPrice = (float)$enrollment['group_price'];
+                        $discountPct = (float)$enrollment['discount_percentage'];
+                        $monthlyDebt = $groupPrice * (1 - $discountPct / 100);
+
+                        // Calculate total remaining debt for selected months
+                        $totalRemainingDebt = 0;
+                        foreach ($months as $m) {
+                            $monthStart = $m . '-01';
+                            $paidStmt = db()->prepare("
+                                SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                                FROM payment_months pm
+                                JOIN payments p ON pm.payment_id = p.id
+                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                            ");
+                            $paidStmt->execute([$studentId, $groupId, $monthStart]);
+                            $paidForMonth = (float)$paidStmt->fetchColumn();
+                            $totalRemainingDebt += max(0, $monthlyDebt - $paidForMonth);
+                        }
+
+                        // Validate amount doesn't exceed debt
+                        if ($amount > $totalRemainingDebt + 0.01) {
+                            jsonError("Amount ({$amount}) exceeds remaining debt ({$totalRemainingDebt}) for selected months", 400);
+                            break;
+                        }
+                    }
+                }
+
                 $newPayload = [
-                    'student_id' => (int)($input['student_id'] ?? 0),
-                    'group_id' => $input['group_id'] ? (int)$input['group_id'] : null,
-                    'amount' => (float)($input['amount'] ?? 0),
-                    'payment_date' => $input['payment_date'] ?? date('Y-m-d'),
-                    'method' => $input['method'] ?? 'cash',
-                    'notes' => $input['notes'] ?? ''
+                    'student_id' => $studentId,
+                    'group_id' => $groupId,
+                    'amount' => $amount,
+                    'payment_date' => $paymentDate,
+                    'method' => $method_pay,
+                    'notes' => $notes
                 ];
                 $stmt = db()->prepare("INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes) VALUES (?,?,?,?,?,?)");
                 $stmt->execute([
@@ -232,6 +385,52 @@ try {
                 $pid = db()->lastInsertId();
                 $invNo = 'INV-' . date('Ymd') . '-' . str_pad($pid, 4, '0', STR_PAD_LEFT);
                 try { db()->prepare("INSERT INTO payment_invoices (payment_id, invoice_no) VALUES (?,?)")->execute([$pid, $invNo]); } catch (Exception $e) {}
+
+                // Insert payment_months entries
+                if (!empty($months) && $groupId) {
+                    // Distribute amount across months proportionally based on remaining debt
+                    $enrollStmt = db()->prepare("
+                        SELECT e.discount_percentage, g.price AS group_price
+                        FROM enrollments e
+                        JOIN groups g ON e.group_id = g.id
+                        WHERE e.student_id = ? AND e.group_id = ?
+                    ");
+                    $enrollStmt->execute([$studentId, $groupId]);
+                    $enrollment = $enrollStmt->fetch();
+                    if ($enrollment) {
+                        $groupPrice = (float)$enrollment['group_price'];
+                        $discountPct = (float)$enrollment['discount_percentage'];
+                        $monthlyDebt = $groupPrice * (1 - $discountPct / 100);
+
+                        $remainingAmount = $amount;
+                        $monthInsert = db()->prepare("INSERT INTO payment_months (payment_id, for_month, amount) VALUES (?, ?, ?)");
+                        foreach ($months as $m) {
+                            if ($remainingAmount <= 0) break;
+                            $monthStart = $m . '-01';
+                            $paidStmt = db()->prepare("
+                                SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                                FROM payment_months pm
+                                JOIN payments p ON pm.payment_id = p.id
+                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                            ");
+                            $paidStmt->execute([$studentId, $groupId, $monthStart]);
+                            $paidForMonth = (float)$paidStmt->fetchColumn();
+                            $debtForMonth = max(0, $monthlyDebt - $paidForMonth);
+                            $payForMonth = min($remainingAmount, $debtForMonth);
+                            if ($payForMonth > 0) {
+                                $monthInsert->execute([$pid, $monthStart, $payForMonth]);
+                                $remainingAmount -= $payForMonth;
+                            }
+                        }
+                    }
+                } elseif (empty($months)) {
+                    // No months specified - assign to payment date month (backward compatibility)
+                    $monthStart = date('Y-m-01', strtotime($paymentDate));
+                    try {
+                        db()->prepare("INSERT INTO payment_months (payment_id, for_month, amount) VALUES (?, ?, ?)")->execute([$pid, $monthStart, $amount]);
+                    } catch (Exception $e) {}
+                }
+
                 $newPayload['id'] = (int)$pid;
                 auditLog('create', 'payment', (int)$pid, null, $newPayload);
                 activityLog('create', 'payment', $pid);
@@ -351,24 +550,53 @@ try {
             requireRole(['admin', 'manager']);
             if ($method === 'GET') {
                 try {
-                    $stmt = db()->query("SELECT * FROM leads ORDER BY created_at DESC");
+                    $stmt = db()->query("
+                        SELECT l.*, g.name AS trial_group_name,
+                            (SELECT COUNT(*) FROM lead_interactions WHERE lead_id = l.id) AS interaction_count
+                        FROM leads l
+                        LEFT JOIN groups g ON l.trial_group_id = g.id
+                        ORDER BY
+                            CASE WHEN l.status IN ('enrolled', 'lost') THEN 1 ELSE 0 END,
+                            CASE l.priority WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 ELSE 2 END,
+                            l.follow_up_date ASC NULLS LAST,
+                            l.created_at DESC
+                    ");
                     jsonResponse($stmt->fetchAll());
                 } catch (PDOException $e) {
-                    jsonResponse([]);
+                    // Fallback for old schema
+                    try {
+                        $stmt = db()->query("SELECT * FROM leads ORDER BY created_at DESC");
+                        jsonResponse($stmt->fetchAll());
+                    } catch (PDOException $e2) {
+                        jsonResponse([]);
+                    }
                 }
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['source'] ?? '', $input['status'] ?? 'new', $input['notes'] ?? '', $input['follow_up_date'] ?? null
+                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['source'] ?? '', $input['status'] ?? 'new',
+                    $input['notes'] ?? '', $input['follow_up_date'] ?? null, $input['priority'] ?? 'warm',
+                    $input['interested_courses'] ?? '', $input['trial_date'] ?? null, $input['trial_group_id'] ?? null,
+                    $input['birth_year'] ?? null, $input['preferred_schedule'] ?? '', $input['budget'] ?? ''
                 ]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'PUT') {
-                $stmt = db()->prepare("UPDATE leads SET first_name=?, last_name=?, phone=?, email=?, parent_name=?, parent_phone=?, source=?, status=?, notes=?, follow_up_date=?, updated_at=CURRENT_TIMESTAMP WHERE id=?");
-                $stmt->execute([
-                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['source'] ?? '', $input['status'] ?? 'new', $input['notes'] ?? '', $input['follow_up_date'] ?? null, $id
-                ]);
+                // Build dynamic update based on provided fields
+                $fields = ['first_name', 'last_name', 'phone', 'email', 'parent_name', 'parent_phone', 'source', 'status', 'notes', 'follow_up_date', 'priority', 'interested_courses', 'trial_date', 'trial_group_id', 'birth_year', 'preferred_schedule', 'budget', 'loss_reason', 'last_contact_date'];
+                $updates = [];
+                $values = [];
+                foreach ($fields as $f) {
+                    if (array_key_exists($f, $input)) {
+                        $updates[] = "$f = ?";
+                        $values[] = $input[$f];
+                    }
+                }
+                if (empty($updates)) { jsonError('No fields to update'); break; }
+                $updates[] = "updated_at = CURRENT_TIMESTAMP";
+                $values[] = $id;
+                $sql = "UPDATE leads SET " . implode(', ', $updates) . " WHERE id = ?";
+                db()->prepare($sql)->execute($values);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 db()->prepare("DELETE FROM leads WHERE id=?")->execute([$id]);
@@ -384,7 +612,58 @@ try {
                 db()->prepare("UPDATE leads SET status='enrolled', converted_student_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$sid, $id]);
                 activityLog('lead_convert', 'lead', $id);
                 jsonResponse(['student_id' => (int)$sid]);
+            } elseif ($id && $sub === 'interactions' && $method === 'GET') {
+                $stmt = db()->prepare("SELECT li.*, u.name AS created_by_name FROM lead_interactions li LEFT JOIN users u ON li.created_by = u.id WHERE li.lead_id = ? ORDER BY li.created_at DESC");
+                $stmt->execute([$id]);
+                jsonResponse($stmt->fetchAll());
+            } elseif ($id && $sub === 'interactions' && $method === 'POST') {
+                $userId = $_SESSION['user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO lead_interactions (lead_id, type, notes, scheduled_at, completed_at, created_by) VALUES (?,?,?,?,?,?)");
+                $stmt->execute([
+                    $id, $input['type'] ?? 'note', $input['notes'] ?? '',
+                    $input['scheduled_at'] ?? null, $input['completed_at'] ?? null, $userId
+                ]);
+                // Update last_contact_date on the lead
+                db()->prepare("UPDATE leads SET last_contact_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
+                jsonResponse(['id' => (int)db()->lastInsertId()]);
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'lead-stats':
+            requireRole(['admin', 'manager']);
+            if ($method === 'GET') {
+                try {
+                    $stats = [];
+                    // Total by status
+                    $stmt = db()->query("SELECT status, COUNT(*) as count FROM leads GROUP BY status");
+                    $byStatus = [];
+                    while ($row = $stmt->fetch()) {
+                        $byStatus[$row['status']] = (int)$row['count'];
+                    }
+                    $stats['by_status'] = $byStatus;
+                    // Follow-ups due today
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE follow_up_date = CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stats['follow_ups_today'] = (int)$stmt->fetchColumn();
+                    // Follow-ups overdue
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE follow_up_date < CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stats['follow_ups_overdue'] = (int)$stmt->fetchColumn();
+                    // Trials scheduled
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE trial_date IS NOT NULL AND trial_date >= CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stats['trials_scheduled'] = (int)$stmt->fetchColumn();
+                    // Hot leads
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE priority = 'hot' AND status NOT IN ('enrolled', 'lost')");
+                    $stats['hot_leads'] = (int)$stmt->fetchColumn();
+                    // This month conversions
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE status = 'enrolled' AND date_trunc('month', updated_at) = date_trunc('month', CURRENT_DATE)");
+                    $stats['conversions_this_month'] = (int)$stmt->fetchColumn();
+                    // By source
+                    $stmt = db()->query("SELECT source, COUNT(*) as count FROM leads WHERE source IS NOT NULL AND source != '' GROUP BY source ORDER BY count DESC LIMIT 5");
+                    $stats['by_source'] = $stmt->fetchAll();
+                    jsonResponse($stats);
+                } catch (PDOException $e) {
+                    jsonResponse(['by_status' => [], 'follow_ups_today' => 0, 'follow_ups_overdue' => 0, 'trials_scheduled' => 0, 'hot_leads' => 0, 'conversions_this_month' => 0, 'by_source' => []]);
+                }
+            } else { jsonError('Method not allowed', 405); }
             break;
 
         case 'attendance':
@@ -427,6 +706,59 @@ try {
             } else { jsonError('Not found', 404); }
             break;
 
+        case 'teacher-salary-preview':
+            // Preview calculated salary for a teacher in a given month
+            requireRole(['admin', 'accountant']);
+            if ($method === 'GET') {
+                $tid = (int)($_GET['teacher_id'] ?? 0);
+                $month = $_GET['month'] ?? ''; // Format: YYYY-MM
+                if (!$tid || !$month) {
+                    jsonError('teacher_id and month required');
+                }
+                $monthStart = $month . '-01';
+                try {
+                    $tstmt = db()->prepare("SELECT salary_type, salary_amount FROM teachers WHERE id = ?");
+                    $tstmt->execute([$tid]);
+                    $t = $tstmt->fetch();
+                    if (!$t) {
+                        jsonError('Teacher not found', 404);
+                    }
+                    $salaryType = $t['salary_type'] ?? 'fixed';
+                    $salaryAmount = (float)($t['salary_amount'] ?? 0);
+                    $baseAmount = 0;
+                    $collectedAmount = 0;
+
+                    if ($salaryType === 'fixed') {
+                        $baseAmount = $salaryAmount;
+                    } elseif ($salaryType === 'per_student') {
+                        // Calculate from collected payments for this teacher's groups in the month
+                        $paidStmt = db()->prepare("
+                            SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                            FROM payment_months pm
+                            JOIN payments p ON pm.payment_id = p.id
+                            JOIN groups g ON p.group_id = g.id
+                            WHERE g.teacher_id = ? AND pm.for_month = ?
+                        ");
+                        $paidStmt->execute([$tid, $monthStart]);
+                        $collectedAmount = (float)$paidStmt->fetchColumn();
+                        if ($collectedAmount > 0 && $salaryAmount > 0) {
+                            $baseAmount = $collectedAmount * ($salaryAmount / 100);
+                        }
+                    }
+                    jsonResponse([
+                        'teacher_id' => $tid,
+                        'month' => $month,
+                        'salary_type' => $salaryType,
+                        'salary_percentage' => $salaryAmount,
+                        'collected_amount' => round($collectedAmount, 2),
+                        'base_amount' => round($baseAmount, 2)
+                    ]);
+                } catch (Exception $e) {
+                    jsonError('Error calculating salary: ' . $e->getMessage());
+                }
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
         case 'salary-slips':
             requireRole(['admin', 'accountant']);
             if ($method === 'GET') {
@@ -439,6 +771,45 @@ try {
                 $base = (float)($input['base_amount'] ?? 0);
                 $bonus = (float)($input['bonus'] ?? 0);
                 $ded = (float)($input['deduction'] ?? 0);
+
+                // Adjust base amount based on teacher salary type
+                if ($tid > 0 && ($start || $end)) {
+                    try {
+                        $tstmt = db()->prepare("SELECT salary_type, salary_amount FROM teachers WHERE id = ?");
+                        $tstmt->execute([$tid]);
+                        $t = $tstmt->fetch();
+                        if ($t) {
+                            $salaryType = $t['salary_type'] ?? 'fixed';
+                            $salaryAmount = (float)($t['salary_amount'] ?? 0);
+                            // Derive month start from period_start (or period_end as fallback)
+                            $monthRef = $start ?: $end;
+                            $monthStart = $monthRef ? date('Y-m-01', strtotime($monthRef)) : null;
+                            if ($salaryType === 'fixed') {
+                                // Fixed: base is the fixed salary amount
+                                $base = $salaryAmount;
+                            } elseif ($salaryType === 'per_student' && $monthStart) {
+                                // Per-student (percentage of collected payments for this teacher's groups in the month)
+                                $paidStmt = db()->prepare("
+                                    SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                                    FROM payment_months pm
+                                    JOIN payments p ON pm.payment_id = p.id
+                                    JOIN groups g ON p.group_id = g.id
+                                    WHERE g.teacher_id = ? AND pm.for_month = ?
+                                ");
+                                $paidStmt->execute([$tid, $monthStart]);
+                                $collected = (float)$paidStmt->fetchColumn();
+                                if ($collected > 0 && $salaryAmount > 0) {
+                                    $base = $collected * ($salaryAmount / 100);
+                                } else {
+                                    $base = 0;
+                                }
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // If anything goes wrong, fall back to provided base amount
+                    }
+                }
+
                 $total = $base + $bonus - $ded;
                 $stmt = db()->prepare("INSERT INTO salary_slips (teacher_id, period_start, period_end, base_amount, bonus, deduction, total_amount, status, notes) VALUES (?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([$tid, $start, $end, $base, $bonus, $ded, $total, $input['status'] ?? 'pending', $input['notes'] ?? '']);
@@ -484,7 +855,7 @@ try {
                     $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $leads = 0;
                     try {
-                        $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial')")->fetchColumn();
+                        $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial','interested','trial_scheduled','trial_completed','negotiating')")->fetchColumn();
                     } catch (PDOException $e) {}
                     jsonResponse([
                         'students' => (int)$students,
@@ -497,6 +868,47 @@ try {
                     ]);
                 } catch (PDOException $e) {
                     jsonResponse(['students' => 0, 'teachers' => 0, 'groups' => 0, 'revenue' => 0, 'expenses' => 0, 'profit' => 0, 'leads_pending' => 0]);
+                }
+            } elseif ($sub === 'revenue-chart') {
+                // Get monthly revenue and expenses for the last 6 months
+                try {
+                    $months = [];
+                    for ($i = 5; $i >= 0; $i--) {
+                        $monthStart = date('Y-m-01', strtotime("-$i months"));
+                        $monthEnd = date('Y-m-t', strtotime("-$i months"));
+                        $monthLabel = date('M', strtotime($monthStart));
+                        $monthYear = date('Y-m', strtotime($monthStart));
+
+                        // Get revenue for this month
+                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ?");
+                        $revStmt->execute([$monthStart, $monthEnd]);
+                        $revenue = (float)$revStmt->fetchColumn();
+
+                        // Get expenses for this month
+                        $expStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date BETWEEN ? AND ?");
+                        $expStmt->execute([$monthStart, $monthEnd]);
+                        $expenses = (float)$expStmt->fetchColumn();
+
+                        $months[] = [
+                            'month' => $monthLabel,
+                            'month_year' => $monthYear,
+                            'revenue' => round($revenue, 2),
+                            'expenses' => round($expenses, 2),
+                            'profit' => round($revenue - $expenses, 2)
+                        ];
+                    }
+
+                    // Calculate growth percentage (current month vs previous month)
+                    $currentRevenue = $months[5]['revenue'] ?? 0;
+                    $previousRevenue = $months[4]['revenue'] ?? 0;
+                    $growth = $previousRevenue > 0 ? round((($currentRevenue - $previousRevenue) / $previousRevenue) * 100, 1) : 0;
+
+                    jsonResponse([
+                        'months' => $months,
+                        'growth_percentage' => $growth
+                    ]);
+                } catch (PDOException $e) {
+                    jsonResponse(['months' => [], 'growth_percentage' => 0]);
                 }
             } else { jsonError('Not found', 404); }
             break;
@@ -536,6 +948,138 @@ try {
                 $stmt = db()->prepare($q);
                 $stmt->execute($params);
                 jsonResponse($stmt->fetchAll());
+            } elseif ($report === 'monthly') {
+                // Monthly report: groups, teachers, students, payments, debt, revenue split
+                $month = $_GET['month'] ?? date('Y-m'); // format: YYYY-MM
+                $monthStart = $month . '-01';
+                $monthEnd = date('Y-m-t', strtotime($monthStart));
+
+                // Get all active groups with teacher info
+                $groupsStmt = db()->query("
+                    SELECT g.id, g.name, g.price, g.teacher_id,
+                           t.first_name || ' ' || t.last_name AS teacher_name,
+                           t.salary_type, t.salary_amount
+                    FROM groups g
+                    LEFT JOIN teachers t ON g.teacher_id = t.id
+                    WHERE g.status = 'active'
+                    ORDER BY g.name
+                ");
+                $groups = $groupsStmt->fetchAll();
+
+                $reportGroups = [];
+                $totals = [
+                    'student_count' => 0,
+                    'paid_student_count' => 0,
+                    'expected_amount' => 0,
+                    'collected_amount' => 0,
+                    'remaining_debt' => 0,
+                    'teacher_portion' => 0,
+                    'center_portion' => 0
+                ];
+
+                foreach ($groups as $g) {
+                    $groupId = (int)$g['id'];
+                    $groupPrice = (float)$g['price'];
+
+                    // Get enrolled students with their discounts
+                    $enrollStmt = db()->prepare("
+                        SELECT e.student_id, e.discount_percentage, e.enrolled_at
+                        FROM enrollments e
+                        JOIN students s ON e.student_id = s.id
+                        WHERE e.group_id = ? AND s.status = 'active'
+                    ");
+                    $enrollStmt->execute([$groupId]);
+                    $enrollments = $enrollStmt->fetchAll();
+                    $studentCount = count($enrollments);
+
+                    // Calculate expected amount (sum of all student debts after discount)
+                    $expectedAmount = 0;
+                    $studentIds = [];
+                    foreach ($enrollments as $e) {
+                        $discount = (float)$e['discount_percentage'];
+                        $monthlyDebt = $groupPrice * (1 - $discount / 100);
+                        $expectedAmount += $monthlyDebt;
+                        $studentIds[] = (int)$e['student_id'];
+                    }
+
+                    // Get collected amount for this group and month
+                    $collectedAmount = 0;
+                    $paidStudentIds = [];
+                    if ($studentIds) {
+                        $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+                        $collectedStmt = db()->prepare("
+                            SELECT p.student_id, SUM(pm.amount) AS paid
+                            FROM payment_months pm
+                            JOIN payments p ON pm.payment_id = p.id
+                            WHERE p.group_id = ? AND pm.for_month = ? AND p.student_id IN ($placeholders)
+                            GROUP BY p.student_id
+                        ");
+                        $params = array_merge([$groupId, $monthStart], $studentIds);
+                        $collectedStmt->execute($params);
+                        foreach ($collectedStmt->fetchAll() as $row) {
+                            $collectedAmount += (float)$row['paid'];
+                            if ((float)$row['paid'] > 0) {
+                                $paidStudentIds[] = (int)$row['student_id'];
+                            }
+                        }
+                    }
+                    $paidStudentCount = count(array_unique($paidStudentIds));
+                    $remainingDebt = max(0, $expectedAmount - $collectedAmount);
+
+                    // Calculate payment percentage
+                    $paymentPercentage = $expectedAmount > 0 ? round(($collectedAmount / $expectedAmount) * 100, 1) : 0;
+
+                    // Calculate teacher portion based on salary type
+                    $teacherPortion = 0;
+                    $salaryType = $g['salary_type'] ?? 'fixed';
+                    $salaryAmount = (float)($g['salary_amount'] ?? 0);
+                    if ($salaryType === 'per_student' && $collectedAmount > 0) {
+                        // For per_student: salary_amount is percentage of collected
+                        $teacherPortion = $collectedAmount * ($salaryAmount / 100);
+                    }
+                    $centerPortion = $collectedAmount - $teacherPortion;
+
+                    $reportGroups[] = [
+                        'group_id' => $groupId,
+                        'group_name' => $g['name'],
+                        'teacher_name' => $g['teacher_name'] ?? 'Unassigned',
+                        'teacher_salary_type' => $salaryType,
+                        'teacher_salary_amount' => $salaryAmount,
+                        'student_count' => $studentCount,
+                        'paid_student_count' => $paidStudentCount,
+                        'expected_amount' => round($expectedAmount, 2),
+                        'collected_amount' => round($collectedAmount, 2),
+                        'remaining_debt' => round($remainingDebt, 2),
+                        'payment_percentage' => $paymentPercentage,
+                        'teacher_portion' => round($teacherPortion, 2),
+                        'center_portion' => round($centerPortion, 2)
+                    ];
+
+                    // Accumulate totals
+                    $totals['student_count'] += $studentCount;
+                    $totals['paid_student_count'] += $paidStudentCount;
+                    $totals['expected_amount'] += $expectedAmount;
+                    $totals['collected_amount'] += $collectedAmount;
+                    $totals['remaining_debt'] += $remainingDebt;
+                    $totals['teacher_portion'] += $teacherPortion;
+                    $totals['center_portion'] += $centerPortion;
+                }
+
+                // Round totals
+                $totals['expected_amount'] = round($totals['expected_amount'], 2);
+                $totals['collected_amount'] = round($totals['collected_amount'], 2);
+                $totals['remaining_debt'] = round($totals['remaining_debt'], 2);
+                $totals['teacher_portion'] = round($totals['teacher_portion'], 2);
+                $totals['center_portion'] = round($totals['center_portion'], 2);
+                $totals['payment_percentage'] = $totals['expected_amount'] > 0
+                    ? round(($totals['collected_amount'] / $totals['expected_amount']) * 100, 1)
+                    : 0;
+
+                jsonResponse([
+                    'month' => $month,
+                    'groups' => $reportGroups,
+                    'totals' => $totals
+                ]);
             } else { jsonError('Report type required'); }
             break;
 
@@ -746,6 +1290,57 @@ try {
             } catch (PDOException $e) {
                 jsonResponse([]);
             }
+            break;
+
+        case 'student-debt':
+            requireRole(['admin', 'manager', 'teacher', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+            $groupId = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+            $month = $_GET['month'] ?? date('Y-m'); // format: YYYY-MM
+            if (!$studentId || !$groupId) {
+                jsonError('student_id and group_id required');
+                break;
+            }
+            // Get enrollment info with discount
+            $enrollStmt = db()->prepare("
+                SELECT e.discount_percentage, e.enrolled_at, g.price AS group_price
+                FROM enrollments e
+                JOIN groups g ON e.group_id = g.id
+                WHERE e.student_id = ? AND e.group_id = ?
+            ");
+            $enrollStmt->execute([$studentId, $groupId]);
+            $enrollment = $enrollStmt->fetch();
+            if (!$enrollment) {
+                jsonError('Student not enrolled in this group', 404);
+                break;
+            }
+            $groupPrice = (float)$enrollment['group_price'];
+            $discountPct = (float)$enrollment['discount_percentage'];
+            $monthlyDebt = $groupPrice * (1 - $discountPct / 100);
+
+            // Get paid amount for this month
+            $monthStart = $month . '-01';
+            $paidStmt = db()->prepare("
+                SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                FROM payment_months pm
+                JOIN payments p ON pm.payment_id = p.id
+                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+            ");
+            $paidStmt->execute([$studentId, $groupId, $monthStart]);
+            $paidAmount = (float)$paidStmt->fetchColumn();
+            $remainingDebt = max(0, $monthlyDebt - $paidAmount);
+
+            jsonResponse([
+                'student_id' => $studentId,
+                'group_id' => $groupId,
+                'month' => $month,
+                'group_price' => $groupPrice,
+                'discount_percentage' => $discountPct,
+                'monthly_debt' => round($monthlyDebt, 2),
+                'paid_amount' => round($paidAmount, 2),
+                'remaining_debt' => round($remainingDebt, 2)
+            ]);
             break;
 
         default:

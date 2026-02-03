@@ -55,12 +55,14 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Calendar className="h-4 w-4" />
-          {new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}
+{(() => {
+            const d = new Date()
+            const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+            const day = String(d.getDate()).padStart(2, '0')
+            const month = String(d.getMonth() + 1).padStart(2, '0')
+            const year = d.getFullYear()
+            return `${weekday}, ${day}/${month}/${year}`
+          })()}
         </div>
       </div>
 

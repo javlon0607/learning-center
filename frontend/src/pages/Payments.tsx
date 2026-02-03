@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { paymentsApi, studentsApi, groupsApi, Payment } from '@/lib/api'
+import { paymentsApi, studentsApi, groupsApi, enrollmentsApi, studentDebtApi, Payment } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -30,8 +30,32 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, Loader2 } from 'lucide-react'
-import { formatCurrency, formatDate, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
+import { Plus, Search, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { DateInput } from '@/components/ui/date-input'
+import { formatCurrency, formatDate, formatDateTime, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
+
+// Format YYYY-MM as "Jan 2026" using local date (avoid UTC parsing shifting month)
+function formatMonthKey(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
+}
+
+// Generate month options (6 months back and 6 months forward)
+// Use local date components for YYYY-MM so timezone doesn't shift the month (toISOString() would use UTC).
+function getMonthOptions() {
+  const months: { value: string; label: string }[] = []
+  const now = new Date()
+  for (let i = -6; i <= 6; i++) {
+    const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    const y = date.getFullYear()
+    const m = date.getMonth() + 1
+    const value = `${y}-${String(m).padStart(2, '0')}` // YYYY-MM in local
+    const label = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    months.push({ value, label })
+  }
+  return months
+}
 
 export function Payments() {
   const queryClient = useQueryClient()
@@ -39,6 +63,30 @@ export function Payments() {
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [amountStr, setAmountStr] = useState('')
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('')
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('')
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
+  const [debtInfo, setDebtInfo] = useState<{
+    groupPrice: number
+    discountPercentage: number
+    monthlyDebt: number
+    monthDebts: { month: string; debt: number; paid: number; remaining: number }[]
+    totalRemaining: number
+  } | null>(null)
+  const [loadingDebt, setLoadingDebt] = useState(false)
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [filterPaymentMonth, setFilterPaymentMonth] = useState<string>('')
+  const [filterCourseMonth, setFilterCourseMonth] = useState<string>('')
+  const [filterGroupId, setFilterGroupId] = useState<string>('')
+  const [filterMethod, setFilterMethod] = useState<string>('')
+
+  const monthOptions = useMemo(() => getMonthOptions(), [])
+  const paymentMethods = useMemo(() => [
+    { value: 'cash', label: 'Cash' },
+    { value: 'card', label: 'Card' },
+    { value: 'transfer', label: 'Bank Transfer' },
+    { value: 'other', label: 'Other' },
+  ], [])
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payments'],
@@ -55,8 +103,56 @@ export function Payments() {
     queryFn: groupsApi.getAll,
   })
 
+  // Get students enrolled in the selected group (for Record Payment: group first, then students in that group)
+  const { data: groupEnrollments = [] } = useQuery({
+    queryKey: ['enrollments', 'group', selectedGroupId],
+    queryFn: () => enrollmentsApi.getByGroup(Number(selectedGroupId)),
+    enabled: !!selectedGroupId,
+  })
+
+  // Fetch debt info when student, group and months are selected
+  useEffect(() => {
+    async function fetchDebtInfo() {
+      if (!selectedStudentId || !selectedGroupId || selectedMonths.length === 0) {
+        setDebtInfo(null)
+        return
+      }
+
+      setLoadingDebt(true)
+      try {
+        const monthDebts: { month: string; debt: number; paid: number; remaining: number }[] = []
+        let totalRemaining = 0
+        let groupPrice = 0
+        let discountPercentage = 0
+        let monthlyDebt = 0
+
+        for (const month of selectedMonths) {
+          const debt = await studentDebtApi.get(Number(selectedStudentId), Number(selectedGroupId), month)
+          groupPrice = debt.group_price
+          discountPercentage = debt.discount_percentage
+          monthlyDebt = debt.monthly_debt
+          monthDebts.push({
+            month,
+            debt: debt.monthly_debt,
+            paid: debt.paid_amount,
+            remaining: debt.remaining_debt
+          })
+          totalRemaining += debt.remaining_debt
+        }
+
+        setDebtInfo({ groupPrice, discountPercentage, monthlyDebt, monthDebts, totalRemaining })
+      } catch (err) {
+        console.error('Failed to fetch debt info:', err)
+        setDebtInfo(null)
+      } finally {
+        setLoadingDebt(false)
+      }
+    }
+    fetchDebtInfo()
+  }, [selectedStudentId, selectedGroupId, selectedMonths])
+
   const createPayment = useMutation({
-    mutationFn: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name'>) =>
+    mutationFn: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name' | 'months_covered'> & { months?: string[] }) =>
       paymentsApi.create(data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['payments'] })
@@ -66,14 +162,53 @@ export function Payments() {
         description: `Invoice: ${data.invoice_no}`,
       })
       setFormOpen(false)
+      resetForm()
     },
   })
 
-  const filteredPayments = payments.filter(
-    (p) =>
-      p.student_name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.group_name?.toLowerCase().includes(search.toLowerCase())
-  )
+  function resetForm() {
+    setAmountStr('')
+    setSelectedStudentId('')
+    setSelectedGroupId('')
+    setSelectedMonths([])
+    setDebtInfo(null)
+    setPaymentDate(new Date().toISOString().split('T')[0])
+  }
+
+  function toggleMonth(month: string) {
+    setSelectedMonths(prev =>
+      prev.includes(month)
+        ? prev.filter(m => m !== month)
+        : [...prev, month].sort()
+    )
+  }
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter((p) => {
+      const searchMatch =
+        !search ||
+        p.student_name?.toLowerCase().includes(search.toLowerCase()) ||
+        p.group_name?.toLowerCase().includes(search.toLowerCase())
+      if (!searchMatch) return false
+
+      if (filterPaymentMonth) {
+        const d = new Date(p.created_at)
+        const payMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        if (payMonth !== filterPaymentMonth) return false
+      }
+      if (filterCourseMonth) {
+        const months = p.months_covered?.map((mc) => mc.month) ?? []
+        if (months.length === 0) {
+          const d = new Date(p.payment_date)
+          const payDateMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          if (payDateMonth !== filterCourseMonth) return false
+        } else if (!months.includes(filterCourseMonth)) return false
+      }
+      if (filterGroupId && p.group_id !== Number(filterGroupId)) return false
+      if (filterMethod && p.method !== filterMethod) return false
+      return true
+    })
+  }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod])
 
   function handleAmountChange(value: string) {
     const cleaned = value.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')
@@ -96,13 +231,25 @@ export function Payments() {
       toast({ title: 'Enter a valid amount', variant: 'destructive' })
       return
     }
+
+    // Validate amount against remaining debt if debt info available
+    if (debtInfo && amountValue > debtInfo.totalRemaining + 0.01) {
+      toast({
+        title: 'Amount exceeds remaining debt',
+        description: `Maximum allowed: ${formatCurrency(debtInfo.totalRemaining)}`,
+        variant: 'destructive'
+      })
+      return
+    }
+
     const data = {
-      student_id: Number(formData.get('student_id')),
-      group_id: formData.get('group_id') ? Number(formData.get('group_id')) : undefined,
+      student_id: Number(selectedStudentId),
+      group_id: selectedGroupId ? Number(selectedGroupId) : undefined,
       amount: amountValue,
-      payment_date: formData.get('payment_date') as string,
+      payment_date: paymentDate,
       method: (formData.get('method') as Payment['method']) || 'cash',
       notes: formData.get('notes') as string,
+      months: selectedMonths.length > 0 ? selectedMonths : undefined,
     }
     createPayment.mutate(data)
   }
@@ -120,8 +267,8 @@ export function Payments() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search payments..."
@@ -130,6 +277,50 @@ export function Payments() {
             className="pl-9"
           />
         </div>
+        <Select value={filterPaymentMonth || '_all'} onValueChange={(v) => setFilterPaymentMonth(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Payment month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All payment months</SelectItem>
+            {monthOptions.map(({ value, label }) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterCourseMonth || '_all'} onValueChange={(v) => setFilterCourseMonth(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Course month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All course months</SelectItem>
+            {monthOptions.map(({ value, label }) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterGroupId || '_all'} onValueChange={(v) => setFilterGroupId(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Group" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All groups</SelectItem>
+            {groups.filter(g => g.status === 'active').map((g) => (
+              <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterMethod || '_all'} onValueChange={(v) => setFilterMethod(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Method" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All methods</SelectItem>
+            {paymentMethods.map((m) => (
+              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -141,9 +332,10 @@ export function Payments() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Date</TableHead>
+                <TableHead>Date & time</TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Group</TableHead>
+                <TableHead>Paid for</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Method</TableHead>
                 <TableHead>Notes</TableHead>
@@ -152,72 +344,180 @@ export function Payments() {
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No payments found
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredPayments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>{formatDate(payment.payment_date)}</TableCell>
-                    <TableCell className="font-medium">{payment.student_name}</TableCell>
-                    <TableCell>{payment.group_name || '-'}</TableCell>
-                    <TableCell className="font-medium text-green-600">
-                      {formatCurrency(payment.amount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {payment.method}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate">
-                      {payment.notes || '-'}
-                    </TableCell>
-                  </TableRow>
-                ))
+                filteredPayments.map((payment) => {
+                  const paidFor = payment.months_covered?.length
+                    ? payment.months_covered.map((mc) => formatMonthKey(mc.month)).join(', ')
+                    : payment.payment_date
+                      ? formatMonthKey(payment.payment_date.slice(0, 7))
+                      : '-'
+                  return (
+                    <TableRow key={payment.id}>
+                      <TableCell>{formatDateTime(payment.created_at)}</TableCell>
+                      <TableCell className="font-medium">{payment.student_name}</TableCell>
+                      <TableCell>{payment.group_name || '-'}</TableCell>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">{paidFor}</TableCell>
+                      <TableCell className="font-medium text-green-600">
+                        {formatCurrency(payment.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {payment.method}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">
+                        {payment.notes || '-'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setAmountStr(''); }}>
-        <DialogContent>
-          <DialogHeader>
+      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) resetForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
             <DialogTitle>Record Payment</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="grid gap-4 py-4 px-6 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-2">
-                <Label htmlFor="student_id">Student *</Label>
-                <Select name="student_id" required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select student" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {students.filter(s => s.status === 'active').map((student) => (
-                      <SelectItem key={student.id} value={student.id.toString()}>
-                        {student.first_name} {student.last_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="group_id">Group (Optional)</Label>
-                <Select name="group_id">
+                <Label htmlFor="group_id">Group *</Label>
+                <Select
+                  value={selectedGroupId}
+                  onValueChange={(val) => {
+                    setSelectedGroupId(val)
+                    setSelectedStudentId('')
+                    setSelectedMonths([])
+                    setDebtInfo(null)
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select group" />
                   </SelectTrigger>
                   <SelectContent>
                     {groups.filter(g => g.status === 'active').map((group) => (
                       <SelectItem key={group.id} value={group.id.toString()}>
-                        {group.name}
+                        {group.name} - {formatCurrency(group.price)}/month
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {selectedGroupId && (
+                <div className="space-y-2">
+                  <Label htmlFor="student_id">Student *</Label>
+                  <Select
+                    value={selectedStudentId}
+                    onValueChange={(val) => {
+                      setSelectedStudentId(val)
+                      setSelectedMonths([])
+                      setDebtInfo(null)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select student in this group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupEnrollments.length > 0 ? (
+                        groupEnrollments.map((e) => (
+                          <SelectItem key={e.student_id} value={e.student_id.toString()}>
+                            {e.student_name ?? `Student ${e.student_id}`}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="_none" disabled>
+                          No students in this group
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {groupEnrollments.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      No students enrolled in this group
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {selectedGroupId && (
+                <div className="space-y-2">
+                  <Label>Months to Pay *</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {monthOptions.map(({ value, label }) => (
+                      <label
+                        key={value}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={selectedMonths.includes(value)}
+                          onCheckedChange={() => toggleMonth(value)}
+                        />
+                        <span className="text-sm">{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {loadingDebt && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading debt info...
+                </div>
+              )}
+
+              {debtInfo && !loadingDebt && (
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span>Group Price:</span>
+                    <span className="font-medium">{formatCurrency(debtInfo.groupPrice)}</span>
+                  </div>
+                  {debtInfo.discountPercentage > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Discount:</span>
+                      <span className="font-medium">{debtInfo.discountPercentage}%</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span>Monthly Rate:</span>
+                    <span className="font-medium">{formatCurrency(debtInfo.monthlyDebt)}</span>
+                  </div>
+                  <hr />
+                  <div className="space-y-1">
+                    {debtInfo.monthDebts.map(md => (
+                      <div key={md.month} className="flex justify-between text-sm">
+                        <span>{formatMonthKey(md.month)}</span>
+                        <span className={md.remaining === 0 ? 'text-green-600' : ''}>
+                          {md.remaining === 0 ? (
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" /> Paid
+                            </span>
+                          ) : (
+                            <>Remaining: {formatCurrency(md.remaining)}</>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <hr />
+                  <div className="flex justify-between font-medium">
+                    <span>Total Remaining:</span>
+                    <span className={debtInfo.totalRemaining > 0 ? 'text-orange-600' : 'text-green-600'}>
+                      {formatCurrency(debtInfo.totalRemaining)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount *</Label>
@@ -232,18 +532,36 @@ export function Payments() {
                     onBlur={handleAmountBlur}
                     required
                   />
+                  {debtInfo && debtInfo.totalRemaining > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-auto py-1"
+                      onClick={() => setAmountStr(debtInfo.totalRemaining.toString())}
+                    >
+                      Pay full remaining: {formatCurrency(debtInfo.totalRemaining)}
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="payment_date">Date *</Label>
-                  <Input
+                  <DateInput
                     id="payment_date"
-                    name="payment_date"
-                    type="date"
-                    defaultValue={new Date().toISOString().split('T')[0]}
+                    value={paymentDate}
+                    onChange={setPaymentDate}
                     required
                   />
                 </div>
               </div>
+
+              {debtInfo && parseAmountFromInput(amountStr) > debtInfo.totalRemaining + 0.01 && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>Amount exceeds remaining debt ({formatCurrency(debtInfo.totalRemaining)})</span>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="method">Payment Method</Label>
                 <Select name="method" defaultValue="cash">
@@ -268,11 +586,20 @@ export function Payments() {
                 />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t bg-muted/30 flex-shrink-0">
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createPayment.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  createPayment.isPending ||
+                  !selectedStudentId ||
+                  !selectedGroupId ||
+                  selectedMonths.length === 0 ||
+                  !!(debtInfo && parseAmountFromInput(amountStr) > debtInfo.totalRemaining + 0.01)
+                }
+              >
                 {createPayment.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}

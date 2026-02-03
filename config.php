@@ -5,7 +5,7 @@ define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_PORT', getenv('DB_PORT') ?: '5432');
 define('DB_NAME', getenv('DB_NAME') ?: 'learning_crm');
 define('DB_USER', getenv('DB_USER') ?: 'postgres');
-define('DB_PASS', getenv('DB_PASS') ?: 'admin');
+define('DB_PASS', getenv('DB_PASS') ?: 'postgres123');
 define('SESSION_TIMEOUT_MINUTES', (int)(getenv('SESSION_TIMEOUT') ?: 30));
 if (!defined('IS_API')) {
     $uri = $_SERVER['REQUEST_URI'] ?? '';
@@ -173,6 +173,7 @@ function initDB() {
         student_id INT REFERENCES students(id) ON DELETE CASCADE,
         group_id INT REFERENCES groups(id) ON DELETE CASCADE,
         enrolled_at DATE DEFAULT CURRENT_DATE,
+        discount_percentage DECIMAL(5,2) DEFAULT 0,
         UNIQUE(student_id, group_id)
     );
     
@@ -225,9 +226,11 @@ function initDB() {
     $additions = __DIR__ . '/schema_additions.sql';
     if (file_exists($additions)) {
         $addSql = file_get_contents($additions);
+        // Remove SQL comments before processing
+        $addSql = preg_replace('/--[^\n]*\n/', "\n", $addSql);
         foreach (explode(';', $addSql) as $q) {
             $q = trim($q);
-            if ($q === '' || stripos($q, '--') === 0) continue;
+            if ($q === '') continue;
             if (stripos($q, 'CREATE') === 0 || stripos($q, 'INSERT') === 0) {
                 try { db()->exec($q); } catch (PDOException $e) { /* ignore */ }
             }
@@ -238,12 +241,77 @@ function initDB() {
     $schemaV2 = __DIR__ . '/schema_v2.sql';
     if (file_exists($schemaV2)) {
         $v2Sql = file_get_contents($schemaV2);
+        // Remove SQL comments before processing
+        $v2Sql = preg_replace('/--[^\n]*\n/', "\n", $v2Sql);
         foreach (explode(';', $v2Sql) as $q) {
             $q = trim($q);
-            if ($q === '' || stripos($q, '--') === 0) continue;
+            if ($q === '') continue;
             if (stripos($q, 'CREATE') === 0 || stripos($q, 'ALTER') === 0 || stripos($q, 'INSERT') === 0) {
                 try { db()->exec($q); } catch (PDOException $e) { /* ignore duplicates */ }
             }
         }
     }
+
+    // Add discount_percentage to enrollments for existing DBs
+    try {
+        db()->exec("ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS discount_percentage DECIMAL(5,2) DEFAULT 0");
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Create payment_months table for month tracking
+    $paymentMonthsSql = "
+    CREATE TABLE IF NOT EXISTS payment_months (
+        id SERIAL PRIMARY KEY,
+        payment_id INT NOT NULL REFERENCES payments(id) ON DELETE CASCADE,
+        for_month DATE NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(payment_id, for_month)
+    )";
+    try { db()->exec($paymentMonthsSql); } catch (PDOException $e) { /* ignore */ }
+
+    // Create indexes for payment_months
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_payment_months_payment ON payment_months(payment_id)"); } catch (PDOException $e) { /* ignore */ }
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_payment_months_month ON payment_months(for_month)"); } catch (PDOException $e) { /* ignore */ }
+
+    // Migrate existing payments to payment_months (assign to their payment month)
+    try {
+        db()->exec("
+            INSERT INTO payment_months (payment_id, for_month, amount)
+            SELECT p.id, date_trunc('month', p.payment_date)::DATE, p.amount
+            FROM payments p
+            WHERE NOT EXISTS (SELECT 1 FROM payment_months pm WHERE pm.payment_id = p.id)
+            ON CONFLICT DO NOTHING
+        ");
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Enhanced leads table columns
+    $leadColumns = [
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'warm'",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS interested_courses TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS trial_date DATE",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS trial_group_id INT REFERENCES groups(id)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contact_date DATE",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS birth_year INT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_schedule TEXT",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS budget VARCHAR(50)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS loss_reason TEXT",
+    ];
+    foreach ($leadColumns as $alter) {
+        try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }
+    }
+
+    // Create lead_interactions table for tracking communication history
+    $leadInteractionsSql = "
+    CREATE TABLE IF NOT EXISTS lead_interactions (
+        id SERIAL PRIMARY KEY,
+        lead_id INT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        type VARCHAR(20) NOT NULL,
+        notes TEXT,
+        scheduled_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        created_by INT REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )";
+    try { db()->exec($leadInteractionsSql); } catch (PDOException $e) { /* ignore */ }
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead ON lead_interactions(lead_id)"); } catch (PDOException $e) { /* ignore */ }
 }

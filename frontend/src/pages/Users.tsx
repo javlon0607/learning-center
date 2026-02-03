@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi, teachersApi, User, UserRole } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -59,6 +60,7 @@ export function Users() {
   const ROLES: UserRole[] = ['admin', 'manager', 'teacher', 'accountant', 'user']
   const [formRoles, setFormRoles] = useState<UserRole[]>(['user'])
   const [formTeacherId, setFormTeacherId] = useState<number | null>(null)
+  const [formPhone, setFormPhone] = useState('')
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -77,6 +79,7 @@ export function Users() {
       const list = r.split(',').map((x) => x.trim()).filter(Boolean) as UserRole[]
       setFormRoles(list.length ? list : ['user'])
       setFormTeacherId(selectedUser?.teacher_id ?? null)
+      setFormPhone(selectedUser?.phone || '')
     }
   }, [formOpen, selectedUser])
 
@@ -147,7 +150,7 @@ export function Users() {
     const username = formData.get('username') as string
     const name = (formData.get('name') as string)?.trim() ?? ''
     const email = (formData.get('email') as string) || undefined
-    const phone = (formData.get('phone') as string) || undefined
+    const phone = formPhone || undefined
     const role = formRoles.length ? formRoles.join(',') : 'user'
     const password = formData.get('password') as string
 
@@ -375,11 +378,10 @@ export function Users() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input
+                  <PhoneInput
                     id="phone"
-                    name="phone"
-                    type="tel"
-                    defaultValue={selectedUser?.phone}
+                    value={formPhone}
+                    onChange={setFormPhone}
                   />
                 </div>
               </div>
