@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { groupsApi, enrollmentsApi, studentsApi, Group } from '@/lib/api'
+import { groupsApi, enrollmentsApi, studentsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,17 +20,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent } from 'lucide-react'
+import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent, Search } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatCurrency } from '@/lib/utils'
 
 const statusColors = {
@@ -48,6 +42,7 @@ export function GroupDetail() {
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false)
   const [selectedStudentId, setSelectedStudentId] = useState<string>('')
   const [discountPercentage, setDiscountPercentage] = useState<string>('0')
+  const [studentSearch, setStudentSearch] = useState('')
 
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
@@ -68,9 +63,33 @@ export function GroupDetail() {
   })
 
   const enrolledStudentIds = new Set(enrollments.map((e) => e.student_id))
-  const availableStudents = students.filter(
-    (s) => s.status === 'active' && !enrolledStudentIds.has(s.id)
-  )
+
+  // Get all active students not enrolled in THIS group, sorted:
+  // 1. Students with no enrollments first
+  // 2. Then alphabetically by name
+  const availableStudents = students
+    .filter((s) => s.status === 'active' && !enrolledStudentIds.has(s.id))
+    .map((s) => ({
+      ...s,
+      hasEnrollments: (s.enrollments && s.enrollments.length > 0) || (s.groups_list && s.groups_list.trim() !== ''),
+      groupNames: s.enrollments?.map(e => e.group_name).join(', ') || s.groups_list || '',
+    }))
+    .sort((a, b) => {
+      // Students without enrollments come first
+      if (!a.hasEnrollments && b.hasEnrollments) return -1
+      if (a.hasEnrollments && !b.hasEnrollments) return 1
+      // Then sort by name
+      const nameA = `${a.first_name} ${a.last_name}`.toLowerCase()
+      const nameB = `${b.first_name} ${b.last_name}`.toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+
+  // Filter by search query
+  const filteredStudents = availableStudents.filter((s) => {
+    if (!studentSearch.trim()) return true
+    const fullName = `${s.first_name} ${s.last_name}`.toLowerCase()
+    return fullName.includes(studentSearch.toLowerCase())
+  })
 
   const enrollStudent = useMutation({
     mutationFn: ({ studentId, groupId, discountPct }: { studentId: number; groupId: number; discountPct: number }) =>
@@ -241,30 +260,61 @@ export function GroupDetail() {
         if (!open) {
           setSelectedStudentId('')
           setDiscountPercentage('0')
+          setStudentSearch('')
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enroll Student</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Select Student</Label>
-              <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a student" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableStudents.map((student) => (
-                    <SelectItem key={student.id} value={student.id.toString()}>
-                      {student.first_name} {student.last_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {availableStudents.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No available students to enroll
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <ScrollArea className="h-[200px] rounded-md border">
+                {filteredStudents.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    {availableStudents.length === 0 ? 'No available students' : 'No students found'}
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredStudents.map((student) => (
+                      <button
+                        key={student.id}
+                        type="button"
+                        onClick={() => setSelectedStudentId(student.id.toString())}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                          selectedStudentId === student.id.toString()
+                            ? 'bg-blue-100 text-blue-900'
+                            : 'hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">
+                            {student.first_name} {student.last_name}
+                          </span>
+                          {student.hasEnrollments && (
+                            <Badge variant="outline" className="text-xs font-normal shrink-0">
+                              {student.groupNames}
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+              {selectedStudentId && (
+                <p className="text-sm text-blue-600">
+                  Selected: {filteredStudents.find(s => s.id.toString() === selectedStudentId)?.first_name} {filteredStudents.find(s => s.id.toString() === selectedStudentId)?.last_name}
                 </p>
               )}
             </div>

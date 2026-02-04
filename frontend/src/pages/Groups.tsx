@@ -45,7 +45,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Clock } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
 
 const statusColors = {
@@ -63,6 +64,20 @@ export function Groups() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null)
+  const [formTeacherId, setFormTeacherId] = useState<string>('')
+  const [formScheduleDays, setFormScheduleDays] = useState<string[]>([])
+  const [formTimeStart, setFormTimeStart] = useState<string>('')
+  const [formTimeEnd, setFormTimeEnd] = useState<string>('')
+
+  const DAYS_OF_WEEK = [
+    { value: 'Mon', label: 'Mon' },
+    { value: 'Tue', label: 'Tue' },
+    { value: 'Wed', label: 'Wed' },
+    { value: 'Thu', label: 'Thu' },
+    { value: 'Fri', label: 'Fri' },
+    { value: 'Sat', label: 'Sat' },
+    { value: 'Sun', label: 'Sun' },
+  ]
 
   const { data: groups = [], isLoading } = useQuery({
     queryKey: ['groups'],
@@ -113,14 +128,23 @@ export function Groups() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+
+    if (!formTeacherId) {
+      toast({ title: 'Please select a teacher', variant: 'destructive' })
+      return
+    }
+
     const formData = new FormData(e.currentTarget)
     const data = {
       name: formData.get('name') as string,
       subject: formData.get('subject') as string,
-      teacher_id: formData.get('teacher_id') ? Number(formData.get('teacher_id')) : undefined,
+      teacher_id: Number(formTeacherId),
       capacity: Number(formData.get('capacity')) || 15,
       price: Number(formData.get('price')) || 0,
       status: (formData.get('status') as Group['status']) || 'active',
+      schedule_days: formScheduleDays.length > 0 ? formScheduleDays.join(',') : undefined,
+      schedule_time_start: formTimeStart || undefined,
+      schedule_time_end: formTimeEnd || undefined,
     }
 
     if (selectedGroup) {
@@ -167,6 +191,7 @@ export function Groups() {
                 <TableHead>Name</TableHead>
                 <TableHead>Subject</TableHead>
                 <TableHead>Teacher</TableHead>
+                <TableHead>Schedule</TableHead>
                 <TableHead>Capacity</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
@@ -176,12 +201,16 @@ export function Groups() {
             <TableBody>
               {filteredGroups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No groups found
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredGroups.map((group) => (
+                filteredGroups.map((group) => {
+                  const scheduleText = group.schedule_days
+                    ? `${group.schedule_days}${group.schedule_time_start ? ` ${group.schedule_time_start.slice(0, 5)}` : ''}${group.schedule_time_end ? `-${group.schedule_time_end.slice(0, 5)}` : ''}`
+                    : '-'
+                  return (
                   <TableRow key={group.id}>
                     <TableCell>
                       <button
@@ -193,6 +222,7 @@ export function Groups() {
                     </TableCell>
                     <TableCell>{group.subject || '-'}</TableCell>
                     <TableCell>{group.teacher_name || '-'}</TableCell>
+                    <TableCell className="text-sm">{scheduleText}</TableCell>
                     <TableCell>{group.capacity}</TableCell>
                     <TableCell>{formatCurrency(group.price)}</TableCell>
                     <TableCell>
@@ -214,6 +244,10 @@ export function Groups() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setSelectedGroup(group)
+                            setFormTeacherId(group.teacher_id?.toString() || '')
+                            setFormScheduleDays(group.schedule_days ? group.schedule_days.split(',') : [])
+                            setFormTimeStart(group.schedule_time_start || '')
+                            setFormTimeEnd(group.schedule_time_end || '')
                             setFormOpen(true)
                           }}>
                             <Pencil className="mr-2 h-4 w-4" />
@@ -233,7 +267,8 @@ export function Groups() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -242,7 +277,18 @@ export function Groups() {
 
       <Dialog open={formOpen} onOpenChange={(open) => {
         setFormOpen(open)
-        if (!open) setSelectedGroup(null)
+        if (!open) {
+          setSelectedGroup(null)
+          setFormTeacherId('')
+          setFormScheduleDays([])
+          setFormTimeStart('')
+          setFormTimeEnd('')
+        } else if (!selectedGroup) {
+          setFormTeacherId('')
+          setFormScheduleDays([])
+          setFormTimeStart('')
+          setFormTimeEnd('')
+        }
       }}>
         <DialogContent>
           <DialogHeader>
@@ -268,9 +314,9 @@ export function Groups() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="teacher_id">Teacher</Label>
-                <Select name="teacher_id" defaultValue={selectedGroup?.teacher_id?.toString()}>
-                  <SelectTrigger>
+                <Label htmlFor="teacher_id">Teacher *</Label>
+                <Select value={formTeacherId} onValueChange={setFormTeacherId}>
+                  <SelectTrigger className={!formTeacherId ? 'text-muted-foreground' : ''}>
                     <SelectValue placeholder="Select teacher" />
                   </SelectTrigger>
                   <SelectContent>
@@ -281,6 +327,9 @@ export function Groups() {
                     ))}
                   </SelectContent>
                 </Select>
+                {teachers.filter(t => t.status === 'active').length === 0 && (
+                  <p className="text-xs text-amber-600">No active teachers available. Please add a teacher first.</p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -315,6 +364,62 @@ export function Groups() {
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Schedule Days</Label>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS_OF_WEEK.map((day) => (
+                    <label
+                      key={day.value}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
+                        formScheduleDays.includes(day.value)
+                          ? 'bg-blue-100 border-blue-300 text-blue-700'
+                          : 'bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <Checkbox
+                        checked={formScheduleDays.includes(day.value)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setFormScheduleDays([...formScheduleDays, day.value])
+                          } else {
+                            setFormScheduleDays(formScheduleDays.filter((d) => d !== day.value))
+                          }
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="text-sm font-medium">{day.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="time_start">Start Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="time_start"
+                      type="time"
+                      value={formTimeStart}
+                      onChange={(e) => setFormTimeStart(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time_end">End Time</Label>
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="time_end"
+                      type="time"
+                      value={formTimeEnd}
+                      onChange={(e) => setFormTimeEnd(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <DialogFooter>

@@ -244,15 +244,32 @@ try {
                 $stmt = db()->query("SELECT g.*, t.first_name || ' ' || t.last_name AS teacher_name FROM groups g LEFT JOIN teachers t ON g.teacher_id = t.id ORDER BY g.created_at DESC");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO groups (name, subject, teacher_id, capacity, price, status) VALUES (?,?,?,?,?,?)");
+                $stmt = db()->prepare("INSERT INTO groups (name, subject, teacher_id, capacity, price, status, schedule_days, schedule_time_start, schedule_time_end) VALUES (?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
-                    $input['name'] ?? '', $input['subject'] ?? '', $input['teacher_id'] ?: null, $input['capacity'] ?? 15, $input['price'] ?? 0, $input['status'] ?? 'active'
+                    $input['name'] ?? '',
+                    $input['subject'] ?? '',
+                    $input['teacher_id'] ?: null,
+                    $input['capacity'] ?? 15,
+                    $input['price'] ?? 0,
+                    $input['status'] ?? 'active',
+                    $input['schedule_days'] ?? null,
+                    $input['schedule_time_start'] ?? null,
+                    $input['schedule_time_end'] ?? null
                 ]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'PUT') {
-                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=? WHERE id=?");
+                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=? WHERE id=?");
                 $stmt->execute([
-                    $input['name'] ?? '', $input['subject'] ?? '', $input['teacher_id'] ?: null, $input['capacity'] ?? 15, $input['price'] ?? 0, $input['status'] ?? 'active', $id
+                    $input['name'] ?? '',
+                    $input['subject'] ?? '',
+                    $input['teacher_id'] ?: null,
+                    $input['capacity'] ?? 15,
+                    $input['price'] ?? 0,
+                    $input['status'] ?? 'active',
+                    $input['schedule_days'] ?? null,
+                    $input['schedule_time_start'] ?? null,
+                    $input['schedule_time_end'] ?? null,
+                    $id
                 ]);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
@@ -1197,8 +1214,8 @@ try {
             break;
 
         case 'settings':
-            requireRole(['admin']);
             if ($method === 'GET') {
+                requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
                 try {
                     $stmt = db()->query("SELECT key, value, description FROM settings ORDER BY key");
                     $settings = [];
@@ -1210,9 +1227,18 @@ try {
                     jsonResponse([]);
                 }
             } elseif ($method === 'PUT') {
+                requireRole(['admin']);
                 foreach ($input as $key => $value) {
-                    $stmt = db()->prepare("UPDATE settings SET value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?");
-                    $stmt->execute([$value, $_SESSION['user']['id'], $key]);
+                    // Insert if not exists, update if exists
+                    $stmt = db()->prepare("SELECT 1 FROM settings WHERE key = ?");
+                    $stmt->execute([$key]);
+                    if ($stmt->fetch()) {
+                        $stmt = db()->prepare("UPDATE settings SET value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?");
+                        $stmt->execute([$value, $_SESSION['user']['id'], $key]);
+                    } else {
+                        $stmt = db()->prepare("INSERT INTO settings (key, value, updated_by) VALUES (?, ?, ?)");
+                        $stmt->execute([$key, $value, $_SESSION['user']['id']]);
+                    }
                 }
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
@@ -1341,6 +1367,53 @@ try {
                 'paid_amount' => round($paidAmount, 2),
                 'remaining_debt' => round($remainingDebt, 2)
             ]);
+            break;
+
+        case 'profile':
+            requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
+            $userId = $_SESSION['user']['id'];
+            if ($method === 'PUT' && $sub === 'password') {
+                // Change password
+                $currentPassword = $input['current_password'] ?? '';
+                $newPassword = $input['new_password'] ?? '';
+                if (!$currentPassword || !$newPassword) {
+                    jsonError('Current and new password required');
+                    break;
+                }
+                if (strlen($newPassword) < 6) {
+                    jsonError('Password must be at least 6 characters');
+                    break;
+                }
+                $stmt = db()->prepare("SELECT password FROM users WHERE id = ?");
+                $stmt->execute([$userId]);
+                $user = $stmt->fetch();
+                if (!$user || !password_verify($currentPassword, $user['password'])) {
+                    jsonError('Current password is incorrect', 401);
+                    break;
+                }
+                $hash = password_hash($newPassword, PASSWORD_DEFAULT);
+                $stmt = db()->prepare("UPDATE users SET password = ? WHERE id = ?");
+                $stmt->execute([$hash, $userId]);
+                activityLog('password_change', 'user', $userId);
+                jsonResponse(['ok' => true]);
+            } elseif ($method === 'PUT') {
+                // Update profile
+                $name = trim($input['name'] ?? '');
+                $email = trim($input['email'] ?? '');
+                $phone = trim($input['phone'] ?? '');
+                if (!$name) {
+                    jsonError('Name is required');
+                    break;
+                }
+                $stmt = db()->prepare("UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?");
+                $stmt->execute([$name, $email ?: null, $phone ?: null, $userId]);
+                // Update session
+                $_SESSION['user']['name'] = $name;
+                $_SESSION['user']['email'] = $email;
+                $_SESSION['user']['phone'] = $phone;
+                activityLog('profile_update', 'user', $userId);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Method not allowed', 405); }
             break;
 
         default:

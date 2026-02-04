@@ -269,6 +269,32 @@ export const auditLogApi = {
     api.get<AuditLogEntry[]>('/audit-log', params as Record<string, string> | undefined),
 }
 
+// Settings API
+export interface SystemSettings {
+  organization_name?: string
+  currency?: string
+  session_timeout?: string
+  payment_reminder_days?: string
+  notification_payment_reminders?: string
+  notification_new_leads?: string
+  notification_attendance?: string
+  contact_email?: string
+  contact_phone?: string
+}
+
+export const settingsApi = {
+  getAll: () => api.get<SystemSettings>('/settings'),
+  update: (data: Partial<SystemSettings>) => api.put<{ ok: boolean }>('/settings', data),
+}
+
+// Profile API (update current user)
+export const profileApi = {
+  update: (data: { name?: string; email?: string; phone?: string }) =>
+    api.put<{ ok: boolean }>('/profile', data),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put<{ ok: boolean }>('/profile/password', { current_password: currentPassword, new_password: newPassword }),
+}
+
 // Types
 export type UserRole = 'admin' | 'manager' | 'teacher' | 'accountant' | 'user'
 
@@ -344,6 +370,9 @@ export interface Group {
   start_date?: string
   end_date?: string
   pricing_type?: 'monthly' | 'per_session' | 'package'
+  schedule_days?: string
+  schedule_time_start?: string
+  schedule_time_end?: string
   status: 'active' | 'inactive' | 'completed'
   created_at: string
 }

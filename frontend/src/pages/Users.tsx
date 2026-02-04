@@ -216,15 +216,16 @@ export function Users() {
                 <TableHead>Username</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead className="hidden md:table-cell">Phone</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[140px]">Actions</TableHead>
+                <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -233,7 +234,8 @@ export function Users() {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.username}</TableCell>
                     <TableCell>{user.name}</TableCell>
-                    <TableCell>{user.email || '-'}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">{user.email || '-'}</TableCell>
+                    <TableCell className="hidden md:table-cell">{user.phone || '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {(user.role || 'user').split(',').map((r) => r.trim()).filter(Boolean).map((r) => (
@@ -405,17 +407,18 @@ export function Users() {
                   ))}
                 </div>
               </div>
-              {!selectedUser && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password *</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    required={!selectedUser}
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="password">
+                  Password {selectedUser ? '(leave blank to keep current)' : '*'}
+                </Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required={!selectedUser}
+                  placeholder={selectedUser ? 'Enter new password to change' : 'Enter password'}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
