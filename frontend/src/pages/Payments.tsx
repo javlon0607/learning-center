@@ -41,12 +41,12 @@ function formatMonthKey(ym: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
 }
 
-// Generate month options (6 months back and 6 months forward)
+// Generate month options (3 months back, current, and 3 months forward = 7 total)
 // Use local date components for YYYY-MM so timezone doesn't shift the month (toISOString() would use UTC).
 function getMonthOptions() {
   const months: { value: string; label: string }[] = []
   const now = new Date()
-  for (let i = -6; i <= 6; i++) {
+  for (let i = -3; i <= 3; i++) {
     const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
     const y = date.getFullYear()
     const m = date.getMonth() + 1
@@ -55,6 +55,14 @@ function getMonthOptions() {
     months.push({ value, label })
   }
   return months
+}
+
+// Get current month in YYYY-MM format
+function getCurrentMonth() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  return `${y}-${String(m).padStart(2, '0')}`
 }
 
 export function Payments() {
@@ -74,6 +82,9 @@ export function Payments() {
     totalRemaining: number
   } | null>(null)
   const [loadingDebt, setLoadingDebt] = useState(false)
+  // Track payment status for all displayed months (for styling fully paid months)
+  const [allMonthsStatus, setAllMonthsStatus] = useState<Record<string, { remaining: number; fullyPaid: boolean }>>({})
+  const [loadingMonthsStatus, setLoadingMonthsStatus] = useState(false)
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0])
   const [filterPaymentMonth, setFilterPaymentMonth] = useState<string>('')
   const [filterCourseMonth, setFilterCourseMonth] = useState<string>('')
@@ -109,6 +120,43 @@ export function Payments() {
     queryFn: () => enrollmentsApi.getByGroup(Number(selectedGroupId)),
     enabled: !!selectedGroupId,
   })
+
+  // Auto-select current month when student is selected
+  useEffect(() => {
+    if (selectedStudentId && selectedGroupId && selectedMonths.length === 0) {
+      const currentMonth = getCurrentMonth()
+      setSelectedMonths([currentMonth])
+    }
+  }, [selectedStudentId, selectedGroupId])
+
+  // Fetch payment status for ALL displayed months when student+group are selected (for styling)
+  useEffect(() => {
+    async function fetchAllMonthsStatus() {
+      if (!selectedStudentId || !selectedGroupId) {
+        setAllMonthsStatus({})
+        return
+      }
+
+      setLoadingMonthsStatus(true)
+      try {
+        const status: Record<string, { remaining: number; fullyPaid: boolean }> = {}
+        for (const { value: month } of monthOptions) {
+          const debt = await studentDebtApi.get(Number(selectedStudentId), Number(selectedGroupId), month)
+          status[month] = {
+            remaining: debt.remaining_debt,
+            fullyPaid: debt.remaining_debt === 0
+          }
+        }
+        setAllMonthsStatus(status)
+      } catch (err) {
+        console.error('Failed to fetch months status:', err)
+        setAllMonthsStatus({})
+      } finally {
+        setLoadingMonthsStatus(false)
+      }
+    }
+    fetchAllMonthsStatus()
+  }, [selectedStudentId, selectedGroupId, monthOptions])
 
   // Fetch debt info when student, group and months are selected
   useEffect(() => {
@@ -172,6 +220,7 @@ export function Payments() {
     setSelectedGroupId('')
     setSelectedMonths([])
     setDebtInfo(null)
+    setAllMonthsStatus({})
     setPaymentDate(new Date().toISOString().split('T')[0])
   }
 
@@ -451,20 +500,50 @@ export function Payments() {
               {selectedGroupId && (
                 <div className="space-y-2">
                   <Label>Months to Pay *</Label>
-                  <div className="flex flex-wrap gap-3">
-                    {monthOptions.map(({ value, label }) => (
-                      <label
-                        key={value}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={selectedMonths.includes(value)}
-                          onCheckedChange={() => toggleMonth(value)}
-                        />
-                        <span className="text-sm">{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {loadingMonthsStatus ? (
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading months...
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {monthOptions.map(({ value, label }) => {
+                        const currentMonth = getCurrentMonth()
+                        const isCurrentMonth = value === currentMonth
+                        const monthStatus = allMonthsStatus[value]
+                        const isFullyPaid = monthStatus?.fullyPaid
+                        const isSelected = selectedMonths.includes(value)
+
+                        return (
+                          <label
+                            key={value}
+                            className={`
+                              flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all
+                              ${isSelected
+                                ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                                : isFullyPaid
+                                  ? 'border-green-300 bg-green-50 text-green-700'
+                                  : isCurrentMonth
+                                    ? 'border-blue-300 bg-blue-50/50'
+                                    : 'border-gray-200 hover:border-gray-300'
+                              }
+                            `}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleMonth(value)}
+                            />
+                            <span className={`text-sm font-medium ${isFullyPaid ? 'text-green-700' : ''}`}>
+                              {label}
+                            </span>
+                            {isFullyPaid && (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            )}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
