@@ -1,0 +1,6 @@
+export { DashboardSkeleton } from './DashboardSkeleton'
+export { StudentsSkeleton } from './StudentsSkeleton'
+export { StudentDetailSkeleton } from './StudentDetailSkeleton'
+export { TableSkeleton, GroupsTableSkeleton, TeachersTableSkeleton } from './TableSkeleton'
+export { AttendanceSkeleton, PageSkeleton } from './AttendanceSkeleton'
+export { ChartSkeleton } from './ChartSkeleton'
