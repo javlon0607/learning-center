@@ -143,6 +143,22 @@ export const enrollmentsApi = {
   delete: (id: number) => api.delete<{ ok: boolean }>(`/enrollments/${id}`),
 }
 
+// Group Transfers API
+export const groupTransfersApi = {
+  getByStudent: (studentId: number) =>
+    api.get<GroupTransfer[]>('/group-transfers', { student_id: String(studentId) }),
+
+  getAll: () => api.get<GroupTransfer[]>('/group-transfers'),
+
+  transfer: (data: {
+    student_id: number
+    from_group_id: number
+    to_group_id: number
+    reason?: string
+    discount_percentage?: number
+  }) => api.post<{ ok: boolean; paid_month_transferred: boolean; message: string }>('/group-transfers', data),
+}
+
 // Payments API
 export const paymentsApi = {
   getAll: () => api.get<Payment[]>('/payments'),
@@ -365,6 +381,7 @@ export interface Group {
   teacher_id?: number
   teacher_name?: string
   capacity: number
+  student_count: number
   price: number
   level?: string
   start_date?: string
@@ -373,6 +390,7 @@ export interface Group {
   schedule_days?: string
   schedule_time_start?: string
   schedule_time_end?: string
+  room?: string
   status: 'active' | 'inactive' | 'completed'
   created_at: string
 }
@@ -386,6 +404,23 @@ export interface Enrollment {
   group_price?: number
   enrolled_at: string
   discount_percentage: number
+}
+
+export interface GroupTransfer {
+  id: number
+  student_id: number
+  from_group_id: number
+  to_group_id: number
+  from_group_name?: string
+  to_group_name?: string
+  student_name?: string
+  transfer_date: string
+  reason?: string
+  paid_month?: string
+  discount_percentage: number
+  transferred_by?: number
+  transferred_by_name?: string
+  created_at: string
 }
 
 export interface Payment {
@@ -544,6 +579,12 @@ export interface DashboardStats {
   expenses: number
   profit: number
   leads_pending: number
+  trends?: {
+    students: number
+    revenue: number
+    expenses: number
+    profit: number
+  }
 }
 
 /** Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries). */

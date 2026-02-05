@@ -241,24 +241,22 @@ try {
         case 'groups':
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT g.*, t.first_name || ' ' || t.last_name AS teacher_name FROM groups g LEFT JOIN teachers t ON g.teacher_id = t.id ORDER BY g.created_at DESC");
+                $stmt = db()->query("
+                    SELECT g.*, 
+                           t.first_name || ' ' || t.last_name AS teacher_name,
+                           COALESCE(e.student_count, 0) AS student_count
+                    FROM groups g 
+                    LEFT JOIN teachers t ON g.teacher_id = t.id 
+                    LEFT JOIN (
+                        SELECT group_id, COUNT(*) AS student_count 
+                        FROM enrollments 
+                        GROUP BY group_id
+                    ) e ON g.id = e.group_id
+                    ORDER BY g.created_at DESC
+                ");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO groups (name, subject, teacher_id, capacity, price, status, schedule_days, schedule_time_start, schedule_time_end) VALUES (?,?,?,?,?,?,?,?,?)");
-                $stmt->execute([
-                    $input['name'] ?? '',
-                    $input['subject'] ?? '',
-                    $input['teacher_id'] ?: null,
-                    $input['capacity'] ?? 15,
-                    $input['price'] ?? 0,
-                    $input['status'] ?? 'active',
-                    $input['schedule_days'] ?? null,
-                    $input['schedule_time_start'] ?? null,
-                    $input['schedule_time_end'] ?? null
-                ]);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
-            } elseif ($id && $method === 'PUT') {
-                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=? WHERE id=?");
+                $stmt = db()->prepare("INSERT INTO groups (name, subject, teacher_id, capacity, price, status, schedule_days, schedule_time_start, schedule_time_end, room) VALUES (?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['name'] ?? '',
                     $input['subject'] ?? '',
@@ -269,6 +267,22 @@ try {
                     $input['schedule_days'] ?? null,
                     $input['schedule_time_start'] ?? null,
                     $input['schedule_time_end'] ?? null,
+                    $input['room'] ?? null
+                ]);
+                jsonResponse(['id' => (int)db()->lastInsertId()]);
+            } elseif ($id && $method === 'PUT') {
+                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=?, room=? WHERE id=?");
+                $stmt->execute([
+                    $input['name'] ?? '',
+                    $input['subject'] ?? '',
+                    $input['teacher_id'] ?: null,
+                    $input['capacity'] ?? 15,
+                    $input['price'] ?? 0,
+                    $input['status'] ?? 'active',
+                    $input['schedule_days'] ?? null,
+                    $input['schedule_time_start'] ?? null,
+                    $input['schedule_time_end'] ?? null,
+                    $input['room'] ?? null,
                     $id
                 ]);
                 jsonResponse(['ok' => true]);
@@ -309,6 +323,151 @@ try {
                 $stmt = db()->prepare("DELETE FROM enrollments WHERE id = ?");
                 $stmt->execute([$id]);
                 jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'group-transfers':
+            requireRole(['admin', 'manager']);
+            if ($method === 'GET') {
+                // Get transfer history - optionally filter by student_id
+                $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+                if ($studentId) {
+                    $stmt = db()->prepare("
+                        SELECT gt.*,
+                               fg.name AS from_group_name,
+                               tg.name AS to_group_name,
+                               s.first_name || ' ' || s.last_name AS student_name,
+                               u.name AS transferred_by_name
+                        FROM group_transfers gt
+                        JOIN groups fg ON gt.from_group_id = fg.id
+                        JOIN groups tg ON gt.to_group_id = tg.id
+                        JOIN students s ON gt.student_id = s.id
+                        LEFT JOIN users u ON gt.transferred_by = u.id
+                        WHERE gt.student_id = ?
+                        ORDER BY gt.created_at DESC
+                    ");
+                    $stmt->execute([$studentId]);
+                } else {
+                    $stmt = db()->query("
+                        SELECT gt.*,
+                               fg.name AS from_group_name,
+                               tg.name AS to_group_name,
+                               s.first_name || ' ' || s.last_name AS student_name,
+                               u.name AS transferred_by_name
+                        FROM group_transfers gt
+                        JOIN groups fg ON gt.from_group_id = fg.id
+                        JOIN groups tg ON gt.to_group_id = tg.id
+                        JOIN students s ON gt.student_id = s.id
+                        LEFT JOIN users u ON gt.transferred_by = u.id
+                        ORDER BY gt.created_at DESC
+                        LIMIT 100
+                    ");
+                }
+                jsonResponse($stmt->fetchAll());
+            } elseif ($method === 'POST') {
+                // Transfer student from one group to another
+                $studentId = (int)($input['student_id'] ?? 0);
+                $fromGroupId = (int)($input['from_group_id'] ?? 0);
+                $toGroupId = (int)($input['to_group_id'] ?? 0);
+                $reason = $input['reason'] ?? null;
+                $discountPct = isset($input['discount_percentage']) ? max(0, min(100, (float)$input['discount_percentage'])) : 0;
+
+                if (!$studentId || !$fromGroupId || !$toGroupId) {
+                    jsonError('student_id, from_group_id, and to_group_id are required');
+                }
+                if ($fromGroupId === $toGroupId) {
+                    jsonError('Source and target groups must be different');
+                }
+
+                // Check student is enrolled in source group
+                $checkStmt = db()->prepare("SELECT id, discount_percentage FROM enrollments WHERE student_id = ? AND group_id = ?");
+                $checkStmt->execute([$studentId, $fromGroupId]);
+                $enrollment = $checkStmt->fetch();
+                if (!$enrollment) {
+                    jsonError('Student is not enrolled in the source group');
+                }
+
+                // Check student is not already in target group
+                $checkStmt2 = db()->prepare("SELECT id FROM enrollments WHERE student_id = ? AND group_id = ?");
+                $checkStmt2->execute([$studentId, $toGroupId]);
+                if ($checkStmt2->fetch()) {
+                    jsonError('Student is already enrolled in the target group');
+                }
+
+                // Check if student has paid for current month in the source group
+                $currentMonth = date('Y-m-01');
+                $paidStmt = db()->prepare("
+                    SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                    FROM payment_months pm
+                    JOIN payments p ON pm.payment_id = p.id
+                    WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                ");
+                $paidStmt->execute([$studentId, $fromGroupId, $currentMonth]);
+                $paidAmount = (float)$paidStmt->fetchColumn();
+
+                // Get source group price to check if fully paid
+                $groupStmt = db()->prepare("SELECT price FROM groups WHERE id = ?");
+                $groupStmt->execute([$fromGroupId]);
+                $sourceGroupPrice = (float)$groupStmt->fetchColumn();
+                $sourceDiscount = (float)$enrollment['discount_percentage'];
+                $expectedPayment = $sourceGroupPrice * (1 - $sourceDiscount / 100);
+
+                $paidMonth = null;
+                if ($paidAmount >= $expectedPayment * 0.5) { // At least 50% paid = consider it paid
+                    $paidMonth = $currentMonth;
+                }
+
+                // Start transaction
+                db()->beginTransaction();
+                try {
+                    // Remove from source group
+                    $delStmt = db()->prepare("DELETE FROM enrollments WHERE student_id = ? AND group_id = ?");
+                    $delStmt->execute([$studentId, $fromGroupId]);
+
+                    // Add to target group
+                    $addStmt = db()->prepare("INSERT INTO enrollments (student_id, group_id, discount_percentage) VALUES (?, ?, ?)");
+                    $addStmt->execute([$studentId, $toGroupId, $discountPct]);
+
+                    // Record transfer history
+                    $userId = $_SESSION['user_id'] ?? null;
+                    $histStmt = db()->prepare("
+                        INSERT INTO group_transfers (student_id, from_group_id, to_group_id, reason, paid_month, discount_percentage, transferred_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $histStmt->execute([$studentId, $fromGroupId, $toGroupId, $reason, $paidMonth, $discountPct, $userId]);
+
+                    // If student paid for current month, create a payment record for the new group
+                    // to mark this month as paid (amount = 0, just a marker)
+                    if ($paidMonth) {
+                        // Insert a "transfer credit" payment
+                        $creditStmt = db()->prepare("
+                            INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes)
+                            VALUES (?, ?, 0, CURRENT_DATE, 'transfer', ?)
+                        ");
+                        $creditStmt->execute([$studentId, $toGroupId, 'Transfer credit from ' . $fromGroupId . ' - month already paid']);
+                        $creditPaymentId = db()->lastInsertId();
+
+                        // Get target group price for the payment_months record
+                        $tgtStmt = db()->prepare("SELECT price FROM groups WHERE id = ?");
+                        $tgtStmt->execute([$toGroupId]);
+                        $targetGroupPrice = (float)$tgtStmt->fetchColumn();
+                        $targetMonthlyRate = $targetGroupPrice * (1 - $discountPct / 100);
+
+                        // Mark current month as paid in target group
+                        $pmStmt = db()->prepare("INSERT INTO payment_months (payment_id, for_month, amount) VALUES (?, ?, ?)");
+                        $pmStmt->execute([$creditPaymentId, $paidMonth, $targetMonthlyRate]);
+                    }
+
+                    db()->commit();
+                    jsonResponse([
+                        'ok' => true,
+                        'paid_month_transferred' => $paidMonth !== null,
+                        'message' => $paidMonth ? 'Student transferred. Current month payment credited to new group.' : 'Student transferred successfully.'
+                    ]);
+                } catch (Exception $e) {
+                    db()->rollBack();
+                    jsonError('Transfer failed: ' . $e->getMessage());
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -865,6 +1024,7 @@ try {
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($sub === 'stats') {
                 try {
+                    // Current counts
                     $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active'")->fetchColumn();
                     $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
                     $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active'")->fetchColumn();
@@ -874,17 +1034,47 @@ try {
                     try {
                         $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial','interested','trial_scheduled','trial_completed','negotiating')")->fetchColumn();
                     } catch (PDOException $e) {}
+                    
+                    // Calculate trends (compare vs last month)
+                    // Students: count created this month vs last month
+                    $studentsThisMonth = db()->query("SELECT COUNT(*) FROM students WHERE created_at >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $studentsLastMonth = db()->query("SELECT COUNT(*) FROM students WHERE created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $studentsTrend = $studentsLastMonth > 0 ? round(($studentsThisMonth - $studentsLastMonth) / $studentsLastMonth * 100) : ($studentsThisMonth > 0 ? 100 : 0);
+                    
+                    // Revenue: this month vs last month
+                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenueTrend = $revenueLastMonth > 0 ? round(($revenue - $revenueLastMonth) / $revenueLastMonth * 100) : ($revenue > 0 ? 100 : 0);
+                    
+                    // Expenses: this month vs last month
+                    $expensesLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND expense_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $expensesTrend = $expensesLastMonth > 0 ? round(($expenses - $expensesLastMonth) / $expensesLastMonth * 100) : ($expenses > 0 ? 100 : 0);
+                    
+                    // Profit: this month vs last month
+                    $profitThisMonth = (float)$revenue - (float)$expenses;
+                    $profitLastMonth = (float)$revenueLastMonth - (float)$expensesLastMonth;
+                    if ($profitLastMonth != 0) {
+                        $profitTrend = round(($profitThisMonth - $profitLastMonth) / abs($profitLastMonth) * 100);
+                    } else {
+                        $profitTrend = $profitThisMonth > 0 ? 100 : ($profitThisMonth < 0 ? -100 : 0);
+                    }
+                    
                     jsonResponse([
                         'students' => (int)$students,
                         'teachers' => (int)$teachers,
                         'groups' => (int)$groups,
                         'revenue' => (float)$revenue,
                         'expenses' => (float)$expenses,
-                        'profit' => (float)$revenue - (float)$expenses,
-                        'leads_pending' => (int)$leads
+                        'profit' => $profitThisMonth,
+                        'leads_pending' => (int)$leads,
+                        'trends' => [
+                            'students' => (int)$studentsTrend,
+                            'revenue' => (int)$revenueTrend,
+                            'expenses' => (int)$expensesTrend,
+                            'profit' => (int)$profitTrend
+                        ]
                     ]);
                 } catch (PDOException $e) {
-                    jsonResponse(['students' => 0, 'teachers' => 0, 'groups' => 0, 'revenue' => 0, 'expenses' => 0, 'profit' => 0, 'leads_pending' => 0]);
+                    jsonResponse(['students' => 0, 'teachers' => 0, 'groups' => 0, 'revenue' => 0, 'expenses' => 0, 'profit' => 0, 'leads_pending' => 0, 'trends' => ['students' => 0, 'revenue' => 0, 'expenses' => 0, 'profit' => 0]]);
                 }
             } elseif ($sub === 'revenue-chart') {
                 // Get monthly revenue and expenses for the last 6 months
@@ -918,7 +1108,11 @@ try {
                     // Calculate growth percentage (current month vs previous month)
                     $currentRevenue = $months[5]['revenue'] ?? 0;
                     $previousRevenue = $months[4]['revenue'] ?? 0;
-                    $growth = $previousRevenue > 0 ? round((($currentRevenue - $previousRevenue) / $previousRevenue) * 100, 1) : 0;
+                    if ($previousRevenue > 0) {
+                        $growth = round((($currentRevenue - $previousRevenue) / $previousRevenue) * 100, 1);
+                    } else {
+                        $growth = $currentRevenue > 0 ? 100 : 0;
+                    }
 
                     jsonResponse([
                         'months' => $months,

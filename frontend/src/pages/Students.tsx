@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsApi, groupsApi, Student } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { StudentsSkeleton } from '@/components/skeletons'
 import {
   Select,
   SelectContent,
@@ -48,7 +50,7 @@ import { useToast } from '@/components/ui/use-toast'
 import {
   Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, User,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
-  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, BookOpen
+  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle
 } from 'lucide-react'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 
@@ -360,10 +362,7 @@ export function Students() {
 
       {/* Results */}
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading students...</p>
-        </div>
+        <StudentsSkeleton />
       ) : sortedStudents.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-4 bg-card rounded-xl border border-border/60">
           <div className="p-4 rounded-full bg-muted">
@@ -461,26 +460,14 @@ export function Students() {
                       </TableCell>
                       <TableCell>
                         {student.enrollments && student.enrollments.length > 0 ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5">
-                                  <BookOpen className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm">{student.enrollments.length} group{student.enrollments.length > 1 ? 's' : ''}</span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" className="max-w-xs">
-                                <div className="space-y-1">
-                                  {student.enrollments.map((e, i) => (
-                                    <div key={i} className="text-sm">
-                                      {e.group_name}
-                                      {e.discount > 0 && <span className="text-green-500 ml-1">(-{e.discount}%)</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                            {student.enrollments.map((e, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs font-normal">
+                                {e.group_name}
+                                {e.discount > 0 && <span className="text-green-600 ml-1">-{e.discount}%</span>}
+                              </Badge>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">Not enrolled</span>
                         )}

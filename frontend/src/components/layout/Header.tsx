@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -9,10 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { LogOut, User, Bell, Search, ChevronDown } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Timetable } from './Timetable'
+import { LogOut, User, Bell, Search, ChevronDown, CalendarDays } from 'lucide-react'
 
 export function Header() {
   const { user, logout } = useAuth()
+  const [timetableOpen, setTimetableOpen] = useState(false)
 
   const initials = user?.name
     ?.split(' ')
@@ -47,6 +56,25 @@ export function Header() {
 
       {/* Right side - Actions */}
       <div className="flex items-center gap-2">
+        {/* Timetable */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-lg"
+                onClick={() => setTimetableOpen(true)}
+              >
+                <CalendarDays className="h-5 w-5 text-muted-foreground" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Class Timetable</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-lg">
           <Bell className="h-5 w-5 text-muted-foreground" />
@@ -94,6 +122,9 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Timetable Sheet */}
+      <Timetable open={timetableOpen} onOpenChange={setTimetableOpen} />
     </header>
   )
 }

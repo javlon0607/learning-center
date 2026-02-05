@@ -4,6 +4,7 @@ import { dashboardApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatsCard } from '@/components/dashboard/StatsCard'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
+import { DashboardSkeleton } from '@/components/skeletons'
 import {
   Users,
   GraduationCap,
@@ -27,14 +28,7 @@ export function Dashboard() {
   })
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading dashboard...</p>
-        </div>
-      </div>
-    )
+    return <DashboardSkeleton />
   }
 
   const profit = stats?.profit ?? 0
@@ -72,8 +66,10 @@ export function Dashboard() {
           title="Active Students"
           value={stats?.students ?? 0}
           icon={Users}
-          trend="+12%"
-          trendUp
+          trend={stats?.trends?.students !== undefined && stats.trends.students !== 0 
+            ? `${stats.trends.students > 0 ? '+' : ''}${stats.trends.students}%` 
+            : undefined}
+          trendUp={stats?.trends?.students !== undefined ? stats.trends.students >= 0 : undefined}
           iconColor="primary"
         />
         <StatsCard
@@ -112,9 +108,19 @@ export function Dashboard() {
             <div className="text-2xl font-bold text-green-600">
               {formatCurrency(stats?.revenue ?? 0)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Total income this month
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">
+                Total income this month
+              </p>
+              {stats?.trends?.revenue !== undefined && stats.trends.revenue !== 0 && (
+                <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                  stats.trends.revenue >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {stats.trends.revenue >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                  {stats.trends.revenue > 0 ? '+' : ''}{stats.trends.revenue}%
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -129,9 +135,19 @@ export function Dashboard() {
             <div className="text-2xl font-bold text-red-600">
               {formatCurrency(stats?.expenses ?? 0)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Total expenses this month
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">
+                Total expenses this month
+              </p>
+              {stats?.trends?.expenses !== undefined && stats.trends.expenses !== 0 && (
+                <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                  stats.trends.expenses <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {stats.trends.expenses <= 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
+                  {stats.trends.expenses > 0 ? '+' : ''}{stats.trends.expenses}%
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -150,9 +166,19 @@ export function Dashboard() {
             <div className={`text-2xl font-bold ${isProfit ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(profit)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Revenue minus expenses
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground">
+                Revenue minus expenses
+              </p>
+              {stats?.trends?.profit !== undefined && stats.trends.profit !== 0 && (
+                <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
+                  stats.trends.profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {stats.trends.profit >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                  {stats.trends.profit > 0 ? '+' : ''}{stats.trends.profit}%
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

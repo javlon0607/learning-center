@@ -11,7 +11,7 @@ export function MainLayout() {
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <img
-            src="/1.jpg"
+            src="/logo-icon.jpg"
             alt="Legacy Academy"
             className="h-16 w-16 rounded-xl animate-pulse"
           />

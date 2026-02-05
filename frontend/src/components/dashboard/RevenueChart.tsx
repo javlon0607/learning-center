@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { dashboardApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ChartSkeleton } from '@/components/skeletons'
 import {
   AreaChart,
   Area,
@@ -11,7 +12,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
+import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -51,7 +52,7 @@ export function RevenueChart() {
           <CardTitle className="text-lg font-semibold">Revenue Overview</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Monthly revenue vs expenses</p>
         </div>
-        {!isLoading && data && (
+        {!isLoading && data && growth !== 0 && (
           <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
             isPositiveGrowth ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'
           }`}>
@@ -67,9 +68,7 @@ export function RevenueChart() {
       <CardContent className="pt-4">
         <div className="h-[300px]">
           {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <ChartSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               Failed to load revenue data

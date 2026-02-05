@@ -1,8 +1,8 @@
 import { cn } from '@/lib/utils'
 
-const LOGO_FULL = '/2.jpg'
-const LOGO_ICON = '/1.jpg'
-const LOGO_WHITE = '/legacy-academy-logo.png'
+const LOGO_FULL = '/logo-full.jpg'
+const LOGO_ICON = '/logo-icon.jpg'
+const LOGO_WHITE = '/logo-full-white.png'
 
 type LegacyAcademyLogoProps = {
   iconOnly?: boolean

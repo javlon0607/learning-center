@@ -546,7 +546,7 @@ export function Leads() {
 
     return (
       <Sheet open={!!detailLead} onOpenChange={(open) => !open && setDetailLead(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto" preventAutoFocus>
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               {detailLead.first_name} {detailLead.last_name}
@@ -564,15 +564,17 @@ export function Leads() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 min-h-[36px]">
               {nextStatuses.map((status) => (
                 <Button
                   key={status}
                   size="sm"
                   variant="outline"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.currentTarget.blur()
                     handleQuickStatusChange(detailLead, status)
-                    setDetailLead({ ...detailLead, status })
+                    setDetailLead((prev) => prev ? { ...prev, status } : null)
                   }}
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
@@ -583,18 +585,36 @@ export function Leads() {
                 <Button
                   size="sm"
                   variant="default"
-                  onClick={() => { setLeadToConvert(detailLead); setConvertDialogOpen(true); }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.currentTarget.blur()
+                    setLeadToConvert(detailLead)
+                    setConvertDialogOpen(true)
+                  }}
                 >
                   <UserPlus className="h-4 w-4 mr-1" />Convert
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => openEditForm(detailLead)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  e.currentTarget.blur()
+                  openEditForm(detailLead)
+                }}
+              >
                 <Pencil className="h-4 w-4 mr-1" />Edit
               </Button>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => { setInteractionLead(detailLead); setInteractionDialogOpen(true); }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  e.currentTarget.blur()
+                  setInteractionLead(detailLead)
+                  setInteractionDialogOpen(true)
+                }}
               >
                 <MessageSquare className="h-4 w-4 mr-1" />Add Note
               </Button>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { StudentDetailSkeleton } from '@/components/skeletons'
 import {
   Table,
   TableBody,
@@ -51,11 +52,7 @@ export function StudentDetail() {
   const studentPayments = allPayments.filter((p) => p.student_id === studentId)
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-      </div>
-    )
+    return <StudentDetailSkeleton />
   }
 
   if (!student) {

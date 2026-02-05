@@ -50,6 +50,19 @@ export function formatDateTime(date: string | Date): string {
   return `${day}/${month}/${year} ${hours}:${minutes}`
 }
 
+/** Format time string to 24-hour format (HH:MM) */
+export function formatTime(time?: string): string {
+  if (!time) return ''
+  // Already in HH:MM:SS or HH:MM format, just return HH:MM
+  return time.slice(0, 5)
+}
+
+/** Compare two time strings. Returns true if end is after start */
+export function isEndTimeAfterStart(start?: string, end?: string): boolean {
+  if (!start || !end) return true
+  return end > start
+}
+
 /**
  * Format Uzbekistan phone number: +998 XX XXX XX XX
  * Accepts raw digits or partially formatted input

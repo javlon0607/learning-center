@@ -17,6 +17,7 @@ ALTER TABLE groups ADD COLUMN IF NOT EXISTS pricing_type VARCHAR(20) DEFAULT 'mo
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS schedule_days VARCHAR(50);
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS schedule_time_start TIME;
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS schedule_time_end TIME;
+ALTER TABLE groups ADD COLUMN IF NOT EXISTS room VARCHAR(50);
 
 -- Enhanced users table
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(100);
@@ -166,6 +167,23 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+
+-- Group transfers history (track student movements between groups)
+CREATE TABLE IF NOT EXISTS group_transfers (
+    id SERIAL PRIMARY KEY,
+    student_id INT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    from_group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    to_group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    transfer_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    reason TEXT,
+    paid_month DATE,  -- If student paid for this month in source group, they don't pay in target
+    discount_percentage DECIMAL(5,2) DEFAULT 0,  -- Discount in the new group
+    transferred_by INT REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_group_transfers_student ON group_transfers(student_id);
+CREATE INDEX IF NOT EXISTS idx_group_transfers_from ON group_transfers(from_group_id);
+CREATE INDEX IF NOT EXISTS idx_group_transfers_to ON group_transfers(to_group_id);
 
 -- Create additional indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_students_created ON students(created_at);

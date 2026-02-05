@@ -41,7 +41,7 @@ export function Sidebar() {
       {/* Logo Section */}
       <div className="flex h-20 items-center justify-center px-4 border-b border-white/10">
         <img
-          src="/2.jpg"
+          src="/logo-full.jpg"
           alt="Legacy Academy"
           className="h-14 w-auto rounded-lg"
           draggable={false}

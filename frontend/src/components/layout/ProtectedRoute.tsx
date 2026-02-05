@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { PageSkeleton } from '@/components/skeletons'
 
 type ProtectedRouteProps = {
   /** Roles allowed to access this route (e.g. ['admin'] for /settings/users). */
@@ -14,11 +15,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth()
 
   if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-      </div>
-    )
+    return <PageSkeleton />
   }
 
   if (!user) {

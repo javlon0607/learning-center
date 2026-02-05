@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { Badge } from '@/components/ui/badge'
+import { TeachersTableSkeleton } from '@/components/skeletons'
 import {
   Table,
   TableBody,
@@ -182,9 +183,7 @@ export function Teachers() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-        </div>
+        <TeachersTableSkeleton />
       ) : (
         <div className="rounded-md border">
           <Table>

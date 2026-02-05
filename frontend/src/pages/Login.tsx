@@ -53,7 +53,7 @@ export function Login() {
           {/* Logo */}
           <div className="mb-8">
             <img
-              src="/2.jpg"
+              src="/logo-full.jpg"
               alt="Legacy Academy"
               className="h-48 w-auto rounded-2xl shadow-2xl"
               draggable={false}
@@ -95,7 +95,7 @@ export function Login() {
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 flex justify-center">
             <img
-              src="/2.jpg"
+              src="/logo-full.jpg"
               alt="Legacy Academy"
               className="h-20 w-auto rounded-xl shadow-lg"
               draggable={false}

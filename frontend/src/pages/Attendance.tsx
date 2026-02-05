@@ -4,6 +4,7 @@ import { attendanceApi, groupsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { DateInput } from '@/components/ui/date-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AttendanceSkeleton } from '@/components/skeletons'
 import {
   Select,
   SelectContent,
@@ -125,9 +126,7 @@ export function Attendance() {
           </CardContent>
         </Card>
       ) : attendanceLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-        </div>
+        <AttendanceSkeleton />
       ) : !attendance?.rows?.length ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">

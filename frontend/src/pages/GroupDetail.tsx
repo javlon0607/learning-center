@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { groupsApi, enrollmentsApi, studentsApi } from '@/lib/api'
+import { groupsApi, enrollmentsApi, studentsApi, groupTransfersApi, Enrollment } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,10 +20,28 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent, Search } from 'lucide-react'
+import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent, Search, ArrowRightLeft, Loader2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatCurrency } from '@/lib/utils'
 
@@ -43,6 +61,12 @@ export function GroupDetail() {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('')
   const [discountPercentage, setDiscountPercentage] = useState<string>('0')
   const [studentSearch, setStudentSearch] = useState('')
+  const [enrollmentToRemove, setEnrollmentToRemove] = useState<{ id: number; studentName: string } | null>(null)
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false)
+  const [enrollmentToTransfer, setEnrollmentToTransfer] = useState<Enrollment | null>(null)
+  const [targetGroupId, setTargetGroupId] = useState<string>('')
+  const [transferReason, setTransferReason] = useState('')
+  const [transferDiscount, setTransferDiscount] = useState('0')
 
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
@@ -110,6 +134,38 @@ export function GroupDetail() {
       toast({ title: 'Student removed from group' })
     },
   })
+
+  const transferStudent = useMutation({
+    mutationFn: (data: {
+      student_id: number
+      from_group_id: number
+      to_group_id: number
+      reason?: string
+      discount_percentage?: number
+    }) => groupTransfersApi.transfer(data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      toast({
+        title: 'Student transferred',
+        description: result.message,
+      })
+      setTransferDialogOpen(false)
+      setEnrollmentToTransfer(null)
+      setTargetGroupId('')
+      setTransferReason('')
+      setTransferDiscount('0')
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Transfer failed', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  // Groups available for transfer (all active groups except current)
+  const transferableGroups = groups.filter(
+    (g) => g.id !== groupId && g.status === 'active'
+  )
 
   if (!group) {
     return (
@@ -237,14 +293,29 @@ export function GroupDetail() {
                       </TableCell>
                       <TableCell>{enrollment.enrolled_at}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => unenrollStudent.mutate(enrollment.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEnrollmentToTransfer(enrollment)
+                              setTransferDiscount(String(enrollment.discount_percentage || 0))
+                              setTransferDialogOpen(true)
+                            }}
+                            title="Transfer to another group"
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <ArrowRightLeft className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEnrollmentToRemove({ id: enrollment.id, studentName: enrollment.student_name || 'this student' })}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -374,6 +445,156 @@ export function GroupDetail() {
               disabled={!selectedStudentId || enrollStudent.isPending}
             >
               Enroll
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!enrollmentToRemove} onOpenChange={(open) => { if (!open) setEnrollmentToRemove(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove student from group?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <span className="font-medium">{enrollmentToRemove?.studentName}</span> from this group? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (enrollmentToRemove) {
+                  unenrollStudent.mutate(enrollmentToRemove.id)
+                  setEnrollmentToRemove(null)
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Transfer Dialog */}
+      <Dialog open={transferDialogOpen} onOpenChange={(open) => {
+        setTransferDialogOpen(open)
+        if (!open) {
+          setEnrollmentToTransfer(null)
+          setTargetGroupId('')
+          setTransferReason('')
+          setTransferDiscount('0')
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5" />
+              Transfer Student
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm">
+                <span className="text-muted-foreground">Student:</span>{' '}
+                <span className="font-medium">{enrollmentToTransfer?.student_name}</span>
+              </p>
+              <p className="text-sm">
+                <span className="text-muted-foreground">From:</span>{' '}
+                <span className="font-medium">{group?.name}</span>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Transfer to Group *</Label>
+              <Select value={targetGroupId} onValueChange={setTargetGroupId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select target group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {transferableGroups.map((g) => (
+                    <SelectItem key={g.id} value={g.id.toString()}>
+                      {g.name} ({formatCurrency(g.price)}/mo)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {transferableGroups.length === 0 && (
+                <p className="text-xs text-amber-600">No other active groups available</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transfer-discount">Discount % in new group</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="transfer-discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={transferDiscount}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v === '' || v === '-') {
+                      setTransferDiscount(v)
+                      return
+                    }
+                    const n = Number(v)
+                    if (!Number.isFinite(n)) return
+                    setTransferDiscount(String(Math.max(0, Math.min(100, n))))
+                  }}
+                  className="w-24"
+                />
+                <Percent className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="transfer-reason">Reason (optional)</Label>
+              <Textarea
+                id="transfer-reason"
+                value={transferReason}
+                onChange={(e) => setTransferReason(e.target.value)}
+                placeholder="e.g., Schedule conflict, level change, etc."
+                rows={2}
+              />
+            </div>
+
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> If the student has already paid for the current month in this group,
+                the payment will be credited to the new group automatically.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (!enrollmentToTransfer || !targetGroupId) return
+                const pct = Number(transferDiscount)
+                if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+                  toast({
+                    title: 'Invalid discount',
+                    description: 'Discount must be between 0 and 100%.',
+                    variant: 'destructive',
+                  })
+                  return
+                }
+                transferStudent.mutate({
+                  student_id: enrollmentToTransfer.student_id,
+                  from_group_id: groupId,
+                  to_group_id: Number(targetGroupId),
+                  reason: transferReason || undefined,
+                  discount_percentage: pct,
+                })
+              }}
+              disabled={!targetGroupId || transferStudent.isPending}
+            >
+              {transferStudent.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Transfer
             </Button>
           </DialogFooter>
         </DialogContent>

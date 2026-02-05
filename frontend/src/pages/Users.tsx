@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { usersApi, teachersApi, User, UserRole } from '@/lib/api'
+import { usersApi, User, UserRole } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -21,13 +21,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
@@ -59,7 +52,6 @@ export function Users() {
   const [toggleUser, setToggleUser] = useState<User | null>(null)
   const ROLES: UserRole[] = ['admin', 'manager', 'teacher', 'accountant', 'user']
   const [formRoles, setFormRoles] = useState<UserRole[]>(['user'])
-  const [formTeacherId, setFormTeacherId] = useState<number | null>(null)
   const [formPhone, setFormPhone] = useState('')
 
   const { data: users = [], isLoading } = useQuery({
@@ -67,18 +59,11 @@ export function Users() {
     queryFn: () => usersApi.getAll(),
   })
 
-  const { data: teachers = [] } = useQuery({
-    queryKey: ['teachers'],
-    queryFn: teachersApi.getAll,
-    enabled: formOpen,
-  })
-
   useEffect(() => {
     if (formOpen) {
       const r = selectedUser?.role ?? 'user'
       const list = r.split(',').map((x) => x.trim()).filter(Boolean) as UserRole[]
       setFormRoles(list.length ? list : ['user'])
-      setFormTeacherId(selectedUser?.teacher_id ?? null)
       setFormPhone(selectedUser?.phone || '')
     }
   }, [formOpen, selectedUser])
@@ -91,7 +76,7 @@ export function Users() {
   )
 
   const createMutation = useMutation({
-    mutationFn: (data: { username: string; password: string; name: string; role: string | UserRole[]; teacher_id?: number | null; email?: string; phone?: string }) =>
+    mutationFn: (data: { username: string; password: string; name: string; role: string | UserRole[]; email?: string; phone?: string }) =>
       usersApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -171,7 +156,6 @@ export function Users() {
         role,
         email,
         phone,
-        teacher_id: formRoles.includes('teacher') ? formTeacherId ?? undefined : undefined,
       })
     }
   }
@@ -348,26 +332,6 @@ export function Users() {
                   />
                 </div>
               </div>
-              {!selectedUser && formRoles.includes('teacher') && (
-                <div className="space-y-2">
-                  <Label>Link to teacher (optional)</Label>
-                  <Select
-                    value={formTeacherId != null ? String(formTeacherId) : ''}
-                    onValueChange={(v) => setFormTeacherId(v ? Number(v) : null)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select teacher record" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teachers.filter((t) => t.status === 'active').map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.first_name} {t.last_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -396,10 +360,7 @@ export function Users() {
                         checked={formRoles.includes(r)}
                         onCheckedChange={(checked) => {
                           if (checked) setFormRoles((prev) => [...prev, r].sort())
-                          else {
-                            setFormRoles((prev) => prev.filter((x) => x !== r))
-                            if (r === 'teacher') setFormTeacherId(null)
-                          }
+                          else setFormRoles((prev) => prev.filter((x) => x !== r))
                         }}
                       />
                       <span className="capitalize text-sm">{r}</span>

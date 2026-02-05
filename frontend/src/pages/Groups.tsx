@@ -5,6 +5,8 @@ import { groupsApi, teachersApi, Group } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { TimeInput } from '@/components/ui/time-input'
+import { GroupsTableSkeleton } from '@/components/skeletons'
 import {
   Table,
   TableBody,
@@ -45,7 +47,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Clock } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
 
@@ -68,6 +70,7 @@ export function Groups() {
   const [formScheduleDays, setFormScheduleDays] = useState<string[]>([])
   const [formTimeStart, setFormTimeStart] = useState<string>('')
   const [formTimeEnd, setFormTimeEnd] = useState<string>('')
+  const [formRoom, setFormRoom] = useState<string>('')
 
   const DAYS_OF_WEEK = [
     { value: 'Mon', label: 'Mon' },
@@ -77,6 +80,12 @@ export function Groups() {
     { value: 'Fri', label: 'Fri' },
     { value: 'Sat', label: 'Sat' },
     { value: 'Sun', label: 'Sun' },
+  ]
+
+  const ROOMS = [
+    { value: 'Room 1', label: 'Room 1' },
+    { value: 'Room 2', label: 'Room 2' },
+    { value: 'Room 3', label: 'Room 3' },
   ]
 
   const { data: groups = [], isLoading } = useQuery({
@@ -134,6 +143,12 @@ export function Groups() {
       return
     }
 
+    // Validate end time is after start time
+    if (formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart) {
+      toast({ title: 'End time must be after start time', variant: 'destructive' })
+      return
+    }
+
     const formData = new FormData(e.currentTarget)
     const data = {
       name: formData.get('name') as string,
@@ -145,6 +160,7 @@ export function Groups() {
       schedule_days: formScheduleDays.length > 0 ? formScheduleDays.join(',') : undefined,
       schedule_time_start: formTimeStart || undefined,
       schedule_time_end: formTimeEnd || undefined,
+      room: formRoom || undefined,
     }
 
     if (selectedGroup) {
@@ -180,9 +196,7 @@ export function Groups() {
       </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-        </div>
+        <GroupsTableSkeleton />
       ) : (
         <div className="rounded-md border">
           <Table>
@@ -192,7 +206,8 @@ export function Groups() {
                 <TableHead>Subject</TableHead>
                 <TableHead>Teacher</TableHead>
                 <TableHead>Schedule</TableHead>
-                <TableHead>Capacity</TableHead>
+                <TableHead>Room</TableHead>
+                <TableHead>Students</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[70px]"></TableHead>
@@ -201,7 +216,7 @@ export function Groups() {
             <TableBody>
               {filteredGroups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No groups found
                   </TableCell>
                 </TableRow>
@@ -223,7 +238,12 @@ export function Groups() {
                     <TableCell>{group.subject || '-'}</TableCell>
                     <TableCell>{group.teacher_name || '-'}</TableCell>
                     <TableCell className="text-sm">{scheduleText}</TableCell>
-                    <TableCell>{group.capacity}</TableCell>
+                    <TableCell>{group.room || '-'}</TableCell>
+                    <TableCell>
+                      <span className={group.student_count >= group.capacity ? 'text-red-600 font-medium' : ''}>
+                        {group.student_count}/{group.capacity}
+                      </span>
+                    </TableCell>
                     <TableCell>{formatCurrency(group.price)}</TableCell>
                     <TableCell>
                       <Badge variant={statusColors[group.status]}>
@@ -248,6 +268,7 @@ export function Groups() {
                             setFormScheduleDays(group.schedule_days ? group.schedule_days.split(',') : [])
                             setFormTimeStart(group.schedule_time_start || '')
                             setFormTimeEnd(group.schedule_time_end || '')
+                            setFormRoom(group.room || '')
                             setFormOpen(true)
                           }}>
                             <Pencil className="mr-2 h-4 w-4" />
@@ -283,11 +304,13 @@ export function Groups() {
           setFormScheduleDays([])
           setFormTimeStart('')
           setFormTimeEnd('')
+          setFormRoom('')
         } else if (!selectedGroup) {
           setFormTeacherId('')
           setFormScheduleDays([])
           setFormTimeStart('')
           setFormTimeEnd('')
+          setFormRoom('')
         }
       }}>
         <DialogContent>
@@ -396,30 +419,39 @@ export function Groups() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="time_start">Start Time</Label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="time_start"
-                      type="time"
-                      value={formTimeStart}
-                      onChange={(e) => setFormTimeStart(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+                  <TimeInput
+                    id="time_start"
+                    value={formTimeStart}
+                    onChange={setFormTimeStart}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="time_end">End Time</Label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="time_end"
-                      type="time"
-                      value={formTimeEnd}
-                      onChange={(e) => setFormTimeEnd(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
+                  <TimeInput
+                    id="time_end"
+                    value={formTimeEnd}
+                    onChange={setFormTimeEnd}
+                    className={formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart ? 'border-red-500 focus-within:ring-red-500' : ''}
+                  />
+                  {formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart && (
+                    <p className="text-xs text-red-500">End time must be after start time</p>
+                  )}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="room">Room</Label>
+                <Select value={formRoom} onValueChange={setFormRoom}>
+                  <SelectTrigger className={!formRoom ? 'text-muted-foreground' : ''}>
+                    <SelectValue placeholder="Select room" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROOMS.map((room) => (
+                      <SelectItem key={room.value} value={room.value}>
+                        {room.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>

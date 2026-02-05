@@ -26,6 +26,7 @@ SheetOverlay.displayName = DialogPrimitive.Overlay.displayName
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   side?: "top" | "bottom" | "left" | "right"
+  preventAutoFocus?: boolean
 }
 
 const sheetVariants = {
@@ -38,26 +39,70 @@ const sheetVariants = {
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
-        sheetVariants[side],
-        className
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </SheetPortal>
-))
+>(({ side = "right", className, children, onKeyDown, preventAutoFocus, onOpenAutoFocus, ...props }, ref) => {
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // Allow Enter to submit forms when not in textarea or select
+      if (e.key === 'Enter' && !e.defaultPrevented) {
+        const target = e.target as HTMLElement
+        const tagName = target.tagName.toLowerCase()
+
+        // Don't interfere with textarea, select, or buttons
+        if (tagName === 'textarea' || tagName === 'select' || tagName === 'button') {
+          return
+        }
+
+        // Find and submit the form if Enter is pressed on an input
+        if (tagName === 'input') {
+          const form = target.closest('form')
+          if (form) {
+            const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement
+            if (submitBtn && !submitBtn.disabled) {
+              e.preventDefault()
+              submitBtn.click()
+            }
+          }
+        }
+      }
+
+      onKeyDown?.(e)
+    },
+    [onKeyDown]
+  )
+
+  const handleOpenAutoFocus = React.useCallback(
+    (e: Event) => {
+      if (preventAutoFocus) {
+        e.preventDefault()
+      }
+      onOpenAutoFocus?.(e)
+    },
+    [preventAutoFocus, onOpenAutoFocus]
+  )
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          sheetVariants[side],
+          className
+        )}
+        onKeyDown={handleKeyDown}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </SheetPortal>
+  )
+})
 SheetContent.displayName = DialogPrimitive.Content.displayName
 
 const SheetHeader = ({
