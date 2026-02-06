@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { flushSync } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { paymentsApi, studentsApi, groupsApi, enrollmentsApi, studentDebtApi, Payment } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -30,10 +29,12 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Plus, Search, Loader2, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DateInput } from '@/components/ui/date-input'
-import { formatCurrency, formatDate, formatDateTime, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime, parseAmountFromInput } from '@/lib/utils'
+import { useAmountInput } from '@/hooks/useAmountInput'
+import { useAuth } from '@/contexts/AuthContext'
 
 // Format YYYY-MM as "Jan 2026" using local date (avoid UTC parsing shifting month)
 function formatMonthKey(ym: string): string {
@@ -68,9 +69,11 @@ function getCurrentMonth() {
 export function Payments() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole('admin')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
-  const [amountStr, setAmountStr] = useState('')
+  const amount = useAmountInput()
   const [selectedStudentId, setSelectedStudentId] = useState<string>('')
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
@@ -214,8 +217,23 @@ export function Payments() {
     },
   })
 
+  const deletePayment = useMutation({
+    mutationFn: (id: number) => paymentsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast({ title: 'Payment deleted successfully' })
+    },
+  })
+
+  function handleDelete(id: number) {
+    if (window.confirm('Are you sure you want to delete this payment? This action marks it as deleted.')) {
+      deletePayment.mutate(id)
+    }
+  }
+
   function resetForm() {
-    setAmountStr('')
+    amount.reset()
     setSelectedStudentId('')
     setSelectedGroupId('')
     setSelectedMonths([])
@@ -258,19 +276,6 @@ export function Payments() {
       return true
     })
   }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod])
-
-  function handleAmountChange(value: string) {
-    const cleaned = value.replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '')
-    const parts = cleaned.split('.')
-    // Allow only one decimal point; preserve trailing zeros (e.g. 1.00, 10, 0.50)
-    const sanitized = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleaned
-    flushSync(() => setAmountStr(sanitized))
-  }
-
-  function handleAmountBlur() {
-    const parsed = parseAmountFromInput(amountStr)
-    setAmountStr(parsed === 0 ? '' : formatAmountForInput(parsed) || formatCurrency(parsed))
-  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -388,39 +393,59 @@ export function Payments() {
                 <TableHead>Amount</TableHead>
                 <TableHead>Method</TableHead>
                 <TableHead>Notes</TableHead>
+                {isAdmin && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     No payments found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredPayments.map((payment) => {
+                  const isDeleted = !!payment.deleted_at
                   const paidFor = payment.months_covered?.length
                     ? payment.months_covered.map((mc) => formatMonthKey(mc.month)).join(', ')
                     : payment.payment_date
                       ? formatMonthKey(payment.payment_date.slice(0, 7))
                       : '-'
                   return (
-                    <TableRow key={payment.id}>
+                    <TableRow key={payment.id} className={isDeleted ? 'opacity-50' : ''}>
                       <TableCell>{formatDateTime(payment.created_at)}</TableCell>
-                      <TableCell className="font-medium">{payment.student_name}</TableCell>
+                      <TableCell className={`font-medium ${isDeleted ? 'line-through' : ''}`}>{payment.student_name}</TableCell>
                       <TableCell>{payment.group_name || '-'}</TableCell>
                       <TableCell className="text-muted-foreground whitespace-nowrap">{paidFor}</TableCell>
-                      <TableCell className="font-medium text-green-600">
+                      <TableCell className={`font-medium text-green-600 ${isDeleted ? 'line-through' : ''}`}>
                         {formatCurrency(payment.amount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {payment.method}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="capitalize">
+                            {payment.method}
+                          </Badge>
+                          {isDeleted && <Badge variant="destructive">Deleted</Badge>}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {payment.notes || '-'}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {!isDeleted && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDelete(payment.id)}
+                              disabled={deletePayment.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })
@@ -601,14 +626,15 @@ export function Payments() {
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount *</Label>
                   <Input
+                    ref={amount.ref}
                     id="amount"
                     name="amount"
                     type="text"
                     inputMode="decimal"
                     placeholder="0.00"
-                    value={amountStr}
-                    onChange={(e) => handleAmountChange(e.target.value)}
-                    onBlur={handleAmountBlur}
+                    value={amount.value}
+                    onChange={amount.onChange}
+                    onBlur={amount.onBlur}
                     required
                   />
                   {debtInfo && debtInfo.totalRemaining > 0 && (
@@ -617,7 +643,7 @@ export function Payments() {
                       variant="ghost"
                       size="sm"
                       className="text-xs h-auto py-1"
-                      onClick={() => setAmountStr(debtInfo.totalRemaining.toString())}
+                      onClick={() => amount.setFromNumber(debtInfo.totalRemaining)}
                     >
                       Pay full remaining: {formatCurrency(debtInfo.totalRemaining)}
                     </Button>
@@ -634,7 +660,7 @@ export function Payments() {
                 </div>
               </div>
 
-              {debtInfo && parseAmountFromInput(amountStr) > debtInfo.totalRemaining + 0.01 && (
+              {debtInfo && amount.numericValue() > debtInfo.totalRemaining + 0.01 && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>Amount exceeds remaining debt ({formatCurrency(debtInfo.totalRemaining)})</span>
@@ -676,7 +702,7 @@ export function Payments() {
                   !selectedStudentId ||
                   !selectedGroupId ||
                   selectedMonths.length === 0 ||
-                  !!(debtInfo && parseAmountFromInput(amountStr) > debtInfo.totalRemaining + 0.01)
+                  !!(debtInfo && amount.numericValue() > debtInfo.totalRemaining + 0.01)
                 }
               >
                 {createPayment.isPending && (

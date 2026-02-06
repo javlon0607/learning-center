@@ -314,4 +314,14 @@ function initDB() {
     )";
     try { db()->exec($leadInteractionsSql); } catch (PDOException $e) { /* ignore */ }
     try { db()->exec("CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead ON lead_interactions(lead_id)"); } catch (PDOException $e) { /* ignore */ }
+
+    // Soft-delete: add deleted_at column to payments, expenses, salary_slips
+    $softDeleteColumns = [
+        "ALTER TABLE payments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+        "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+        "ALTER TABLE salary_slips ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+    ];
+    foreach ($softDeleteColumns as $alter) {
+        try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }
+    }
 }

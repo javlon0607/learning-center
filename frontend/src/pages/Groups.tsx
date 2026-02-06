@@ -50,6 +50,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
+import { useAmountInput } from '@/hooks/useAmountInput'
 
 const statusColors = {
   active: 'success',
@@ -71,6 +72,7 @@ export function Groups() {
   const [formTimeStart, setFormTimeStart] = useState<string>('')
   const [formTimeEnd, setFormTimeEnd] = useState<string>('')
   const [formRoom, setFormRoom] = useState<string>('')
+  const price = useAmountInput()
 
   const DAYS_OF_WEEK = [
     { value: 'Mon', label: 'Mon' },
@@ -155,7 +157,7 @@ export function Groups() {
       subject: formData.get('subject') as string,
       teacher_id: Number(formTeacherId),
       capacity: Number(formData.get('capacity')) || 15,
-      price: Number(formData.get('price')) || 0,
+      price: price.numericValue(),
       status: (formData.get('status') as Group['status']) || 'active',
       schedule_days: formScheduleDays.length > 0 ? formScheduleDays.join(',') : undefined,
       schedule_time_start: formTimeStart || undefined,
@@ -269,6 +271,7 @@ export function Groups() {
                             setFormTimeStart(group.schedule_time_start || '')
                             setFormTimeEnd(group.schedule_time_end || '')
                             setFormRoom(group.room || '')
+                            price.setFromNumber(group.price || 0)
                             setFormOpen(true)
                           }}>
                             <Pencil className="mr-2 h-4 w-4" />
@@ -305,12 +308,14 @@ export function Groups() {
           setFormTimeStart('')
           setFormTimeEnd('')
           setFormRoom('')
+          price.reset()
         } else if (!selectedGroup) {
           setFormTeacherId('')
           setFormScheduleDays([])
           setFormTimeStart('')
           setFormTimeEnd('')
           setFormRoom('')
+          price.reset()
         }
       }}>
         <DialogContent>
@@ -367,11 +372,15 @@ export function Groups() {
                 <div className="space-y-2">
                   <Label htmlFor="price">Price</Label>
                   <Input
+                    ref={price.ref}
                     id="price"
                     name="price"
-                    type="number"
-                    step="0.01"
-                    defaultValue={selectedGroup?.price || 0}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={price.value}
+                    onChange={price.onChange}
+                    onBlur={price.onBlur}
                   />
                 </div>
               </div>

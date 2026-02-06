@@ -29,17 +29,23 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, Loader2, Check } from 'lucide-react'
+import { Plus, Search, Loader2, Check, Trash2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useAmountInput } from '@/hooks/useAmountInput'
+import { useAuth } from '@/contexts/AuthContext'
 
 export function Salaries() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole('admin')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
-  const [baseAmount, setBaseAmount] = useState('')
+  const baseAmount = useAmountInput()
+  const bonus = useAmountInput()
+  const deduction = useAmountInput()
   const [salaryPreview, setSalaryPreview] = useState<TeacherSalaryPreview | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
 
@@ -62,7 +68,9 @@ export function Salaries() {
       setFormOpen(false)
       setSalaryMonth(new Date().toISOString().slice(0, 7))
       setSelectedTeacherId('')
-      setBaseAmount('')
+      baseAmount.reset()
+      bonus.reset()
+      deduction.reset()
       setSalaryPreview(null)
     },
   })
@@ -75,6 +83,20 @@ export function Salaries() {
       toast({ title: 'Salary slip marked as paid' })
     },
   })
+
+  const deleteSalarySlip = useMutation({
+    mutationFn: (id: number) => salarySlipsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['salary-slips'] })
+      toast({ title: 'Salary slip deleted successfully' })
+    },
+  })
+
+  function handleDelete(id: number) {
+    if (window.confirm('Are you sure you want to delete this salary slip? This action marks it as deleted.')) {
+      deleteSalarySlip.mutate(id)
+    }
+  }
 
   // Fetch salary preview when teacher and month are selected
   useEffect(() => {
@@ -90,7 +112,7 @@ export function Salaries() {
 
     // For fixed salary, we can set it directly without API call
     if (teacher.salary_type === 'fixed') {
-      setBaseAmount(String(teacher.salary_amount ?? 0))
+      baseAmount.setFromNumber(teacher.salary_amount ?? 0)
       setSalaryPreview({
         teacher_id: teacher.id,
         month: salaryMonth,
@@ -107,11 +129,11 @@ export function Salaries() {
     salarySlipsApi.preview(Number(selectedTeacherId), salaryMonth)
       .then((preview) => {
         setSalaryPreview(preview)
-        setBaseAmount(String(preview.base_amount))
+        baseAmount.setFromNumber(preview.base_amount)
       })
       .catch(() => {
         setSalaryPreview(null)
-        setBaseAmount('')
+        baseAmount.reset()
       })
       .finally(() => setLoadingPreview(false))
   }, [selectedTeacherId, salaryMonth, teachers])
@@ -138,9 +160,9 @@ export function Salaries() {
       teacher_id: Number(formData.get('teacher_id')),
       period_start: periodStart,
       period_end: periodEnd,
-      base_amount: Number(baseAmount || 0),
-      bonus: Number(formData.get('bonus')) || 0,
-      deduction: Number(formData.get('deduction')) || 0,
+      base_amount: baseAmount.numericValue(),
+      bonus: bonus.numericValue(),
+      deduction: deduction.numericValue(),
       status: 'pending' as const,
       notes: formData.get('notes') as string,
     }
@@ -199,41 +221,60 @@ export function Salaries() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredSlips.map((slip) => (
-                  <TableRow key={slip.id}>
-                    <TableCell className="font-medium">{slip.teacher_name}</TableCell>
-                    <TableCell>
-                      {formatDate(slip.period_start)} - {formatDate(slip.period_end)}
-                    </TableCell>
-                    <TableCell>{formatCurrency(slip.base_amount)}</TableCell>
-                    <TableCell className="text-green-600">+{formatCurrency(slip.bonus)}</TableCell>
-                    <TableCell className="text-red-600">-{formatCurrency(slip.deduction)}</TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(slip.total_amount)}</TableCell>
-                    <TableCell>
-                      <Badge variant={slip.status === 'paid' ? 'success' : 'warning'}>
-                        {slip.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {slip.status === 'pending' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => markAsPaid.mutate(slip.id)}
-                          disabled={markAsPaid.isPending}
-                        >
-                          <Check className="mr-1 h-4 w-4" />
-                          Pay
-                        </Button>
-                      )}
-                      {slip.status === 'paid' && slip.paid_at && (
-                        <span className="text-sm text-muted-foreground">
-                          {formatDate(slip.paid_at)}
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                filteredSlips.map((slip) => {
+                  const isDeleted = !!slip.deleted_at
+                  return (
+                    <TableRow key={slip.id} className={isDeleted ? 'opacity-50' : ''}>
+                      <TableCell className={`font-medium ${isDeleted ? 'line-through' : ''}`}>{slip.teacher_name}</TableCell>
+                      <TableCell>
+                        {formatDate(slip.period_start)} - {formatDate(slip.period_end)}
+                      </TableCell>
+                      <TableCell>{formatCurrency(slip.base_amount)}</TableCell>
+                      <TableCell className="text-green-600">+{formatCurrency(slip.bonus)}</TableCell>
+                      <TableCell className="text-red-600">-{formatCurrency(slip.deduction)}</TableCell>
+                      <TableCell className={`font-semibold ${isDeleted ? 'line-through' : ''}`}>{formatCurrency(slip.total_amount)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={slip.status === 'paid' ? 'success' : 'warning'}>
+                            {slip.status}
+                          </Badge>
+                          {isDeleted && <Badge variant="destructive">Deleted</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {slip.status === 'pending' && !isDeleted && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markAsPaid.mutate(slip.id)}
+                              disabled={markAsPaid.isPending}
+                            >
+                              <Check className="mr-1 h-4 w-4" />
+                              Pay
+                            </Button>
+                          )}
+                          {slip.status === 'paid' && slip.paid_at && !isDeleted && (
+                            <span className="text-sm text-muted-foreground">
+                              {formatDate(slip.paid_at)}
+                            </span>
+                          )}
+                          {isAdmin && !isDeleted && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDelete(slip.id)}
+                              disabled={deleteSalarySlip.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -309,36 +350,44 @@ export function Salaries() {
                 <div className="space-y-2">
                   <Label htmlFor="base_amount">Base Amount *</Label>
                   <Input
+                    ref={baseAmount.ref}
                     id="base_amount"
                     name="base_amount"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={baseAmount}
-                    onChange={(e) => setBaseAmount(e.target.value)}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={baseAmount.value}
+                    onChange={baseAmount.onChange}
+                    onBlur={baseAmount.onBlur}
                     required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="bonus">Bonus</Label>
                   <Input
+                    ref={bonus.ref}
                     id="bonus"
                     name="bonus"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue="0"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={bonus.value}
+                    onChange={bonus.onChange}
+                    onBlur={bonus.onBlur}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="deduction">Deduction</Label>
                   <Input
+                    ref={deduction.ref}
                     id="deduction"
                     name="deduction"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue="0"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={deduction.value}
+                    onChange={deduction.onChange}
+                    onBlur={deduction.onBlur}
                   />
                 </div>
               </div>

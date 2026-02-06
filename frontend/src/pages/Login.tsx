@@ -90,7 +90,7 @@ export function Login() {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 bg-background">
+      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 bg-background relative">
         <div className="w-full max-w-sm">
           {/* Mobile Logo */}
           <div className="lg:hidden mb-8 flex justify-center">
@@ -179,16 +179,10 @@ export function Login() {
             </Button>
           </form>
 
-          {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-border">
-            <p className="text-center text-xs text-muted-foreground">
-              Demo credentials: <span className="font-medium text-foreground">admin</span> / <span className="font-medium text-foreground">password</span>
-            </p>
-          </div>
         </div>
 
         {/* Copyright */}
-        <p className="mt-auto pt-8 text-xs text-muted-foreground">
+        <p className="absolute bottom-6 text-xs text-muted-foreground">
           &copy; {new Date().getFullYear()} Legacy Academy. All rights reserved.
         </p>
       </div>

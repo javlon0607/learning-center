@@ -637,6 +637,16 @@ try {
                 auditLog('update', 'payment', (int)$id, $oldValues, $newValues);
                 activityLog('update', 'payment', $id);
                 jsonResponse(['ok' => true]);
+            } elseif ($id && $method === 'DELETE') {
+                requireRole(['admin']);
+                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ?");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Payment not found', 404); break; }
+                db()->prepare("UPDATE payments SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('soft_delete', 'payment', (int)$id, ['deleted_at' => null], ['deleted_at' => date('Y-m-d H:i:s')]);
+                activityLog('soft_delete', 'payment', $id);
+                jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
 
@@ -719,6 +729,14 @@ try {
                 $stmt = db()->prepare("INSERT INTO expenses (category, amount, description, expense_date) VALUES (?,?,?,?)");
                 $stmt->execute([$input['category'] ?? '', (float)($input['amount'] ?? 0), $input['description'] ?? '', $input['expense_date'] ?? date('Y-m-d')]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
+            } elseif ($id && $method === 'DELETE') {
+                requireRole(['admin']);
+                $old = db()->prepare("SELECT id FROM expenses WHERE id = ?");
+                $old->execute([$id]);
+                if (!$old->fetch()) { jsonError('Expense not found', 404); break; }
+                db()->prepare("UPDATE expenses SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                activityLog('soft_delete', 'expense', $id);
+                jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
 
@@ -1016,6 +1034,15 @@ try {
                     ->execute([$newStatus, $newPaidAt, $id]);
                 $newValues = ['status' => $newStatus, 'paid_at' => $newPaidAt];
                 auditLog('update', 'salary_slip', (int)$id, $oldValues, $newValues);
+                jsonResponse(['ok' => true]);
+            } elseif ($id && $method === 'DELETE') {
+                requireRole(['admin']);
+                $old = db()->prepare("SELECT id FROM salary_slips WHERE id = ?");
+                $old->execute([$id]);
+                if (!$old->fetch()) { jsonError('Salary slip not found', 404); break; }
+                db()->prepare("UPDATE salary_slips SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('soft_delete', 'salary_slip', (int)$id, ['deleted_at' => null], ['deleted_at' => date('Y-m-d H:i:s')]);
+                activityLog('soft_delete', 'salary_slip', $id);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;

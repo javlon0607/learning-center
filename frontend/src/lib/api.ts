@@ -165,6 +165,8 @@ export const paymentsApi = {
 
   create: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name' | 'months_covered'> & { months?: string[] }) =>
     api.post<{ id: number; invoice_no: string }>('/payments', data),
+
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/payments/${id}`),
 }
 
 // Student Debt API
@@ -179,6 +181,8 @@ export const expensesApi = {
 
   create: (data: Omit<Expense, 'id' | 'created_at'>) =>
     api.post<{ id: number }>('/expenses', data),
+
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/expenses/${id}`),
 }
 
 // Leads API
@@ -226,6 +230,8 @@ export const salarySlipsApi = {
 
   update: (id: number, data: { status: string; paid_at?: string }) =>
     api.put<{ ok: boolean }>(`/salary-slips/${id}`, data),
+
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/salary-slips/${id}`),
 
   preview: (teacherId: number, month: string) =>
     api.get<TeacherSalaryPreview>('/teacher-salary-preview', { teacher_id: String(teacherId), month }),
@@ -435,6 +441,7 @@ export interface Payment {
   notes?: string
   created_at: string
   months_covered?: { month: string; amount: number }[]
+  deleted_at?: string
 }
 
 export interface StudentDebt {
@@ -486,6 +493,7 @@ export interface Expense {
   description?: string
   expense_date: string
   created_at: string
+  deleted_at?: string
 }
 
 export interface Lead {
@@ -560,6 +568,7 @@ export interface SalarySlip {
   paid_at?: string
   notes?: string
   created_at: string
+  deleted_at?: string
 }
 
 export interface TeacherSalaryPreview {

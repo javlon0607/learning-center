@@ -30,8 +30,10 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, Loader2 } from 'lucide-react'
-import { formatCurrency, formatDate, formatAmountForInput, parseAmountFromInput } from '@/lib/utils'
+import { Plus, Search, Loader2, Trash2 } from 'lucide-react'
+import { formatCurrency, formatDate, parseAmountFromInput } from '@/lib/utils'
+import { useAmountInput } from '@/hooks/useAmountInput'
+import { useAuth } from '@/contexts/AuthContext'
 
 const categories = [
   { value: 'rent', label: 'Rent' },
@@ -47,9 +49,11 @@ const categories = [
 export function Expenses() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole('admin')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
-  const [amount, setAmount] = useState<number>(0)
+  const amount = useAmountInput()
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0])
 
   const { data: expenses = [], isLoading } = useQuery({
@@ -65,8 +69,24 @@ export function Expenses() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast({ title: 'Expense recorded successfully' })
       setFormOpen(false)
+      amount.reset()
     },
   })
+
+  const deleteExpense = useMutation({
+    mutationFn: (id: number) => expensesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      toast({ title: 'Expense deleted successfully' })
+    },
+  })
+
+  function handleDelete(id: number) {
+    if (window.confirm('Are you sure you want to delete this expense? This action marks it as deleted.')) {
+      deleteExpense.mutate(id)
+    }
+  }
 
   const filteredExpenses = expenses.filter(
     (e) =>
@@ -74,7 +94,7 @@ export function Expenses() {
       e.description?.toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const totalExpenses = filteredExpenses.reduce((sum, e) => e.deleted_at ? sum : sum + e.amount, 0)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -138,39 +158,61 @@ export function Expenses() {
                 <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                {isAdmin && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredExpenses.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-8 text-muted-foreground">
                     No expenses found
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredExpenses.map((expense) => (
-                  <TableRow key={expense.id}>
-                    <TableCell>{formatDate(expense.expense_date)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {expense.category}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-[300px]">
-                      {expense.description || '-'}
-                    </TableCell>
-                    <TableCell className="text-right font-medium text-red-600">
-                      {formatCurrency(expense.amount)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                filteredExpenses.map((expense) => {
+                  const isDeleted = !!expense.deleted_at
+                  return (
+                    <TableRow key={expense.id} className={isDeleted ? 'opacity-50' : ''}>
+                      <TableCell>{formatDate(expense.expense_date)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="capitalize">
+                            {expense.category}
+                          </Badge>
+                          {isDeleted && <Badge variant="destructive">Deleted</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className={`max-w-[300px] ${isDeleted ? 'line-through' : ''}`}>
+                        {expense.description || '-'}
+                      </TableCell>
+                      <TableCell className={`text-right font-medium text-red-600 ${isDeleted ? 'line-through' : ''}`}>
+                        {formatCurrency(expense.amount)}
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          {!isDeleted && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDelete(expense.id)}
+                              disabled={deleteExpense.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setAmount(0); }}>
+      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) amount.reset(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Expense</DialogTitle>
@@ -196,13 +238,15 @@ export function Expenses() {
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount *</Label>
                   <Input
+                    ref={amount.ref}
                     id="amount"
                     name="amount"
                     type="text"
                     inputMode="decimal"
                     placeholder="0.00"
-                    value={formatAmountForInput(amount)}
-                    onChange={(e) => setAmount(parseAmountFromInput(e.target.value))}
+                    value={amount.value}
+                    onChange={amount.onChange}
+                    onBlur={amount.onBlur}
                     required
                   />
                 </div>
