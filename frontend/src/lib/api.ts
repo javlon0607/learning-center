@@ -70,6 +70,25 @@ export const api = {
   },
 }
 
+// Shared source options for leads and students
+export const sourceOptions = [
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'website', label: 'Website' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'walk_in', label: 'Walk-in' },
+  { value: 'phone', label: 'Phone Call' },
+  { value: 'flyer', label: 'Flyer/Banner' },
+  { value: 'event', label: 'Event' },
+  { value: 'other', label: 'Other' },
+] as const
+
+export interface Referrer {
+  id: number
+  name: string
+}
+
 // Auth API
 export const authApi = {
   login: (username: string, password: string) =>
@@ -82,7 +101,7 @@ export const authApi = {
 
 // Students API
 export const studentsApi = {
-  getAll: (params?: { status?: string; search?: string; group_id?: string }) =>
+  getAll: (params?: { status?: string; search?: string; group_id?: string; source?: string }) =>
     api.get<Student[]>('/students', params),
 
   getById: (id: number) => api.get<Student>(`/students/${id}`),
@@ -207,6 +226,12 @@ export const leadsApi = {
 
   addInteraction: (leadId: number, data: Omit<LeadInteraction, 'id' | 'lead_id' | 'created_at' | 'created_by' | 'created_by_name'>) =>
     api.post<{ id: number }>(`/leads/${leadId}/interactions`, data),
+}
+
+// Referrers API
+export const referrersApi = {
+  getByType: (type: 'student' | 'teacher' | 'user') =>
+    api.get<Referrer[]>('/referrers', { type }),
 }
 
 // Attendance API
@@ -359,6 +384,14 @@ export interface Student {
   status: 'active' | 'inactive' | 'graduated' | 'suspended'
   notes?: string
   created_at: string
+  // Source tracking
+  source?: string
+  referred_by_type?: 'student' | 'teacher' | 'user'
+  referred_by_id?: number
+  referred_by_name?: string
+  lead_id?: number
+  created_by?: number
+  created_by_name?: string
   // Enriched fields
   groups_list?: string
   enrollments?: StudentEnrollment[]
@@ -504,7 +537,7 @@ export interface Lead {
   email?: string
   parent_name?: string
   parent_phone?: string
-  source?: string
+  source: string
   status: 'new' | 'contacted' | 'interested' | 'trial_scheduled' | 'trial_completed' | 'negotiating' | 'enrolled' | 'lost' | 'postponed'
   notes?: string
   follow_up_date?: string
@@ -523,6 +556,10 @@ export interface Lead {
   budget?: string
   loss_reason?: string
   interaction_count?: number
+  // Source tracking
+  created_by?: number
+  referred_by_type?: 'student' | 'teacher' | 'user'
+  referred_by_id?: number
 }
 
 export interface LeadInteraction {

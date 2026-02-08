@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { studentsApi, enrollmentsApi, paymentsApi } from '@/lib/api'
+import { studentsApi, enrollmentsApi, paymentsApi, sourceOptions } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Mail, Phone, User, Calendar, BookOpen } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, User, Calendar, BookOpen, Info } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 
 const statusColors = {
@@ -83,7 +83,7 @@ export function StudentDetail() {
         </Badge>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Contact Information</CardTitle>
@@ -143,6 +143,41 @@ export function StudentDetail() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span>Joined {formatDate(student.created_at)}</span>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Source</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <Badge variant="outline">
+                {sourceOptions.find(s => s.value === student.source)?.label || student.source || 'Walk-in'}
+              </Badge>
+            </div>
+            {student.source === 'referral' && student.referred_by_name && (
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  Referred by: <span className="font-medium">{student.referred_by_name}</span>
+                  {student.referred_by_type && (
+                    <span className="text-muted-foreground"> ({student.referred_by_type})</span>
+                  )}
+                </span>
+              </div>
+            )}
+            {student.created_by_name && (
+              <div className="text-sm text-muted-foreground">
+                Created by: {student.created_by_name}
+              </div>
+            )}
+            {student.lead_id && (
+              <div className="text-sm text-muted-foreground">
+                From lead #{student.lead_id}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

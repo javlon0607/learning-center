@@ -5,7 +5,7 @@ define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
 define('DB_PORT', getenv('DB_PORT') ?: '5432');
 define('DB_NAME', getenv('DB_NAME') ?: 'learning_crm');
 define('DB_USER', getenv('DB_USER') ?: 'postgres');
-define('DB_PASS', getenv('DB_PASS') ?: 'postgres123');
+define('DB_PASS', getenv('DB_PASS') ?: 'admin');
 define('SESSION_TIMEOUT_MINUTES', (int)(getenv('SESSION_TIMEOUT') ?: 30));
 if (!defined('IS_API')) {
     $uri = $_SERVER['REQUEST_URI'] ?? '';
@@ -314,6 +314,30 @@ function initDB() {
     )";
     try { db()->exec($leadInteractionsSql); } catch (PDOException $e) { /* ignore */ }
     try { db()->exec("CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead ON lead_interactions(lead_id)"); } catch (PDOException $e) { /* ignore */ }
+
+    // Source tracking columns for students and leads
+    $sourceTrackingColumns = [
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS source VARCHAR(30) NOT NULL DEFAULT 'walk_in'",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS referred_by_type VARCHAR(20)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS referred_by_id INTEGER",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS lead_id INTEGER REFERENCES leads(id)",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_type VARCHAR(20)",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS referred_by_id INTEGER",
+    ];
+    foreach ($sourceTrackingColumns as $alter) {
+        try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }
+    }
+    // Make leads.source NOT NULL
+    try {
+        db()->exec("UPDATE leads SET source = 'walk_in' WHERE source IS NULL OR source = ''");
+        db()->exec("ALTER TABLE leads ALTER COLUMN source SET DEFAULT 'walk_in'");
+        db()->exec("ALTER TABLE leads ALTER COLUMN source SET NOT NULL");
+    } catch (PDOException $e) { /* ignore */ }
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_students_source ON students(source)"); } catch (PDOException $e) { /* ignore */ }
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_students_lead_id ON students(lead_id)"); } catch (PDOException $e) { /* ignore */ }
+    try { db()->exec("CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source)"); } catch (PDOException $e) { /* ignore */ }
 
     // Soft-delete: add deleted_at column to payments, expenses, salary_slips
     $softDeleteColumns = [

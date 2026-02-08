@@ -99,11 +99,23 @@ try {
                     $where[] = "EXISTS (SELECT 1 FROM enrollments e2 WHERE e2.student_id = s.id AND e2.group_id = ?)";
                     $params[] = (int)$_GET['group_id'];
                 }
+                if (!empty($_GET['source'])) {
+                    $where[] = "s.source = ?";
+                    $params[] = $_GET['source'];
+                }
+
                 $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
                 // Get students with aggregated enrollment info
                 $q = "
                     SELECT s.*,
+                        cb.name AS created_by_name,
+                        CASE
+                            WHEN s.referred_by_type = 'student' THEN (SELECT first_name || ' ' || last_name FROM students WHERE id = s.referred_by_id)
+                            WHEN s.referred_by_type = 'teacher' THEN (SELECT first_name || ' ' || last_name FROM teachers WHERE id = s.referred_by_id)
+                            WHEN s.referred_by_type = 'user' THEN (SELECT name FROM users WHERE id = s.referred_by_id)
+                            ELSE NULL
+                        END AS referred_by_name,
                         COALESCE(
                             (SELECT string_agg(g.name, ', ' ORDER BY g.name)
                              FROM enrollments e
@@ -119,6 +131,7 @@ try {
                             '[]'
                         ) AS enrollments_json
                     FROM students s
+                    LEFT JOIN users cb ON s.created_by = cb.id
                     $whereClause
                     ORDER BY s.created_at DESC
                 ";
@@ -166,10 +179,20 @@ try {
                 }
                 jsonResponse($students);
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes) VALUES (?,?,?,?,?,?,?,?,?)");
+                if (empty($input['source'])) { jsonError('Source is required'); break; }
+                $source = $input['source'];
+                $referredByType = null;
+                $referredById = null;
+                if ($source === 'referral') {
+                    $referredByType = $input['referred_by_type'] ?? null;
+                    $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
+                }
+                $createdBy = $_SESSION['user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null, $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['status'] ?? 'active', $input['notes'] ?? ''
+                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['status'] ?? 'active', $input['notes'] ?? '',
+                    $source, $referredByType, $referredById, $createdBy
                 ]);
                 $id = db()->lastInsertId();
                 activityLog('create', 'student', $id);
@@ -183,6 +206,7 @@ try {
                 activityLog('update', 'student', $id);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                db()->prepare("UPDATE leads SET converted_student_id = NULL WHERE converted_student_id = ?")->execute([$id]);
                 db()->prepare("DELETE FROM students WHERE id=?")->execute([$id]);
                 activityLog('delete', 'student', $id);
                 jsonResponse(['ok' => true]);
@@ -765,19 +789,44 @@ try {
                         jsonResponse([]);
                     }
                 }
+            } elseif ($id && $sub === 'convert' && $method === 'POST') {
+                $lead = db()->prepare("SELECT * FROM leads WHERE id = ?");
+                $lead->execute([$id]);
+                $l = $lead->fetch();
+                if (!$l) { jsonError('Lead not found', 404); break; }
+                $createdBy = $_SESSION['user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                $stmt->execute([
+                    $l['first_name'], $l['last_name'], $l['phone'], $l['email'], $l['parent_name'], $l['parent_phone'],
+                    'active', $l['notes'], $l['source'] ?? 'walk_in', $l['referred_by_type'], $l['referred_by_id'], $id, $createdBy
+                ]);
+                $sid = db()->lastInsertId();
+                db()->prepare("UPDATE leads SET status='enrolled', converted_student_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$sid, $id]);
+                activityLog('lead_convert', 'lead', $id);
+                jsonResponse(['student_id' => (int)$sid]);
             } elseif ($method === 'POST') {
-                $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                if (empty($input['source'])) { jsonError('Source is required'); break; }
+                $source = $input['source'];
+                $referredByType = null;
+                $referredById = null;
+                if ($source === 'referral') {
+                    $referredByType = $input['referred_by_type'] ?? null;
+                    $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
+                }
+                $createdBy = $_SESSION['user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget, created_by, referred_by_type, referred_by_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['source'] ?? '', $input['status'] ?? 'new',
+                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $source, $input['status'] ?? 'new',
                     $input['notes'] ?? '', $input['follow_up_date'] ?? null, $input['priority'] ?? 'warm',
                     $input['interested_courses'] ?? '', $input['trial_date'] ?? null, $input['trial_group_id'] ?? null,
-                    $input['birth_year'] ?? null, $input['preferred_schedule'] ?? '', $input['budget'] ?? ''
+                    $input['birth_year'] ?? null, $input['preferred_schedule'] ?? '', $input['budget'] ?? '',
+                    $createdBy, $referredByType, $referredById
                 ]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'PUT') {
                 // Build dynamic update based on provided fields
-                $fields = ['first_name', 'last_name', 'phone', 'email', 'parent_name', 'parent_phone', 'source', 'status', 'notes', 'follow_up_date', 'priority', 'interested_courses', 'trial_date', 'trial_group_id', 'birth_year', 'preferred_schedule', 'budget', 'loss_reason', 'last_contact_date'];
+                $fields = ['first_name', 'last_name', 'phone', 'email', 'parent_name', 'parent_phone', 'source', 'status', 'notes', 'follow_up_date', 'priority', 'interested_courses', 'trial_date', 'trial_group_id', 'birth_year', 'preferred_schedule', 'budget', 'loss_reason', 'last_contact_date', 'referred_by_type', 'referred_by_id'];
                 $updates = [];
                 $values = [];
                 foreach ($fields as $f) {
@@ -795,17 +844,6 @@ try {
             } elseif ($id && $method === 'DELETE') {
                 db()->prepare("DELETE FROM leads WHERE id=?")->execute([$id]);
                 jsonResponse(['ok' => true]);
-            } elseif ($id && $sub === 'convert' && $method === 'POST') {
-                $lead = db()->prepare("SELECT * FROM leads WHERE id = ?");
-                $lead->execute([$id]);
-                $l = $lead->fetch();
-                if (!$l) { jsonError('Lead not found', 404); break; }
-                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, phone, email, parent_name, parent_phone, status, notes) VALUES (?,?,?,?,?,?,?,?)");
-                $stmt->execute([$l['first_name'], $l['last_name'], $l['phone'], $l['email'], $l['parent_name'], $l['parent_phone'], 'active', $l['notes']]);
-                $sid = db()->lastInsertId();
-                db()->prepare("UPDATE leads SET status='enrolled', converted_student_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$sid, $id]);
-                activityLog('lead_convert', 'lead', $id);
-                jsonResponse(['student_id' => (int)$sid]);
             } elseif ($id && $sub === 'interactions' && $method === 'GET') {
                 $stmt = db()->prepare("SELECT li.*, u.name AS created_by_name FROM lead_interactions li LEFT JOIN users u ON li.created_by = u.id WHERE li.lead_id = ? ORDER BY li.created_at DESC");
                 $stmt->execute([$id]);
@@ -857,6 +895,28 @@ try {
                 } catch (PDOException $e) {
                     jsonResponse(['by_status' => [], 'follow_ups_today' => 0, 'follow_ups_overdue' => 0, 'trials_scheduled' => 0, 'hot_leads' => 0, 'conversions_this_month' => 0, 'by_source' => []]);
                 }
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'referrers':
+            requireRole(['admin', 'manager']);
+            if ($method === 'GET') {
+                $type = $_GET['type'] ?? '';
+                $results = [];
+                if ($type === 'student') {
+                    $stmt = db()->query("SELECT id, first_name || ' ' || last_name AS name FROM students WHERE status = 'active' ORDER BY first_name, last_name");
+                    $results = $stmt->fetchAll();
+                } elseif ($type === 'teacher') {
+                    $stmt = db()->query("SELECT id, first_name || ' ' || last_name AS name FROM teachers WHERE status = 'active' ORDER BY first_name, last_name");
+                    $results = $stmt->fetchAll();
+                } elseif ($type === 'user') {
+                    $stmt = db()->query("SELECT id, name FROM users WHERE is_active = true ORDER BY name");
+                    $results = $stmt->fetchAll();
+                } else {
+                    jsonError('type parameter required (student, teacher, or user)');
+                    break;
+                }
+                jsonResponse($results);
             } else { jsonError('Method not allowed', 405); }
             break;
 

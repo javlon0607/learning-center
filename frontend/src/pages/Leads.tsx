@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { leadsApi, groupsApi, Lead, LeadInteraction } from '@/lib/api'
+import { leadsApi, groupsApi, referrersApi, Lead, LeadInteraction, sourceOptions, Referrer } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -77,19 +77,6 @@ const priorityConfig = {
   cold: { label: 'Cold', color: 'bg-blue-500 text-white', icon: Snowflake },
 } as const
 
-const sourceOptions = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'telegram', label: 'Telegram' },
-  { value: 'facebook', label: 'Facebook' },
-  { value: 'website', label: 'Website' },
-  { value: 'referral', label: 'Referral' },
-  { value: 'walk_in', label: 'Walk-in' },
-  { value: 'phone', label: 'Phone Call' },
-  { value: 'flyer', label: 'Flyer/Banner' },
-  { value: 'event', label: 'Event' },
-  { value: 'other', label: 'Other' },
-]
-
 const interactionTypes = [
   { value: 'call', label: 'Phone Call', icon: Phone },
   { value: 'whatsapp', label: 'WhatsApp/Telegram', icon: MessageCircle },
@@ -125,6 +112,9 @@ export function Leads() {
   const [formParentPhone, setFormParentPhone] = useState('')
   const [formFollowUpDate, setFormFollowUpDate] = useState('')
   const [formTrialDate, setFormTrialDate] = useState('')
+  const [formSource, setFormSource] = useState('')
+  const [formReferrerType, setFormReferrerType] = useState<'student' | 'teacher' | 'user'>('student')
+  const [formReferrerId, setFormReferrerId] = useState<number | undefined>()
 
   // Queries
   const { data: leads = [], isLoading } = useQuery({
@@ -140,6 +130,12 @@ export function Leads() {
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
     queryFn: groupsApi.getAll,
+  })
+
+  const { data: referrers = [] } = useQuery({
+    queryKey: ['referrers', formReferrerType],
+    queryFn: () => referrersApi.getByType(formReferrerType),
+    enabled: formSource === 'referral',
   })
 
   const { data: interactions = [] } = useQuery({
@@ -240,6 +236,9 @@ export function Leads() {
     setFormParentPhone('')
     setFormFollowUpDate('')
     setFormTrialDate('')
+    setFormSource('')
+    setFormReferrerType('student')
+    setFormReferrerId(undefined)
   }
 
   function openEditForm(lead: Lead) {
@@ -248,20 +247,23 @@ export function Leads() {
     setFormParentPhone(lead.parent_phone || '')
     setFormFollowUpDate(lead.follow_up_date || '')
     setFormTrialDate(lead.trial_date || '')
+    setFormSource(lead.source || 'walk_in')
+    setFormReferrerType(lead.referred_by_type || 'student')
+    setFormReferrerId(lead.referred_by_id)
     setFormOpen(true)
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const data = {
+    const data: Record<string, unknown> = {
       first_name: formData.get('first_name') as string,
       last_name: formData.get('last_name') as string,
       phone: formPhone,
       email: formData.get('email') as string,
       parent_name: formData.get('parent_name') as string,
       parent_phone: formParentPhone,
-      source: formData.get('source') as string || undefined,
+      source: formSource,
       status: (formData.get('status') as Lead['status']) || 'new',
       priority: (formData.get('priority') as Lead['priority']) || 'warm',
       notes: formData.get('notes') as string,
@@ -272,12 +274,14 @@ export function Leads() {
       birth_year: formData.get('birth_year') ? Number(formData.get('birth_year')) : undefined,
       preferred_schedule: formData.get('preferred_schedule') as string,
       budget: formData.get('budget') as string,
+      referred_by_type: formSource === 'referral' ? formReferrerType : undefined,
+      referred_by_id: formSource === 'referral' ? formReferrerId : undefined,
     }
 
     if (selectedLead) {
       updateLead.mutate({ id: selectedLead.id, data })
     } else {
-      createLead.mutate(data)
+      createLead.mutate(data as Parameters<typeof leadsApi.create>[0])
     }
   }
 
@@ -309,12 +313,23 @@ export function Leads() {
     return new Date(date).toDateString() === new Date().toDateString()
   }
 
+  function clearLeadFilters() {
+    setSearch('')
+    setFilterStatus('all')
+    setFilterPriority('all')
+    setFilterSource('all')
+  }
+
   // Stat Cards Component
   function StatCards() {
     const activeLeads = leads.filter(l => !['enrolled', 'lost', 'postponed'].includes(l.status)).length
+    const noFilter = filterStatus === 'all' && filterPriority === 'all' && filterSource === 'all' && !search
     return (
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", noFilter && "ring-2 ring-blue-500")}
+          onClick={clearLeadFilters}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
@@ -327,7 +342,10 @@ export function Leads() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", filterPriority === 'hot' && "ring-2 ring-red-500")}
+          onClick={() => { clearLeadFilters(); setFilterPriority('hot'); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 rounded-lg">
@@ -353,7 +371,10 @@ export function Leads() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", filterStatus === 'trial_scheduled' && "ring-2 ring-purple-500")}
+          onClick={() => { clearLeadFilters(); setFilterStatus('trial_scheduled'); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-purple-100 rounded-lg">
@@ -366,7 +387,10 @@ export function Leads() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", filterStatus === 'enrolled' && "ring-2 ring-green-500")}
+          onClick={() => { clearLeadFilters(); setFilterStatus('enrolled'); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
@@ -379,7 +403,10 @@ export function Leads() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", filterStatus === 'lost' && "ring-2 ring-gray-500")}
+          onClick={() => { clearLeadFilters(); setFilterStatus('lost'); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gray-100 rounded-lg">
@@ -962,8 +989,8 @@ export function Leads() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="source">Source</Label>
-                  <Select name="source" defaultValue={selectedLead?.source}>
+                  <Label htmlFor="source">Source *</Label>
+                  <Select value={formSource} onValueChange={(v) => { setFormSource(v); if (v !== 'referral') { setFormReferrerId(undefined); } }}>
                     <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
                       {sourceOptions.map(({ value, label }) => (
@@ -973,6 +1000,34 @@ export function Leads() {
                   </Select>
                 </div>
               </div>
+
+              {/* Referral picker */}
+              {formSource === 'referral' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Referrer Type</Label>
+                    <Select value={formReferrerType} onValueChange={(v) => { setFormReferrerType(v as 'student' | 'teacher' | 'user'); setFormReferrerId(undefined); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="teacher">Teacher</SelectItem>
+                        <SelectItem value="user">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Referred By</Label>
+                    <Select value={formReferrerId?.toString() || ''} onValueChange={(v) => setFormReferrerId(Number(v))}>
+                      <SelectTrigger><SelectValue placeholder="Select person" /></SelectTrigger>
+                      <SelectContent>
+                        {referrers.map((r: Referrer) => (
+                          <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
               {/* Interest */}
               <div className="grid grid-cols-2 gap-4">

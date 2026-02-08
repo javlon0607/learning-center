@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { studentsApi, groupsApi, Student } from '@/lib/api'
+import { studentsApi, groupsApi, Student, sourceOptions } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -54,7 +54,7 @@ import {
 } from 'lucide-react'
 import { formatDate, formatCurrency, cn } from '@/lib/utils'
 
-type SortField = 'name' | 'phone' | 'status' | 'groups' | 'debt' | 'created_at'
+type SortField = 'name' | 'phone' | 'status' | 'groups' | 'debt' | 'source' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
 const statusConfig = {
@@ -75,6 +75,8 @@ export function Students() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [groupFilter, setGroupFilter] = useState<string>('all')
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [debtOnly, setDebtOnly] = useState(false)
 
   // Sorting
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -92,10 +94,11 @@ export function Students() {
 
   // Queries
   const { data: studentsRaw = [], isLoading } = useQuery({
-    queryKey: ['students', { status: statusFilter === 'all' ? undefined : statusFilter, group_id: groupFilter === 'all' ? undefined : groupFilter }],
+    queryKey: ['students', { status: statusFilter === 'all' ? undefined : statusFilter, group_id: groupFilter === 'all' ? undefined : groupFilter, source: sourceFilter === 'all' ? undefined : sourceFilter }],
     queryFn: () => studentsApi.getAll({
       status: statusFilter === 'all' ? undefined : statusFilter,
       group_id: groupFilter === 'all' ? undefined : groupFilter,
+      source: sourceFilter === 'all' ? undefined : sourceFilter,
     }),
   })
 
@@ -133,18 +136,22 @@ export function Students() {
     },
   })
 
-  // Filter by search
+  // Filter by search + debt
   const filteredStudents = useMemo(() => {
-    if (!search) return studentsRaw
+    let result = studentsRaw
+    if (debtOnly) {
+      result = result.filter(s => (s.current_month_debt || 0) > 0)
+    }
+    if (!search) return result
     const s = search.toLowerCase()
-    return studentsRaw.filter(student =>
+    return result.filter(student =>
       `${student.first_name} ${student.last_name}`.toLowerCase().includes(s) ||
       student.phone?.toLowerCase().includes(s) ||
       student.email?.toLowerCase().includes(s) ||
       student.parent_name?.toLowerCase().includes(s) ||
       student.parent_phone?.toLowerCase().includes(s)
     )
-  }, [studentsRaw, search])
+  }, [studentsRaw, search, debtOnly])
 
   // Sort
   const sortedStudents = useMemo(() => {
@@ -166,6 +173,9 @@ export function Students() {
           break
         case 'debt':
           comparison = (a.current_month_debt || 0) - (b.current_month_debt || 0)
+          break
+        case 'source':
+          comparison = (a.source || '').localeCompare(b.source || '')
           break
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -230,6 +240,8 @@ export function Students() {
     setSearch('')
     setStatusFilter('all')
     setGroupFilter('all')
+    setSourceFilter('all')
+    setDebtOnly(false)
     setCurrentPage(1)
   }
 
@@ -265,7 +277,10 @@ export function Students() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", statusFilter === 'all' && !debtOnly && "ring-2 ring-blue-500")}
+          onClick={() => { clearFilters(); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
@@ -278,7 +293,10 @@ export function Students() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", statusFilter === 'active' && !debtOnly && "ring-2 ring-green-500")}
+          onClick={() => { clearFilters(); setStatusFilter('active'); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
@@ -291,7 +309,10 @@ export function Students() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", debtOnly && "ring-2 ring-red-500")}
+          onClick={() => { clearFilters(); setDebtOnly(true); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className={cn("p-2 rounded-lg", stats.withDebt > 0 ? "bg-red-100" : "bg-gray-100")}>
@@ -304,7 +325,10 @@ export function Students() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn("cursor-pointer transition-shadow hover:shadow-md", debtOnly && "ring-2 ring-amber-500")}
+          onClick={() => { clearFilters(); setDebtOnly(true); }}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className={cn("p-2 rounded-lg", stats.totalDebt > 0 ? "bg-amber-100" : "bg-gray-100")}>
@@ -353,7 +377,24 @@ export function Students() {
             ))}
           </SelectContent>
         </Select>
-        {(search || statusFilter !== 'all' || groupFilter !== 'all') && (
+        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="All sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sources</SelectItem>
+            {sourceOptions.map(({ value, label }) => (
+              <SelectItem key={value} value={value}>{label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {debtOnly && (
+          <Badge variant="secondary" className="gap-1">
+            Debt only
+            <button onClick={() => setDebtOnly(false)} className="ml-1 hover:text-foreground">&times;</button>
+          </Badge>
+        )}
+        {(search || statusFilter !== 'all' || groupFilter !== 'all' || sourceFilter !== 'all' || debtOnly) && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground hover:text-foreground">
             Clear filters
           </Button>
@@ -371,12 +412,12 @@ export function Students() {
           <div className="text-center">
             <h3 className="font-medium text-foreground">No students found</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              {search || statusFilter !== 'all' || groupFilter !== 'all'
+              {search || statusFilter !== 'all' || groupFilter !== 'all' || sourceFilter !== 'all' || debtOnly
                 ? 'Try adjusting your search or filter criteria'
                 : 'Get started by adding your first student'}
             </p>
           </div>
-          {!search && statusFilter === 'all' && groupFilter === 'all' && (
+          {!search && statusFilter === 'all' && groupFilter === 'all' && sourceFilter === 'all' && !debtOnly && (
             <Button onClick={() => setFormOpen(true)} className="mt-2">
               <Plus className="mr-2 h-4 w-4" />Add Student
             </Button>
@@ -395,6 +436,7 @@ export function Students() {
                   <SortableHeader field="groups" className="font-semibold">Groups</SortableHeader>
                   <SortableHeader field="debt" className="font-semibold">This Month</SortableHeader>
                   <SortableHeader field="status" className="font-semibold">Status</SortableHeader>
+                  <SortableHeader field="source" className="font-semibold">Source</SortableHeader>
                   <SortableHeader field="created_at" className="font-semibold">Enrolled</SortableHeader>
                   <TableHead className="w-[70px]"></TableHead>
                 </TableRow>
@@ -512,6 +554,11 @@ export function Students() {
                           <StatusIcon className="h-3 w-3" />
                           {statusConfig[student.status]?.label}
                         </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs font-normal">
+                          {sourceOptions.find(s => s.value === student.source)?.label || student.source || 'Walk-in'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">{formatDate(student.created_at)}</span>
