@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { reportsApi, auditLogApi, type AuditLogEntry } from '@/lib/api'
 import { DateInput } from '@/components/ui/date-input'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -13,6 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import {
   BarChart,
@@ -27,7 +35,7 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { TrendingUp, TrendingDown, History, Calendar, Users, Building2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, History, Calendar, Users, Building2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 
 function formatAuditValues(obj: Record<string, unknown> | null): string {
@@ -66,10 +74,29 @@ export function Reports() {
     enabled: !!dateFrom && !!dateTo,
   })
 
-  const { data: auditLog = [], isLoading: auditLoading } = useQuery({
-    queryKey: ['audit-log'],
-    queryFn: () => auditLogApi.getList({ limit: '100' }),
+  // Audit log state
+  const [auditDateFrom, setAuditDateFrom] = useState('')
+  const [auditDateTo, setAuditDateTo] = useState('')
+  const [auditEntityType, setAuditEntityType] = useState('all')
+  const [auditAction, setAuditAction] = useState('all')
+  const [auditPage, setAuditPage] = useState(1)
+  const auditPageSize = 50
+
+  const { data: auditData, isLoading: auditLoading } = useQuery({
+    queryKey: ['audit-log', auditDateFrom, auditDateTo, auditEntityType, auditAction, auditPage],
+    queryFn: () => auditLogApi.getList({
+      ...(auditDateFrom ? { date_from: auditDateFrom } : {}),
+      ...(auditDateTo ? { date_to: auditDateTo } : {}),
+      ...(auditEntityType !== 'all' ? { entity_type: auditEntityType } : {}),
+      ...(auditAction !== 'all' ? { action: auditAction } : {}),
+      limit: String(auditPageSize),
+      offset: String((auditPage - 1) * auditPageSize),
+    }),
   })
+
+  const auditLog = auditData?.rows ?? []
+  const auditTotal = auditData?.total ?? 0
+  const auditTotalPages = Math.max(1, Math.ceil(auditTotal / auditPageSize))
 
   const { data: monthlyReport, isLoading: monthlyLoading } = useQuery({
     queryKey: ['reports', 'monthly', reportMonth],
@@ -596,15 +623,101 @@ export function Reports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="audit" className="mt-4">
+        <TabsContent value="audit" className="mt-4 space-y-4">
+          {/* Audit Filters */}
+          <div className="flex flex-wrap items-end gap-3 p-4 bg-card rounded-xl border border-border/60">
+            <div className="space-y-1">
+              <Label className="text-xs">From</Label>
+              <DateInput value={auditDateFrom} onChange={(v) => { setAuditDateFrom(v); setAuditPage(1); }} className="w-[140px]" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">To</Label>
+              <DateInput value={auditDateTo} onChange={(v) => { setAuditDateTo(v); setAuditPage(1); }} className="w-[140px]" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Entity</Label>
+              <Select value={auditEntityType} onValueChange={(v) => { setAuditEntityType(v); setAuditPage(1); }}>
+                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All entities</SelectItem>
+                  <SelectItem value="payment">Payment</SelectItem>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="lead">Lead</SelectItem>
+                  <SelectItem value="group">Group</SelectItem>
+                  <SelectItem value="discount">Discount</SelectItem>
+                  <SelectItem value="attendance">Attendance</SelectItem>
+                  <SelectItem value="salary_slip">Salary</SelectItem>
+                  <SelectItem value="teacher">Teacher</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Action</Label>
+              <Select value={auditAction} onValueChange={(v) => { setAuditAction(v); setAuditPage(1); }}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All actions</SelectItem>
+                  <SelectItem value="create">Create</SelectItem>
+                  <SelectItem value="update">Update</SelectItem>
+                  <SelectItem value="soft_delete">Soft Delete</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="login">Login</SelectItem>
+                  <SelectItem value="logout">Logout</SelectItem>
+                  <SelectItem value="lead_convert">Lead Convert</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {(auditDateFrom || auditDateTo || auditEntityType !== 'all' || auditAction !== 'all') && (
+              <Button variant="ghost" size="sm" onClick={() => { setAuditDateFrom(''); setAuditDateTo(''); setAuditEntityType('all'); setAuditAction('all'); setAuditPage(1); }}>
+                Clear filters
+              </Button>
+            )}
+            <div className="ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (auditLog.length === 0) return
+                  const headers = ['ID', 'User', 'Entity', 'Entity ID', 'Action', 'Before', 'After', 'IP', 'Timestamp']
+                  const csvRows = [headers.join(',')]
+                  auditLog.forEach((e: AuditLogEntry) => {
+                    const row = [
+                      e.id,
+                      `"${(e.changed_by_name || e.changed_by_username || '').replace(/"/g, '""')}"`,
+                      e.entity_type,
+                      e.entity_id ?? '',
+                      e.action,
+                      `"${formatAuditValues(e.old_values).replace(/"/g, '""')}"`,
+                      `"${formatAuditValues(e.new_values).replace(/"/g, '""')}"`,
+                      e.ip_address || '',
+                      e.created_at,
+                    ]
+                    csvRows.push(row.join(','))
+                  })
+                  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                <Download className="h-4 w-4 mr-1" />Export CSV
+              </Button>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <History className="h-5 w-5" />
                 Change history
+                <span className="text-sm font-normal text-muted-foreground ml-2">({auditTotal} entries)</span>
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Who changed Payments, Discounts, Attendance, Salaries — with before/after values and timestamp.
+                Who changed Payments, Discounts, Attendance, Salaries, Students, Leads, Groups, Teachers, Users — with before/after values and timestamp.
               </p>
             </CardHeader>
             <CardContent className="p-0">
@@ -641,7 +754,7 @@ export function Reports() {
                             <span className="capitalize">{entry.entity_type}</span>
                             {entry.entity_id != null && ` #${entry.entity_id}`}
                           </TableCell>
-                          <TableCell className="capitalize">{entry.action}</TableCell>
+                          <TableCell className="capitalize">{entry.action?.replace('_', ' ')}</TableCell>
                           <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground" title={formatAuditValues(entry.old_values)}>
                             {formatAuditValues(entry.old_values)}
                           </TableCell>
@@ -659,6 +772,30 @@ export function Reports() {
               )}
             </CardContent>
           </Card>
+
+          {/* Audit Pagination */}
+          {auditTotalPages > 1 && (
+            <div className="flex items-center justify-between px-2">
+              <span className="text-sm text-muted-foreground">
+                Showing {((auditPage - 1) * auditPageSize) + 1}–{Math.min(auditPage * auditPageSize, auditTotal)} of {auditTotal}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAuditPage(1)} disabled={auditPage === 1}>
+                  <ChevronLeft className="h-4 w-4" /><ChevronLeft className="h-4 w-4 -ml-2" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAuditPage(auditPage - 1)} disabled={auditPage === 1}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm px-3">Page {auditPage} of {auditTotalPages}</span>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAuditPage(auditPage + 1)} disabled={auditPage === auditTotalPages}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setAuditPage(auditTotalPages)} disabled={auditPage === auditTotalPages}>
+                  <ChevronRight className="h-4 w-4" /><ChevronRight className="h-4 w-4 -ml-2" />
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

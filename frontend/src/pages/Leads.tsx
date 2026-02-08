@@ -920,9 +920,9 @@ export function Leads() {
         </Tabs>
       )}
 
-      {/* Lead Form Dialog */}
+      {/* Lead Form Dialog — key forces remount so defaultValue fields reset */}
       <Dialog open={formOpen} onOpenChange={(open) => !open && closeForm()}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent key={selectedLead ? `edit-${selectedLead.id}` : 'new'} className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedLead ? 'Edit Lead' : 'Add New Lead'}</DialogTitle>
           </DialogHeader>

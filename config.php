@@ -93,25 +93,21 @@ function requireRole($allowed) {
 }
 
 function activityLog($action, $entity = null, $entityId = null, $details = null) {
-    $userId = $_SESSION['user']['id'] ?? null;
-    try {
-        $stmt = db()->prepare("INSERT INTO activity_log (user_id, action, entity, entity_id, details) VALUES (?,?,?,?,?)");
-        $stmt->execute([$userId, $action, $entity, $entityId, $details]);
-    } catch (Exception $e) { /* ignore */ }
+    auditLog($action, $entity, $entityId, null, null, $details);
 }
 
 /**
  * Audit log: who changed, before/after values, timestamp.
  * Use for Payments, Discounts, Attendance, Salaries.
  */
-function auditLog($action, $entityType, $entityId, $oldValues = null, $newValues = null) {
+function auditLog($action, $entityType, $entityId, $oldValues = null, $newValues = null, $details = null) {
     $userId = $_SESSION['user']['id'] ?? null;
     $ip = $_SERVER['REMOTE_ADDR'] ?? null;
     $oldJson = $oldValues !== null ? json_encode($oldValues, JSON_UNESCAPED_UNICODE) : null;
     $newJson = $newValues !== null ? json_encode($newValues, JSON_UNESCAPED_UNICODE) : null;
     try {
-        $stmt = db()->prepare("INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$userId, $action, $entityType, $entityId, $oldJson, $newJson, $ip]);
+        $stmt = db()->prepare("INSERT INTO audit_log (user_id, action, entity_type, entity_id, old_values, new_values, ip_address, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$userId, $action, $entityType, $entityId, $oldJson, $newJson, $ip, $details]);
     } catch (Exception $e) { /* ignore */ }
 }
 
@@ -339,11 +335,17 @@ function initDB() {
     try { db()->exec("CREATE INDEX IF NOT EXISTS idx_students_lead_id ON students(lead_id)"); } catch (PDOException $e) { /* ignore */ }
     try { db()->exec("CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source)"); } catch (PDOException $e) { /* ignore */ }
 
-    // Soft-delete: add deleted_at column to payments, expenses, salary_slips
+    // Add details column to audit_log for unified logging
+    try { db()->exec("ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS details TEXT"); } catch (PDOException $e) { /* ignore */ }
+
+    // Soft-delete: add deleted_at column to payments, expenses, salary_slips, students, leads, groups
     $softDeleteColumns = [
         "ALTER TABLE payments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
         "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
         "ALTER TABLE salary_slips ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+        "ALTER TABLE leads ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
+        "ALTER TABLE groups ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL",
     ];
     foreach ($softDeleteColumns as $alter) {
         try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }

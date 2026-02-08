@@ -93,6 +93,8 @@ export function Payments() {
   const [filterCourseMonth, setFilterCourseMonth] = useState<string>('')
   const [filterGroupId, setFilterGroupId] = useState<string>('')
   const [filterMethod, setFilterMethod] = useState<string>('')
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('')
+  const [filterDateTo, setFilterDateTo] = useState<string>('')
 
   const monthOptions = useMemo(() => getMonthOptions(), [])
   const paymentMethods = useMemo(() => [
@@ -273,9 +275,11 @@ export function Payments() {
       }
       if (filterGroupId && p.group_id !== Number(filterGroupId)) return false
       if (filterMethod && p.method !== filterMethod) return false
+      if (filterDateFrom && p.payment_date < filterDateFrom) return false
+      if (filterDateTo && p.payment_date > filterDateTo) return false
       return true
     })
-  }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod])
+  }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod, filterDateFrom, filterDateTo])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -375,6 +379,21 @@ export function Payments() {
             ))}
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-2">
+          <DateInput
+            value={filterDateFrom}
+            onChange={(v) => setFilterDateFrom(v)}
+            placeholder="From date"
+            className="w-[140px]"
+          />
+          <span className="text-muted-foreground text-sm">—</span>
+          <DateInput
+            value={filterDateTo}
+            onChange={(v) => setFilterDateTo(v)}
+            placeholder="To date"
+            className="w-[140px]"
+          />
+        </div>
       </div>
 
       {isLoading ? (

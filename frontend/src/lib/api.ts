@@ -310,10 +310,15 @@ export const usersApi = {
   delete: (id: number) => api.delete<{ ok: boolean }>(`/users/${id}`),
 }
 
-// Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries)
+// Unified audit log: tracks all entity changes (Students, Teachers, Groups, Leads, Users, Payments, Discounts, Attendance, Salaries) and actions (login, logout, lead_convert)
+export interface AuditLogResponse {
+  rows: AuditLogEntry[]
+  total: number
+}
+
 export const auditLogApi = {
-  getList: (params?: { entity_type?: string; entity_id?: string; limit?: string }) =>
-    api.get<AuditLogEntry[]>('/audit-log', params as Record<string, string> | undefined),
+  getList: (params?: { entity_type?: string; entity_id?: string; action?: string; date_from?: string; date_to?: string; limit?: string; offset?: string }) =>
+    api.get<AuditLogResponse>('/audit-log', params as Record<string, string> | undefined),
 }
 
 // Settings API
@@ -633,7 +638,7 @@ export interface DashboardStats {
   }
 }
 
-/** Audit log: who changed, before/after values, timestamp (Payments, Discounts, Attendance, Salaries). */
+/** Unified audit log: tracks all entity changes and actions with before/after values and timestamp. */
 export interface AuditLogEntry {
   id: number
   user_id: number | null

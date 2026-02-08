@@ -84,7 +84,7 @@ try {
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($method === 'GET') {
                 // Build query with optional filters
-                $where = [];
+                $where = ["s.deleted_at IS NULL"];
                 $params = [];
                 if (!empty($_GET['status'])) {
                     $where[] = "s.status = ?";
@@ -104,7 +104,7 @@ try {
                     $params[] = $_GET['source'];
                 }
 
-                $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
 
                 // Get students with aggregated enrollment info
                 $q = "
@@ -195,20 +195,40 @@ try {
                     $source, $referredByType, $referredById, $createdBy
                 ]);
                 $id = db()->lastInsertId();
-                activityLog('create', 'student', $id);
+                auditLog('create', 'student', (int)$id, null, [
+                    'first_name' => $input['first_name'] ?? '',
+                    'last_name' => $input['last_name'] ?? '',
+                    'phone' => $input['phone'] ?? '',
+                    'email' => $input['email'] ?? '',
+                    'status' => $input['status'] ?? 'active',
+                    'source' => $source
+                ]);
                 jsonResponse(['id' => (int)$id]);
             } elseif ($id && $method === 'PUT') {
+                $oldStmt = db()->prepare("SELECT first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes FROM students WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
                 $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, email=?, parent_name=?, parent_phone=?, status=?, notes=? WHERE id=?");
-                $stmt->execute([
-                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null, $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['status'] ?? 'active', $input['notes'] ?? '', $id
-                ]);
-                activityLog('update', 'student', $id);
+                $newValues = [
+                    'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
+                    'dob' => $input['dob'] ?? null, 'phone' => $input['phone'] ?? '', 'email' => $input['email'] ?? '',
+                    'parent_name' => $input['parent_name'] ?? '', 'parent_phone' => $input['parent_phone'] ?? '',
+                    'status' => $input['status'] ?? 'active', 'notes' => $input['notes'] ?? ''
+                ];
+                $stmt->execute(array_merge(array_values($newValues), [$id]));
+                auditLog('update', 'student', $id, $oldRow ?: null, $newValues);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                db()->prepare("UPDATE leads SET converted_student_id = NULL WHERE converted_student_id = ?")->execute([$id]);
-                db()->prepare("DELETE FROM students WHERE id=?")->execute([$id]);
-                activityLog('delete', 'student', $id);
+                requireRole(['admin']);
+                $old = db()->prepare("SELECT id, first_name, last_name, phone, email, status, source, created_at FROM students WHERE id = ? AND deleted_at IS NULL");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Student not found', 404); break; }
+                $oldValues = $oldRow;
+                $oldValues['id'] = (int)$oldValues['id'];
+                db()->prepare("UPDATE students SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('soft_delete', 'student', $id, $oldValues, null);
+                activityLog('soft_delete', 'student', $id);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -242,22 +262,35 @@ try {
                     try {
                         db()->prepare("UPDATE users SET teacher_id = ? WHERE id = ?")->execute([$teacherId, $userId]);
                     } catch (PDOException $e) { /* ignore if column missing */ }
-                    activityLog('create', 'teacher', $teacherId);
+                    auditLog('create', 'teacher', $teacherId, null, [
+                        'first_name' => $firstName, 'last_name' => $lastName,
+                        'subjects' => $subjects, 'salary_type' => $salaryType,
+                        'salary_amount' => $salaryAmount, 'status' => $status
+                    ]);
                     jsonResponse(['id' => $teacherId]);
                 } else {
                     jsonError('Select a user with teacher role to add as teacher', 400);
                 }
             } elseif ($id && $method === 'PUT') {
+                $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status FROM teachers WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
+                $newValues = [
+                    'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
+                    'phone' => $input['phone'] ?? '', 'email' => $input['email'] ?? '',
+                    'subjects' => $input['subjects'] ?? '', 'salary_type' => $input['salary_type'] ?? 'fixed',
+                    'salary_amount' => $input['salary_amount'] ?? 0, 'status' => $input['status'] ?? 'active'
+                ];
                 $stmt = db()->prepare("UPDATE teachers SET first_name=?, last_name=?, phone=?, email=?, subjects=?, salary_type=?, salary_amount=?, status=? WHERE id=?");
-                $stmt->execute([
-                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
-                    $input['subjects'] ?? '', $input['salary_type'] ?? 'fixed', $input['salary_amount'] ?? 0, $input['status'] ?? 'active', $id
-                ]);
-                activityLog('update', 'teacher', $id);
+                $stmt->execute(array_merge(array_values($newValues), [$id]));
+                auditLog('update', 'teacher', $id, $oldRow ?: null, $newValues);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status FROM teachers WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
                 db()->prepare("DELETE FROM teachers WHERE id=?")->execute([$id]);
-                activityLog('delete', 'teacher', $id);
+                auditLog('delete', 'teacher', $id, $oldRow ?: null, null);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -266,16 +299,17 @@ try {
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
             if ($method === 'GET') {
                 $stmt = db()->query("
-                    SELECT g.*, 
+                    SELECT g.*,
                            t.first_name || ' ' || t.last_name AS teacher_name,
                            COALESCE(e.student_count, 0) AS student_count
-                    FROM groups g 
-                    LEFT JOIN teachers t ON g.teacher_id = t.id 
+                    FROM groups g
+                    LEFT JOIN teachers t ON g.teacher_id = t.id
                     LEFT JOIN (
-                        SELECT group_id, COUNT(*) AS student_count 
-                        FROM enrollments 
+                        SELECT group_id, COUNT(*) AS student_count
+                        FROM enrollments
                         GROUP BY group_id
                     ) e ON g.id = e.group_id
+                    WHERE g.deleted_at IS NULL
                     ORDER BY g.created_at DESC
                 ");
                 jsonResponse($stmt->fetchAll());
@@ -293,25 +327,42 @@ try {
                     $input['schedule_time_end'] ?? null,
                     $input['room'] ?? null
                 ]);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $groupId = (int)db()->lastInsertId();
+                auditLog('create', 'group', $groupId, null, [
+                    'name' => $input['name'] ?? '', 'subject' => $input['subject'] ?? '',
+                    'teacher_id' => $input['teacher_id'] ?: null, 'capacity' => $input['capacity'] ?? 15,
+                    'price' => $input['price'] ?? 0, 'status' => $input['status'] ?? 'active'
+                ]);
+                jsonResponse(['id' => $groupId]);
             } elseif ($id && $method === 'PUT') {
+                $oldStmt = db()->prepare("SELECT name, subject, teacher_id, capacity, price, status FROM groups WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
+                $newValues = [
+                    'name' => $input['name'] ?? '', 'subject' => $input['subject'] ?? '',
+                    'teacher_id' => $input['teacher_id'] ?: null, 'capacity' => $input['capacity'] ?? 15,
+                    'price' => $input['price'] ?? 0, 'status' => $input['status'] ?? 'active'
+                ];
                 $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=?, room=? WHERE id=?");
                 $stmt->execute([
-                    $input['name'] ?? '',
-                    $input['subject'] ?? '',
-                    $input['teacher_id'] ?: null,
-                    $input['capacity'] ?? 15,
-                    $input['price'] ?? 0,
-                    $input['status'] ?? 'active',
-                    $input['schedule_days'] ?? null,
-                    $input['schedule_time_start'] ?? null,
-                    $input['schedule_time_end'] ?? null,
-                    $input['room'] ?? null,
-                    $id
+                    $newValues['name'], $newValues['subject'], $newValues['teacher_id'],
+                    $newValues['capacity'], $newValues['price'], $newValues['status'],
+                    $input['schedule_days'] ?? null, $input['schedule_time_start'] ?? null,
+                    $input['schedule_time_end'] ?? null, $input['room'] ?? null, $id
                 ]);
+                auditLog('update', 'group', $id, $oldRow ?: null, $newValues);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                db()->prepare("DELETE FROM groups WHERE id=?")->execute([$id]);
+                requireRole(['admin']);
+                $old = db()->prepare("SELECT id, name, subject, teacher_id, capacity, price, status, created_at FROM groups WHERE id = ? AND deleted_at IS NULL");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Group not found', 404); break; }
+                $oldValues = $oldRow;
+                $oldValues['id'] = (int)$oldValues['id'];
+                db()->prepare("UPDATE groups SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('soft_delete', 'group', $id, $oldValues, null);
+                activityLog('soft_delete', 'group', $id);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -441,6 +492,35 @@ try {
                     $paidMonth = $currentMonth;
                 }
 
+                // Calculate total unpaid debt in source group (all months with outstanding balance)
+                $debtStmt = db()->prepare("
+                    SELECT COALESCE(SUM(expected - paid), 0) AS total_debt
+                    FROM (
+                        SELECT
+                            :exp_payment AS expected,
+                            COALESCE((
+                                SELECT SUM(pm2.amount)
+                                FROM payment_months pm2
+                                JOIN payments p2 ON pm2.payment_id = p2.id
+                                WHERE p2.student_id = :sid AND p2.group_id = :gid
+                                  AND pm2.for_month = gs.month_start
+                                  AND p2.deleted_at IS NULL
+                            ), 0) AS paid
+                        FROM generate_series(
+                            (SELECT COALESCE(MIN(enrolled_at), CURRENT_DATE) FROM enrollments WHERE student_id = :sid2 AND group_id = :gid2),
+                            date_trunc('month', CURRENT_DATE)::DATE,
+                            '1 month'::interval
+                        ) AS gs(month_start)
+                    ) debt_calc
+                    WHERE expected > paid
+                ");
+                $debtStmt->execute([
+                    ':exp_payment' => $expectedPayment,
+                    ':sid' => $studentId, ':gid' => $fromGroupId,
+                    ':sid2' => $studentId, ':gid2' => $fromGroupId
+                ]);
+                $sourceGroupDebt = (float)$debtStmt->fetchColumn();
+
                 // Start transaction
                 db()->beginTransaction();
                 try {
@@ -483,10 +563,17 @@ try {
                     }
 
                     db()->commit();
+
+                    $message = $paidMonth ? 'Student transferred. Current month payment credited to new group.' : 'Student transferred successfully.';
+                    if ($sourceGroupDebt > 0) {
+                        $message .= ' Warning: Student had ' . number_format($sourceGroupDebt, 2) . ' unpaid debt in the source group.';
+                    }
+
                     jsonResponse([
                         'ok' => true,
                         'paid_month_transferred' => $paidMonth !== null,
-                        'message' => $paidMonth ? 'Student transferred. Current month payment credited to new group.' : 'Student transferred successfully.'
+                        'source_group_debt' => $sourceGroupDebt,
+                        'message' => $message
                     ]);
                 } catch (Exception $e) {
                     db()->rollBack();
@@ -773,6 +860,7 @@ try {
                             (SELECT COUNT(*) FROM lead_interactions WHERE lead_id = l.id) AS interaction_count
                         FROM leads l
                         LEFT JOIN groups g ON l.trial_group_id = g.id
+                        WHERE l.deleted_at IS NULL
                         ORDER BY
                             CASE WHEN l.status IN ('enrolled', 'lost') THEN 1 ELSE 0 END,
                             CASE l.priority WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 ELSE 2 END,
@@ -783,27 +871,38 @@ try {
                 } catch (PDOException $e) {
                     // Fallback for old schema
                     try {
-                        $stmt = db()->query("SELECT * FROM leads ORDER BY created_at DESC");
+                        $stmt = db()->query("SELECT * FROM leads WHERE deleted_at IS NULL ORDER BY created_at DESC");
                         jsonResponse($stmt->fetchAll());
                     } catch (PDOException $e2) {
                         jsonResponse([]);
                     }
                 }
             } elseif ($id && $sub === 'convert' && $method === 'POST') {
-                $lead = db()->prepare("SELECT * FROM leads WHERE id = ?");
-                $lead->execute([$id]);
-                $l = $lead->fetch();
-                if (!$l) { jsonError('Lead not found', 404); break; }
-                $createdBy = $_SESSION['user']['id'] ?? null;
-                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-                $stmt->execute([
-                    $l['first_name'], $l['last_name'], $l['phone'], $l['email'], $l['parent_name'], $l['parent_phone'],
-                    'active', $l['notes'], $l['source'] ?? 'walk_in', $l['referred_by_type'], $l['referred_by_id'], $id, $createdBy
-                ]);
-                $sid = db()->lastInsertId();
-                db()->prepare("UPDATE leads SET status='enrolled', converted_student_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$sid, $id]);
-                activityLog('lead_convert', 'lead', $id);
-                jsonResponse(['student_id' => (int)$sid]);
+                db()->beginTransaction();
+                try {
+                    $lead = db()->prepare("SELECT * FROM leads WHERE id = ? AND deleted_at IS NULL AND converted_student_id IS NULL FOR UPDATE");
+                    $lead->execute([$id]);
+                    $l = $lead->fetch();
+                    if (!$l) {
+                        db()->rollBack();
+                        jsonError('Lead not found or already converted', 404);
+                        break;
+                    }
+                    $createdBy = $_SESSION['user']['id'] ?? null;
+                    $stmt = db()->prepare("INSERT INTO students (first_name, last_name, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                    $stmt->execute([
+                        $l['first_name'], $l['last_name'], $l['phone'], $l['email'], $l['parent_name'], $l['parent_phone'],
+                        'active', $l['notes'], $l['source'] ?? 'walk_in', $l['referred_by_type'], $l['referred_by_id'], $id, $createdBy
+                    ]);
+                    $sid = db()->lastInsertId();
+                    db()->prepare("UPDATE leads SET status='enrolled', converted_student_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?")->execute([$sid, $id]);
+                    db()->commit();
+                    activityLog('lead_convert', 'lead', $id);
+                    jsonResponse(['student_id' => (int)$sid]);
+                } catch (Exception $e) {
+                    db()->rollBack();
+                    jsonError('Conversion failed: ' . $e->getMessage());
+                }
             } elseif ($method === 'POST') {
                 if (empty($input['source'])) { jsonError('Source is required'); break; }
                 $source = $input['source'];
@@ -823,7 +922,13 @@ try {
                     $input['birth_year'] ?? null, $input['preferred_schedule'] ?? '', $input['budget'] ?? '',
                     $createdBy, $referredByType, $referredById
                 ]);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $leadId = (int)db()->lastInsertId();
+                auditLog('create', 'lead', $leadId, null, [
+                    'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
+                    'phone' => $input['phone'] ?? '', 'source' => $source,
+                    'status' => $input['status'] ?? 'new', 'priority' => $input['priority'] ?? 'warm'
+                ]);
+                jsonResponse(['id' => $leadId]);
             } elseif ($id && $method === 'PUT') {
                 // Build dynamic update based on provided fields
                 $fields = ['first_name', 'last_name', 'phone', 'email', 'parent_name', 'parent_phone', 'source', 'status', 'notes', 'follow_up_date', 'priority', 'interested_courses', 'trial_date', 'trial_group_id', 'birth_year', 'preferred_schedule', 'budget', 'loss_reason', 'last_contact_date', 'referred_by_type', 'referred_by_id'];
@@ -836,13 +941,28 @@ try {
                     }
                 }
                 if (empty($updates)) { jsonError('No fields to update'); break; }
+                $oldStmt = db()->prepare("SELECT first_name, last_name, phone, source, status, priority FROM leads WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
                 $updates[] = "updated_at = CURRENT_TIMESTAMP";
                 $values[] = $id;
                 $sql = "UPDATE leads SET " . implode(', ', $updates) . " WHERE id = ?";
                 db()->prepare($sql)->execute($values);
+                $newStmt = db()->prepare("SELECT first_name, last_name, phone, source, status, priority FROM leads WHERE id = ?");
+                $newStmt->execute([$id]);
+                $newRow = $newStmt->fetch();
+                auditLog('update', 'lead', $id, $oldRow ?: null, $newRow ?: null);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                db()->prepare("DELETE FROM leads WHERE id=?")->execute([$id]);
+                $old = db()->prepare("SELECT id, first_name, last_name, phone, source, status, priority, created_at FROM leads WHERE id = ? AND deleted_at IS NULL");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Lead not found', 404); break; }
+                $oldValues = $oldRow;
+                $oldValues['id'] = (int)$oldValues['id'];
+                db()->prepare("UPDATE leads SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('soft_delete', 'lead', $id, $oldValues, null);
+                activityLog('soft_delete', 'lead', $id);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $sub === 'interactions' && $method === 'GET') {
                 $stmt = db()->prepare("SELECT li.*, u.name AS created_by_name FROM lead_interactions li LEFT JOIN users u ON li.created_by = u.id WHERE li.lead_id = ? ORDER BY li.created_at DESC");
@@ -867,29 +987,29 @@ try {
                 try {
                     $stats = [];
                     // Total by status
-                    $stmt = db()->query("SELECT status, COUNT(*) as count FROM leads GROUP BY status");
+                    $stmt = db()->query("SELECT status, COUNT(*) as count FROM leads WHERE deleted_at IS NULL GROUP BY status");
                     $byStatus = [];
                     while ($row = $stmt->fetch()) {
                         $byStatus[$row['status']] = (int)$row['count'];
                     }
                     $stats['by_status'] = $byStatus;
                     // Follow-ups due today
-                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE follow_up_date = CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND follow_up_date = CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
                     $stats['follow_ups_today'] = (int)$stmt->fetchColumn();
                     // Follow-ups overdue
-                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE follow_up_date < CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND follow_up_date < CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
                     $stats['follow_ups_overdue'] = (int)$stmt->fetchColumn();
                     // Trials scheduled
-                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE trial_date IS NOT NULL AND trial_date >= CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND trial_date IS NOT NULL AND trial_date >= CURRENT_DATE AND status NOT IN ('enrolled', 'lost')");
                     $stats['trials_scheduled'] = (int)$stmt->fetchColumn();
                     // Hot leads
-                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE priority = 'hot' AND status NOT IN ('enrolled', 'lost')");
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND priority = 'hot' AND status NOT IN ('enrolled', 'lost')");
                     $stats['hot_leads'] = (int)$stmt->fetchColumn();
                     // This month conversions
-                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE status = 'enrolled' AND date_trunc('month', updated_at) = date_trunc('month', CURRENT_DATE)");
+                    $stmt = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND status = 'enrolled' AND date_trunc('month', updated_at) = date_trunc('month', CURRENT_DATE)");
                     $stats['conversions_this_month'] = (int)$stmt->fetchColumn();
                     // By source
-                    $stmt = db()->query("SELECT source, COUNT(*) as count FROM leads WHERE source IS NOT NULL AND source != '' GROUP BY source ORDER BY count DESC LIMIT 5");
+                    $stmt = db()->query("SELECT source, COUNT(*) as count FROM leads WHERE deleted_at IS NULL AND source IS NOT NULL AND source != '' GROUP BY source ORDER BY count DESC LIMIT 5");
                     $stats['by_source'] = $stmt->fetchAll();
                     jsonResponse($stats);
                 } catch (PDOException $e) {
@@ -904,7 +1024,7 @@ try {
                 $type = $_GET['type'] ?? '';
                 $results = [];
                 if ($type === 'student') {
-                    $stmt = db()->query("SELECT id, first_name || ' ' || last_name AS name FROM students WHERE status = 'active' ORDER BY first_name, last_name");
+                    $stmt = db()->query("SELECT id, first_name || ' ' || last_name AS name FROM students WHERE status = 'active' AND deleted_at IS NULL ORDER BY first_name, last_name");
                     $results = $stmt->fetchAll();
                 } elseif ($type === 'teacher') {
                     $stmt = db()->query("SELECT id, first_name || ' ' || last_name AS name FROM teachers WHERE status = 'active' ORDER BY first_name, last_name");
@@ -931,6 +1051,10 @@ try {
                 jsonResponse(['date' => $date, 'group_id' => $group, 'rows' => $stmt->fetchAll()]);
             } elseif ($method === 'POST') {
                 $date = $input['date'] ?? date('Y-m-d');
+                if ($date > date('Y-m-d')) {
+                    jsonError('Cannot save attendance for future dates');
+                    break;
+                }
                 $group = (int)($input['group_id'] ?? 0);
                 $rows = $input['rows'] ?? [];
                 $fetchOld = db()->prepare("SELECT id, student_id, group_id, attendance_date, status FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
@@ -1112,28 +1236,28 @@ try {
             if ($sub === 'stats') {
                 try {
                     // Current counts
-                    $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active'")->fetchColumn();
+                    $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
                     $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
-                    $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active'")->fetchColumn();
-                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
-                    $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
+                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $leads = 0;
                     try {
-                        $leads = db()->query("SELECT COUNT(*) FROM leads WHERE status IN ('new','contacted','trial','interested','trial_scheduled','trial_completed','negotiating')")->fetchColumn();
+                        $leads = db()->query("SELECT COUNT(*) FROM leads WHERE deleted_at IS NULL AND status IN ('new','contacted','trial','interested','trial_scheduled','trial_completed','negotiating')")->fetchColumn();
                     } catch (PDOException $e) {}
-                    
+
                     // Calculate trends (compare vs last month)
                     // Students: count created this month vs last month
-                    $studentsThisMonth = db()->query("SELECT COUNT(*) FROM students WHERE created_at >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
-                    $studentsLastMonth = db()->query("SELECT COUNT(*) FROM students WHERE created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $studentsThisMonth = db()->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND created_at >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $studentsLastMonth = db()->query("SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND created_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND created_at < date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $studentsTrend = $studentsLastMonth > 0 ? round(($studentsThisMonth - $studentsLastMonth) / $studentsLastMonth * 100) : ($studentsThisMonth > 0 ? 100 : 0);
                     
                     // Revenue: this month vs last month
-                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $revenueTrend = $revenueLastMonth > 0 ? round(($revenue - $revenueLastMonth) / $revenueLastMonth * 100) : ($revenue > 0 ? 100 : 0);
-                    
+
                     // Expenses: this month vs last month
-                    $expensesLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND expense_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $expensesLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND expense_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $expensesTrend = $expensesLastMonth > 0 ? round(($expenses - $expensesLastMonth) / $expensesLastMonth * 100) : ($expenses > 0 ? 100 : 0);
                     
                     // Profit: this month vs last month
@@ -1174,12 +1298,12 @@ try {
                         $monthYear = date('Y-m', strtotime($monthStart));
 
                         // Get revenue for this month
-                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ?");
+                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL");
                         $revStmt->execute([$monthStart, $monthEnd]);
                         $revenue = (float)$revStmt->fetchColumn();
 
                         // Get expenses for this month
-                        $expStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date BETWEEN ? AND ?");
+                        $expStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE expense_date BETWEEN ? AND ? AND deleted_at IS NULL");
                         $expStmt->execute([$monthStart, $monthEnd]);
                         $expenses = (float)$expStmt->fetchColumn();
 
@@ -1217,17 +1341,17 @@ try {
             $from = $_GET['from'] ?? date('Y-m-01');
             $to = $_GET['to'] ?? date('Y-m-d');
             if ($report === 'payments') {
-                $stmt = db()->prepare("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id WHERE p.payment_date BETWEEN ? AND ? ORDER BY p.payment_date");
+                $stmt = db()->prepare("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id WHERE p.payment_date BETWEEN ? AND ? AND p.deleted_at IS NULL ORDER BY p.payment_date");
                 $stmt->execute([$from, $to]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($report === 'expenses') {
-                $stmt = db()->prepare("SELECT * FROM expenses WHERE expense_date BETWEEN ? AND ? ORDER BY expense_date");
+                $stmt = db()->prepare("SELECT * FROM expenses WHERE expense_date BETWEEN ? AND ? AND deleted_at IS NULL ORDER BY expense_date");
                 $stmt->execute([$from, $to]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($report === 'income-expense') {
-                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ?");
+                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL");
                 $inc->execute([$from, $to]);
-                $exp = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date BETWEEN ? AND ?");
+                $exp = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date BETWEEN ? AND ? AND deleted_at IS NULL");
                 $exp->execute([$from, $to]);
                 jsonResponse(['from' => $from, 'to' => $to, 'income' => (float)$inc->fetchColumn(), 'expense' => (float)$exp->fetchColumn()]);
             } elseif ($report === 'attendance') {
@@ -1259,7 +1383,7 @@ try {
                            t.salary_type, t.salary_amount
                     FROM groups g
                     LEFT JOIN teachers t ON g.teacher_id = t.id
-                    WHERE g.status = 'active'
+                    WHERE g.status = 'active' AND g.deleted_at IS NULL
                     ORDER BY g.name
                 ");
                 $groups = $groupsStmt->fetchAll();
@@ -1284,7 +1408,7 @@ try {
                         SELECT e.student_id, e.discount_percentage, e.enrolled_at
                         FROM enrollments e
                         JOIN students s ON e.student_id = s.id
-                        WHERE e.group_id = ? AND s.status = 'active'
+                        WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
                     ");
                     $enrollStmt->execute([$groupId]);
                     $enrollments = $enrollStmt->fetchAll();
@@ -1309,7 +1433,7 @@ try {
                             SELECT p.student_id, SUM(pm.amount) AS paid
                             FROM payment_months pm
                             JOIN payments p ON pm.payment_id = p.id
-                            WHERE p.group_id = ? AND pm.for_month = ? AND p.student_id IN ($placeholders)
+                            WHERE p.group_id = ? AND pm.for_month = ? AND p.student_id IN ($placeholders) AND p.deleted_at IS NULL
                             GROUP BY p.student_id
                         ");
                         $params = array_merge([$groupId, $monthStart], $studentIds);
@@ -1416,8 +1540,11 @@ try {
                         $role, $input['email'] ?? '', $input['phone'] ?? '', true
                     ]);
                 }
-                activityLog('create', 'user', db()->lastInsertId());
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $newUserId = (int)db()->lastInsertId();
+                auditLog('create', 'user', $newUserId, null, [
+                    'username' => $input['username'] ?? '', 'name' => $name, 'role' => $role
+                ]);
+                jsonResponse(['id' => $newUserId]);
             } elseif ($id && $method === 'PUT') {
                 requireRole(['admin']);
                 $role = $input['role'] ?? null;
@@ -1449,16 +1576,25 @@ try {
                     $params[] = password_hash($input['password'], PASSWORD_DEFAULT);
                 }
                 if ($sets) {
+                    $oldStmt = db()->prepare("SELECT username, name, role, email, phone, is_active FROM users WHERE id = ?");
+                    $oldStmt->execute([$id]);
+                    $oldRow = $oldStmt->fetch();
                     $params[] = $id;
                     $stmt = db()->prepare("UPDATE users SET " . implode(', ', $sets) . " WHERE id = ?");
                     $stmt->execute($params);
-                    activityLog('update', 'user', $id);
+                    $newStmt = db()->prepare("SELECT username, name, role, email, phone, is_active FROM users WHERE id = ?");
+                    $newStmt->execute([$id]);
+                    $newRow = $newStmt->fetch();
+                    auditLog('update', 'user', $id, $oldRow ?: null, $newRow ?: null);
                 }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
+                $oldStmt = db()->prepare("SELECT username, name, role FROM users WHERE id = ?");
+                $oldStmt->execute([$id]);
+                $oldRow = $oldStmt->fetch();
                 db()->prepare("DELETE FROM users WHERE id = ? AND id != ?")->execute([$id, $_SESSION['user']['id']]);
-                activityLog('delete', 'user', $id);
+                auditLog('delete', 'user', $id, $oldRow ?: null, null);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -1566,7 +1702,7 @@ try {
         case 'students-export':
             requireRole(['admin', 'manager', 'accountant']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT id, first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, created_at FROM students ORDER BY last_name, first_name");
+                $stmt = db()->query("SELECT id, first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, created_at FROM students WHERE deleted_at IS NULL ORDER BY last_name, first_name");
                 jsonResponse($stmt->fetchAll());
             } else { jsonError('Not found', 404); }
             break;
@@ -1577,15 +1713,31 @@ try {
             try {
                 $entityType = $_GET['entity_type'] ?? null;
                 $entityId = isset($_GET['entity_id']) ? (int)$_GET['entity_id'] : null;
-                $limit = min(500, max(1, (int)($_GET['limit'] ?? 100)));
+                $action = $_GET['action'] ?? null;
+                $dateFrom = $_GET['date_from'] ?? null;
+                $dateTo = $_GET['date_to'] ?? null;
+                $limit = min(500, max(1, (int)($_GET['limit'] ?? 50)));
+                $offset = max(0, (int)($_GET['offset'] ?? 0));
+
+                $whereClauses = ["1=1"];
+                $params = [];
+                if ($entityType) { $whereClauses[] = "a.entity_type = ?"; $params[] = $entityType; }
+                if ($entityId) { $whereClauses[] = "a.entity_id = ?"; $params[] = $entityId; }
+                if ($action) { $whereClauses[] = "a.action = ?"; $params[] = $action; }
+                if ($dateFrom) { $whereClauses[] = "a.created_at >= ?"; $params[] = $dateFrom . ' 00:00:00'; }
+                if ($dateTo) { $whereClauses[] = "a.created_at <= ?"; $params[] = $dateTo . ' 23:59:59'; }
+                $whereStr = implode(' AND ', $whereClauses);
+
+                // Get total count
+                $countStmt = db()->prepare("SELECT COUNT(*) FROM audit_log a WHERE $whereStr");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
                 $q = "SELECT a.id, a.user_id, a.action, a.entity_type, a.entity_id, a.old_values, a.new_values, a.ip_address, a.created_at, u.name AS changed_by_name, u.username AS changed_by_username
                       FROM audit_log a
                       LEFT JOIN users u ON a.user_id = u.id
-                      WHERE 1=1";
-                $params = [];
-                if ($entityType) { $q .= " AND a.entity_type = ?"; $params[] = $entityType; }
-                if ($entityId) { $q .= " AND a.entity_id = ?"; $params[] = $entityId; }
-                $q .= " ORDER BY a.created_at DESC LIMIT " . $limit;
+                      WHERE $whereStr
+                      ORDER BY a.created_at DESC LIMIT $limit OFFSET $offset";
                 $stmt = db()->prepare($q);
                 $stmt->execute($params);
                 $rows = $stmt->fetchAll();
@@ -1593,9 +1745,9 @@ try {
                     if (!empty($row['old_values']) && is_string($row['old_values'])) $row['old_values'] = json_decode($row['old_values'], true);
                     if (!empty($row['new_values']) && is_string($row['new_values'])) $row['new_values'] = json_decode($row['new_values'], true);
                 }
-                jsonResponse($rows);
+                jsonResponse(['rows' => $rows, 'total' => $total]);
             } catch (PDOException $e) {
-                jsonResponse([]);
+                jsonResponse(['rows' => [], 'total' => 0]);
             }
             break;
 
