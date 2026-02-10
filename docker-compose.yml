@@ -17,7 +17,7 @@ services:
       - ./backend/schema_v2.sql:/docker-entrypoint-initdb.d/03-schema_v2.sql
       - ./backend/schema_source_tracking.sql:/docker-entrypoint-initdb.d/04-schema_source_tracking.sql
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     networks:
       - learning_center_network
     healthcheck:
