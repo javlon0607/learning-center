@@ -1,0 +1,289 @@
+# Learning Center CRM
+
+A comprehensive educational center management system with student tracking, payment management, CRM features, and financial reporting.
+
+## Features
+
+### Core Management
+- **Students** - Full CRUD with enrollment tracking, status management, and parent contact info
+- **Teachers** - Profile management with flexible salary types (fixed or per-student percentage)
+- **Groups/Classes** - Capacity, pricing, schedules, levels, and teacher assignment
+- **Enrollments** - Student-group relationships with discount support
+
+### Financial
+- **Payments** - Record payments with month-wise allocation and automatic debt calculation
+- **Expenses** - Track expenses by category with vendor information
+- **Salary Slips** - Automatic teacher salary calculation with bonus/deduction support
+- **Discounts** - Flexible discount management at enrollment level
+- **Reports** - Income/expense summaries, monthly reports, payment tracking
+
+### CRM
+- **Lead Management** - Track potential students through conversion pipeline
+- **Lead Interactions** - Log calls, meetings, notes, and trial sessions
+- **Priority Tracking** - Hot/warm/cold lead classification
+- **Conversion** - Convert leads to enrolled students
+
+### Operations
+- **Attendance** - Daily attendance tracking by group
+- **Dashboard** - Real-time statistics and revenue charts
+- **Notifications** - User notification system
+- **Audit Log** - Complete change history for compliance
+
+### Administration
+- **User Management** - Role-based access (admin, manager, teacher, accountant)
+- **Settings** - Organization info, currency, session timeout
+- **Activity Tracking** - Monitor user actions
+
+## Tech Stack
+
+### Backend
+- PHP 8+ with PDO
+- PostgreSQL 12+
+- RESTful API architecture
+- Session-based authentication with bcrypt
+
+### Frontend (Modern SPA)
+- React 18 with TypeScript
+- Vite build tool
+- TanStack React Query for data fetching
+- Tailwind CSS with Radix UI components
+- React Router v6
+
+### Frontend (Legacy)
+- Server-rendered PHP pages
+- Tailwind CSS via CDN
+- Alpine.js for interactivity
+
+## Quick Start
+
+### Requirements
+- PHP 8.0+
+- PostgreSQL 12+
+- Node.js 18+ (for React frontend)
+
+### 1. Database Setup
+
+```sql
+CREATE DATABASE learning_crm;
+```
+
+### 2. Configure Database
+
+Edit `config.php` or set environment variables:
+
+```bash
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=learning_crm
+export DB_USER=postgres
+export DB_PASS=your_password
+```
+
+### 3. Run Backend
+
+```bash
+php -S localhost:8000 router.php
+```
+
+### 4. Run Frontend (React SPA)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Visit `http://localhost:5173`
+
+### 5. Login
+
+```
+Username: admin
+Password: password
+```
+
+Tables are created automatically on first run.
+
+## Project Structure
+
+```
+learning-center-web/
+├── api/
+│   └── index.php          # REST API endpoints
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── contexts/      # React contexts (Auth)
+│   │   ├── lib/           # API client, utilities
+│   │   └── pages/         # Page components
+│   └── package.json
+├── config.php             # Database config & auth
+├── router.php             # API route handler
+├── schema.sql             # Base database schema
+├── schema_additions.sql   # Feature extensions
+└── schema_v2.sql          # Enhanced schema
+```
+
+## API Endpoints
+
+### Authentication
+- `POST /api/login` - User login
+- `POST /api/logout` - User logout
+- `GET /api/me` - Current user info
+
+### Students
+- `GET /api/students` - List (with filters)
+- `GET /api/students/{id}` - Details
+- `POST /api/students` - Create
+- `PUT /api/students/{id}` - Update
+- `DELETE /api/students/{id}` - Delete
+- `GET /api/student-debt` - Calculate monthly debt
+
+### Teachers
+- `GET /api/teachers` - List
+- `POST /api/teachers` - Create
+- `PUT /api/teachers/{id}` - Update
+- `DELETE /api/teachers/{id}` - Delete
+
+### Groups
+- `GET /api/groups` - List with teacher info
+- `POST /api/groups` - Create
+- `PUT /api/groups/{id}` - Update
+- `DELETE /api/groups/{id}` - Delete
+
+### Payments
+- `GET /api/payments` - List with months covered
+- `POST /api/payments` - Record (supports month distribution)
+
+### Leads
+- `GET /api/leads` - List with interaction counts
+- `POST /api/leads` - Create
+- `PUT /api/leads/{id}` - Update
+- `POST /api/leads/{id}/convert` - Convert to student
+- `GET /api/leads/{id}/interactions` - Interaction history
+- `POST /api/leads/{id}/interactions` - Log interaction
+
+### Reports
+- `GET /api/reports?type=payments` - Payment reports
+- `GET /api/reports?type=expenses` - Expense reports
+- `GET /api/reports?type=income-expense` - Summary
+- `GET /api/reports?type=monthly` - Monthly by group
+
+### Dashboard
+- `GET /api/dashboard/stats` - Statistics
+- `GET /api/dashboard/revenue-chart` - 6-month revenue
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| users | System users with roles |
+| students | Student records |
+| teachers | Teacher profiles |
+| groups | Classes/courses |
+| enrollments | Student-group links |
+| payments | Payment records |
+| payment_months | Monthly payment allocation |
+| expenses | Expense tracking |
+| leads | CRM leads |
+| lead_interactions | Lead communication log |
+| attendance | Daily attendance |
+| salary_slips | Teacher salaries |
+| discounts | Payment discounts |
+| group_schedules | Multi-day schedules |
+| activity_log | User activity |
+| audit_log | Change history |
+| notifications | User notifications |
+| settings | System config |
+
+## Security
+
+- Password hashing with bcrypt
+- PDO prepared statements (SQL injection prevention)
+- Session-based authentication with timeout
+- XSS protection
+- Role-based access control
+- Audit logging
+
+## User Roles
+
+| Role | Access |
+|------|--------|
+| admin | Full system access |
+| manager | Management features |
+| teacher | Teaching features |
+| accountant | Financial features |
+
+## Deployment
+
+### Shared Hosting
+1. Upload files via FTP
+2. Create PostgreSQL database
+3. Update config.php
+4. Build frontend: `npm run build`
+5. Copy `frontend/dist` to web root
+
+### Docker
+
+```dockerfile
+FROM php:8.2-apache
+RUN docker-php-ext-install pdo pdo_pgsql
+COPY . /var/www/html/
+```
+
+### VPS
+
+```bash
+sudo apt install php8.2 postgresql php-pgsql nodejs npm
+git clone <repo>
+cd learning-center-web
+sudo -u postgres createdb learning_crm
+php -S 0.0.0.0:8000 router.php &
+cd frontend && npm install && npm run build
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| DB_HOST | localhost | Database host |
+| DB_PORT | 5432 | Database port |
+| DB_NAME | learning_crm | Database name |
+| DB_USER | postgres | Database user |
+| DB_PASS | - | Database password |
+| SESSION_TIMEOUT | 30 | Session timeout (minutes) |
+
+## Troubleshooting
+
+### Database Connection Error
+```bash
+systemctl status postgresql
+# Check config.php credentials
+```
+
+### PDO Extension Missing
+```bash
+sudo apt install php-pgsql
+```
+
+### Permission Errors
+```bash
+sudo chmod -R 755 learning-center-web
+sudo chown -R www-data:www-data learning-center-web
+```
+
+## Change Default Password
+
+```php
+echo password_hash('your_new_password', PASSWORD_DEFAULT);
+```
+
+```sql
+UPDATE users SET password = '$2y$10$NEW_HASH' WHERE username = 'admin';
+```
+
+## License
+
+MIT License
