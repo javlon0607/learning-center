@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: learning_center_db
+    restart: always
+    environment:
+      POSTGRES_DB: learning_center_db
+      POSTGRES_USER: learning_center_user
+      POSTGRES_PASSWORD: postgres123  # CHANGE THIS!
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./backend/schema_additions.sql:/docker-entrypoint-initdb.d/02-schema_additions.sql
+      - ./backend/schema_v2.sql:/docker-entrypoint-initdb.d/03-schema_v2.sql
+      - ./backend/schema_source_tracking.sql:/docker-entrypoint-initdb.d/04-schema_source_tracking.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - learning_center_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U learning_center_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PHP Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: learning_center_backend
+    restart: always
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - learning_center_network
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: learning_center_db
+      DB_USER: learning_center_user
+      DB_PASS: postgres123  # CHANGE THIS!
+
+  # Nginx Web Server
+  nginx:
+    image: nginx:alpine
+    container_name: learning_center_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./frontend/dist:/usr/share/nginx/html
+      - ./backend:/var/www/html/api
+    depends_on:
+      - backend
+      - postgres
+    networks:
+      - learning_center_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  learning_center_network:
+    driver: bridge

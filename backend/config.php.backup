@@ -1,0 +1,95 @@
+<?php
+// Database Configuration (from Docker environment)
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_PORT', getenv('DB_PORT') ?: '5432');
+define('DB_NAME', getenv('DB_NAME') ?: 'learning_center_db');
+define('DB_USER', getenv('DB_USER') ?: 'learning_center_user');
+define('DB_PASS', getenv('DB_PASS') ?: 'postgres123');
+
+// Session Configuration
+ini_set('session.gc_maxlifetime', 1800);
+session_set_cookie_params(1800);
+
+// Error Reporting
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// CORS Configuration
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Credentials: true');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit;
+}
+
+// Database Connection
+function getDB() {
+    static $pdo = null;
+    if ($pdo === null) {
+        try {
+            $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
+            $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection failed: ' . $e->getMessage()]);
+            exit;
+        }
+    }
+    return $pdo;
+}
+// Initialize database schema
+function initDB() {
+    $db = getDB();
+    
+    // Check if users table exists
+    try {
+        $stmt = $db->query("SELECT 1 FROM users LIMIT 1");
+        // Tables already exist
+        return;
+    } catch (PDOException $e) {
+        // Tables don't exist, schema already loaded manually
+        // Do nothing - we created tables manually
+    }
+}
+// Alias for backward compatibility
+function db() {
+    return getDB();
+}
+// Activity logging function
+function activityLog($action, $entity = null, $entity_id = null, $details = null) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    $user_id = $_SESSION['user_id'] ?? null;
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("
+            INSERT INTO audit_log (user_id, action, entity_type, entity_id, ip_address, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
+        
+        $stmt->execute([
+            $user_id,
+            $action,
+            $entity,
+            $entity_id,
+            $ip,
+            $details
+        ]);
+    } catch (PDOException $e) {
+        // Log failed, continue execution
+        error_log("Activity log failed: " . $e->getMessage());
+    }
+}
+// Rest of your config.php functions...
+// (Keep all your existing auth(), requireRole(), activityLog(), auditLog(), initDB() functions)

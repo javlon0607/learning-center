@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Legacy Academy Brand Colors */
+    --background: 210 20% 98%;
+    --foreground: 215 50% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 50% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 50% 10%;
+
+    /* Primary: Deep Navy Blue from logo */
+    --primary: 215 70% 15%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Light navy tint */
+    --secondary: 215 30% 95%;
+    --secondary-foreground: 215 50% 15%;
+
+    /* Muted colors */
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 15% 45%;
+
+    /* Accent: Gold/Amber for achievements (star in logo) */
+    --accent: 45 93% 47%;
+    --accent-foreground: 215 50% 10%;
+
+    /* Status colors */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* UI elements */
+    --border: 215 20% 90%;
+    --input: 215 20% 90%;
+    --ring: 215 70% 15%;
+    --radius: 0.625rem;
+
+    /* Sidebar specific */
+    --sidebar: 215 70% 12%;
+    --sidebar-foreground: 215 20% 90%;
+    --sidebar-accent: 215 70% 20%;
+  }
+
+  .dark {
+    --background: 215 50% 8%;
+    --foreground: 210 20% 98%;
+    --card: 215 50% 12%;
+    --card-foreground: 210 20% 98%;
+    --popover: 215 50% 12%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 215 60% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 40% 20%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 215 40% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 45 93% 47%;
+    --accent-foreground: 215 50% 10%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 40% 20%;
+    --input: 215 40% 20%;
+    --ring: 215 60% 50%;
+    --sidebar: 215 50% 6%;
+    --sidebar-foreground: 215 20% 85%;
+    --sidebar-accent: 215 50% 15%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+}
+
+@layer components {
+  /* Glass effect for cards */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
+  }
+
+  /* Subtle card hover */
+  .card-hover {
+    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
+  }
+}
