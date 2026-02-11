@@ -14,7 +14,16 @@
       "Bash(where \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\")",
       "Bash(where \"C:\\\\Program Files \\(x86\\)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\")",
       "Bash(dir:*)",
-      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\" --headless --disable-gpu --print-to-pdf=\"D:\\\\Projects\\\\learning-center\\\\Learning_Center_CRM_BRD.pdf\" --no-pdf-header-footer --print-to-pdf-no-header \"C:\\\\Users\\\\javlo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Projects-learning-center\\\\9eca1a77-3453-4a5e-b384-7f94117e9da6\\\\scratchpad\\\\brd.html\")"
+      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe\" --headless --disable-gpu --print-to-pdf=\"D:\\\\Projects\\\\learning-center\\\\Learning_Center_CRM_BRD.pdf\" --no-pdf-header-footer --print-to-pdf-no-header \"C:\\\\Users\\\\javlo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Projects-learning-center\\\\9eca1a77-3453-4a5e-b384-7f94117e9da6\\\\scratchpad\\\\brd.html\")",
+      "Bash(docker images:*)",
+      "Bash(docker info:*)",
+      "Bash(findstr:*)",
+      "Bash(nslookup:*)",
+      "Bash(curl:*)",
+      "Bash(docker pull:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }

@@ -57,59 +57,68 @@ function initDB() {
     return;
 }
 
+// Session timeout (minutes)
+define('SESSION_TIMEOUT_MINUTES', (int)(getenv('SESSION_TIMEOUT') ?: 30));
+
+if (!defined('IS_API')) {
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    define('IS_API', strpos($uri, '/api') !== false || !empty($_SERVER['HTTP_X_REQUESTED_WITH']));
+}
+
+// Check session timeout
+function checkSessionTimeout() {
+    if (!isset($_SESSION['user'])) return false;
+    $last = $_SESSION['last_activity'] ?? 0;
+    if (time() - $last > SESSION_TIMEOUT_MINUTES * 60) {
+        unset($_SESSION['user'], $_SESSION['user_id'], $_SESSION['last_activity']);
+        return false;
+    }
+    $_SESSION['last_activity'] = time();
+    return true;
+}
+
 // Authentication helper
 function auth() {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    
-    if (!isset($_SESSION['user_id'])) {
+
+    if (!checkSessionTimeout()) {
         http_response_code(401);
-        echo json_encode(['error' => 'Unauthorized']);
+        echo json_encode(['error' => 'Unauthorized', 'code' => 'SESSION_EXPIRED']);
         exit;
     }
-    
+
     // Check if user is active
-    $db = getDB();
-    $stmt = $db->prepare("SELECT is_active FROM users WHERE id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $user = $stmt->fetch();
-    
-    if (!$user || !$user['is_active']) {
-        session_destroy();
-        http_response_code(403);
-        echo json_encode(['error' => 'Account deactivated']);
-        exit;
+    $userId = $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? null;
+    if ($userId) {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT is_active FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user || ($user['is_active'] === false || $user['is_active'] === 'f' || $user['is_active'] === 0)) {
+            unset($_SESSION['user'], $_SESSION['user_id'], $_SESSION['last_activity']);
+            http_response_code(403);
+            echo json_encode(['error' => 'Account deactivated']);
+            exit;
+        }
     }
-    
-    return $_SESSION['user_id'];
 }
 
 // Check if user has required role
-function requireRole(...$roles) {
+function requireRole($allowed) {
     auth();
-    
-    $db = getDB();
-    $stmt = $db->prepare("SELECT role FROM users WHERE id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $user = $stmt->fetch();
-    
-    if (!$user) {
-        http_response_code(403);
-        echo json_encode(['error' => 'Forbidden']);
-        exit;
+    $roleStr = $_SESSION['user']['role'] ?? '';
+    $userRoles = array_map('trim', explode(',', $roleStr));
+    $userRoles = array_filter($userRoles);
+    if (empty($userRoles)) $userRoles = ['user'];
+    $allowed = is_array($allowed) ? $allowed : [$allowed];
+    if (count(array_intersect($userRoles, $allowed)) > 0) {
+        return true;
     }
-    
-    $userRoles = array_map('trim', explode(',', $user['role']));
-    
-    foreach ($roles as $role) {
-        if (in_array($role, $userRoles)) {
-            return true;
-        }
-    }
-    
     http_response_code(403);
-    echo json_encode(['error' => 'Insufficient permissions']);
+    echo json_encode(['error' => 'Forbidden']);
     exit;
 }
 
