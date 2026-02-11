@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { studentsApi, groupsApi, Student, sourceOptions } from '@/lib/api'
@@ -47,12 +47,13 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { StudentForm } from '@/components/students/StudentForm'
 import { useToast } from '@/components/ui/use-toast'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, User,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
-  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle
+  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, Download
 } from 'lucide-react'
-import { formatDate, formatCurrency, cn } from '@/lib/utils'
+import { formatDate, formatCurrency, calculateAge, cn } from '@/lib/utils'
 
 type SortField = 'name' | 'phone' | 'status' | 'groups' | 'debt' | 'source' | 'created_at'
 type SortDirection = 'asc' | 'desc'
@@ -70,13 +71,22 @@ export function Students() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { hasRole } = useAuth()
 
   // Filters
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [groupFilter, setGroupFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [debtOnly, setDebtOnly] = useState(false)
+
+  // Debounce search input (300ms)
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => {
+    searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(searchTimer.current)
+  }, [search])
 
   // Sorting
   const [sortField, setSortField] = useState<SortField>('created_at')
@@ -94,11 +104,12 @@ export function Students() {
 
   // Queries
   const { data: studentsRaw = [], isLoading } = useQuery({
-    queryKey: ['students', { status: statusFilter === 'all' ? undefined : statusFilter, group_id: groupFilter === 'all' ? undefined : groupFilter, source: sourceFilter === 'all' ? undefined : sourceFilter }],
+    queryKey: ['students', { status: statusFilter === 'all' ? undefined : statusFilter, group_id: groupFilter === 'all' ? undefined : groupFilter, source: sourceFilter === 'all' ? undefined : sourceFilter, search: debouncedSearch || undefined }],
     queryFn: () => studentsApi.getAll({
       status: statusFilter === 'all' ? undefined : statusFilter,
       group_id: groupFilter === 'all' ? undefined : groupFilter,
       source: sourceFilter === 'all' ? undefined : sourceFilter,
+      search: debouncedSearch || undefined,
     }),
   })
 
@@ -136,22 +147,11 @@ export function Students() {
     },
   })
 
-  // Filter by search + debt
+  // Filter by debt (search is now server-side)
   const filteredStudents = useMemo(() => {
-    let result = studentsRaw
-    if (debtOnly) {
-      result = result.filter(s => (s.current_month_debt || 0) > 0)
-    }
-    if (!search) return result
-    const s = search.toLowerCase()
-    return result.filter(student =>
-      `${student.first_name} ${student.last_name}`.toLowerCase().includes(s) ||
-      student.phone?.toLowerCase().includes(s) ||
-      student.email?.toLowerCase().includes(s) ||
-      student.parent_name?.toLowerCase().includes(s) ||
-      student.parent_phone?.toLowerCase().includes(s)
-    )
-  }, [studentsRaw, search, debtOnly])
+    if (!debtOnly) return studentsRaw
+    return studentsRaw.filter(s => (s.current_month_debt || 0) > 0)
+  }, [studentsRaw, debtOnly])
 
   // Sort
   const sortedStudents = useMemo(() => {
@@ -238,11 +238,39 @@ export function Students() {
 
   function clearFilters() {
     setSearch('')
+    setDebouncedSearch('')
     setStatusFilter('all')
     setGroupFilter('all')
     setSourceFilter('all')
     setDebtOnly(false)
     setCurrentPage(1)
+  }
+
+  function exportCSV() {
+    const headers = ['ID', 'First Name', 'Last Name', 'Age', 'Phone', 'Email', 'Parent Name', 'Parent Phone', 'Groups', 'Status', 'Source', 'Debt', 'Enrolled']
+    const rows = sortedStudents.map(s => [
+      s.id,
+      s.first_name,
+      s.last_name,
+      s.dob ? calculateAge(s.dob) : '',
+      s.phone || '',
+      s.email || '',
+      s.parent_name || '',
+      s.parent_phone || '',
+      s.groups_list || '',
+      s.status,
+      sourceOptions.find(so => so.value === s.source)?.label || s.source || '',
+      s.current_month_debt || 0,
+      formatDate(s.created_at),
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `students_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // Sort header component
@@ -270,9 +298,16 @@ export function Students() {
           <h1 className="text-2xl font-bold text-foreground">Students</h1>
           <p className="text-muted-foreground mt-1">Manage and track all student records</p>
         </div>
-        <Button onClick={() => setFormOpen(true)} className="bg-navy-950 hover:bg-navy-900">
-          <Plus className="mr-2 h-4 w-4" />Add Student
-        </Button>
+        <div className="flex items-center gap-2">
+          {sortedStudents.length > 0 && (
+            <Button variant="outline" onClick={exportCSV}>
+              <Download className="mr-2 h-4 w-4" />Export
+            </Button>
+          )}
+          <Button onClick={() => setFormOpen(true)} className="bg-navy-950 hover:bg-navy-900">
+            <Plus className="mr-2 h-4 w-4" />Add Student
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -350,7 +385,7 @@ export function Students() {
           <Input
             placeholder="Search by name, phone, email..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
             className="pl-9"
           />
         </div>
@@ -461,28 +496,30 @@ export function Students() {
                           </div>
                           <div>
                             <p className="font-medium text-foreground">{student.first_name} {student.last_name}</p>
-                            <p className="text-xs text-muted-foreground">ID: {student.id}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {student.dob ? `${calculateAge(student.dob)} y/o` : `ID: ${student.id}`}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell>
                         <div className="space-y-1">
                           {student.phone && (
-                            <a href={`tel:${student.phone}`} className="flex items-center gap-2 text-sm hover:text-primary">
+                            <div className="flex items-center gap-2 text-sm">
                               <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                               {student.phone}
-                            </a>
+                            </div>
                           )}
                           {student.email && (
-                            <a href={`mailto:${student.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Mail className="h-3.5 w-3.5" />
                               <span className="truncate max-w-[150px]">{student.email}</span>
-                            </a>
+                            </div>
                           )}
                           {!student.phone && !student.email && <span className="text-muted-foreground text-sm">-</span>}
                         </div>
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+                      <TableCell>
                         {student.parent_name ? (
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 text-sm">
@@ -490,10 +527,10 @@ export function Students() {
                               <span className="font-medium">{student.parent_name}</span>
                             </div>
                             {student.parent_phone && (
-                              <a href={`tel:${student.parent_phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Phone className="h-3.5 w-3.5" />
                                 {student.parent_phone}
-                              </a>
+                              </div>
                             )}
                           </div>
                         ) : (
@@ -577,10 +614,14 @@ export function Students() {
                             <DropdownMenuItem onClick={() => handleEdit(student)} className="cursor-pointer">
                               <Pencil className="mr-2 h-4 w-4" />Edit Student
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDelete(student)} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-                              <Trash2 className="mr-2 h-4 w-4" />Delete Student
-                            </DropdownMenuItem>
+                            {hasRole('admin') && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDelete(student)} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+                                  <Trash2 className="mr-2 h-4 w-4" />Delete Student
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

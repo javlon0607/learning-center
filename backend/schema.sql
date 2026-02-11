@@ -155,6 +155,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Student notes table
+CREATE TABLE IF NOT EXISTS student_notes (
+    id SERIAL PRIMARY KEY,
+    student_id INT REFERENCES students(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_by INT REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Leads table
 CREATE TABLE IF NOT EXISTS leads (
     id SERIAL PRIMARY KEY,

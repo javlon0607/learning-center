@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 // Global session expiry handler — set by AuthProvider
 let onSessionExpired: (() => void) | null = null
-export function setSessionExpiredHandler(handler: () => void) {
+export function setSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler
 }
 
@@ -189,7 +189,7 @@ export const groupTransfersApi = {
 
 // Payments API
 export const paymentsApi = {
-  getAll: () => api.get<Payment[]>('/payments'),
+  getAll: (params?: { student_id?: string }) => api.get<Payment[]>('/payments', params),
 
   create: (data: Omit<Payment, 'id' | 'created_at' | 'student_name' | 'group_name' | 'months_covered'> & { months?: string[] }) =>
     api.post<{ id: number; invoice_no: string }>('/payments', data),
@@ -330,6 +330,71 @@ export const auditLogApi = {
     api.get<AuditLogResponse>('/audit-log', params as Record<string, string> | undefined),
 }
 
+// Student Attendance API
+export interface StudentAttendanceRecord {
+  attendance_date: string
+  status: 'present' | 'absent' | 'late' | 'excused'
+  group_name: string
+  group_id: number
+}
+
+export const studentAttendanceApi = {
+  getByStudent: (studentId: number, limit?: number) =>
+    api.get<StudentAttendanceRecord[]>('/student-attendance', {
+      student_id: String(studentId),
+      ...(limit ? { limit: String(limit) } : {}),
+    }),
+}
+
+// Student Notes API
+export interface StudentNote {
+  id: number
+  student_id: number
+  content: string
+  created_by: number | null
+  created_by_name: string | null
+  created_at: string
+}
+
+export const studentNotesApi = {
+  getByStudent: (studentId: number) =>
+    api.get<StudentNote[]>('/student-notes', { student_id: String(studentId) }),
+  create: (studentId: number, content: string) =>
+    api.post<{ id: number }>('/student-notes', { student_id: studentId, content }),
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/student-notes/${id}`),
+}
+
+// Birthdays API
+export interface BirthdayStudent {
+  id: number
+  first_name: string
+  last_name: string
+  dob: string
+  phone?: string
+  status: string
+}
+
+export const birthdaysApi = {
+  getToday: () => api.get<BirthdayStudent[]>('/birthdays'),
+}
+
+// Notifications API
+export interface Notification {
+  id: number
+  user_id: number
+  type: string
+  title: string
+  message?: string
+  is_read: boolean
+  created_at: string
+}
+
+export const notificationsApi = {
+  getAll: () => api.get<Notification[]>('/notifications'),
+  markRead: (id: number) => api.put<{ ok: boolean }>(`/notifications/${id}/read`),
+  markAllRead: () => api.put<{ ok: boolean }>('/notifications/read-all'),
+}
+
 // Settings API
 export interface SystemSettings {
   organization_name?: string
@@ -339,6 +404,7 @@ export interface SystemSettings {
   notification_payment_reminders?: string
   notification_new_leads?: string
   notification_attendance?: string
+  notification_birthdays?: string
   contact_email?: string
   contact_phone?: string
 }

@@ -90,7 +90,61 @@ try {
 
         case 'students':
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
-            if ($method === 'GET') {
+            if ($id && $method === 'GET') {
+                // Single student by ID
+                $q = "
+                    SELECT s.*,
+                        cb.name AS created_by_name,
+                        CASE
+                            WHEN s.referred_by_type = 'student' THEN (SELECT first_name || ' ' || last_name FROM students WHERE id = s.referred_by_id)
+                            WHEN s.referred_by_type = 'teacher' THEN (SELECT first_name || ' ' || last_name FROM teachers WHERE id = s.referred_by_id)
+                            WHEN s.referred_by_type = 'user' THEN (SELECT name FROM users WHERE id = s.referred_by_id)
+                            ELSE NULL
+                        END AS referred_by_name,
+                        COALESCE(
+                            (SELECT string_agg(g.name, ', ' ORDER BY g.name)
+                             FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = s.id), ''
+                        ) AS groups_list,
+                        COALESCE(
+                            (SELECT json_agg(json_build_object('group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage))
+                             FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = s.id), '[]'
+                        ) AS enrollments_json
+                    FROM students s
+                    LEFT JOIN users cb ON s.created_by = cb.id
+                    WHERE s.id = ? AND s.deleted_at IS NULL
+                ";
+                $stmt = db()->prepare($q);
+                $stmt->execute([$id]);
+                $student = $stmt->fetch();
+                if (!$student) { jsonError('Student not found', 404); break; }
+                $student['enrollments'] = json_decode($student['enrollments_json'], true) ?: [];
+                unset($student['enrollments_json']);
+                $currentMonth = date('Y-m-01');
+                $debtStmt = db()->prepare("
+                    SELECT
+                        SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
+                        COALESCE(SUM(
+                            (SELECT COALESCE(SUM(pm.amount), 0)
+                             FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ?)
+                        ), 0) AS paid
+                    FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?
+                ");
+                $debtStmt->execute([$currentMonth, $id]);
+                $debtRow = $debtStmt->fetch();
+                if ($debtRow) {
+                    $expected = (float)$debtRow['expected'];
+                    $paid = (float)$debtRow['paid'];
+                    $student['current_month_debt'] = round(max(0, $expected - $paid), 2);
+                    $student['current_month_expected'] = round($expected, 2);
+                    $student['current_month_paid'] = round($paid, 2);
+                } else {
+                    $student['current_month_debt'] = 0;
+                    $student['current_month_expected'] = 0;
+                    $student['current_month_paid'] = 0;
+                }
+                jsonResponse($student);
+            } elseif ($method === 'GET') {
                 // Build query with optional filters
                 $where = ["s.deleted_at IS NULL"];
                 $params = [];
@@ -213,15 +267,16 @@ try {
                 ]);
                 jsonResponse(['id' => (int)$id]);
             } elseif ($id && $method === 'PUT') {
-                $oldStmt = db()->prepare("SELECT first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes FROM students WHERE id = ?");
+                $oldStmt = db()->prepare("SELECT first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, source FROM students WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, email=?, parent_name=?, parent_phone=?, status=?, notes=? WHERE id=?");
+                $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, email=?, parent_name=?, parent_phone=?, status=?, notes=?, source=? WHERE id=?");
                 $newValues = [
                     'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
                     'dob' => $input['dob'] ?? null, 'phone' => $input['phone'] ?? '', 'email' => $input['email'] ?? '',
                     'parent_name' => $input['parent_name'] ?? '', 'parent_phone' => $input['parent_phone'] ?? '',
-                    'status' => $input['status'] ?? 'active', 'notes' => $input['notes'] ?? ''
+                    'status' => $input['status'] ?? 'active', 'notes' => $input['notes'] ?? '',
+                    'source' => $input['source'] ?? ($oldRow['source'] ?? 'walk_in')
                 ];
                 $stmt->execute(array_merge(array_values($newValues), [$id]));
                 auditLog('update', 'student', $id, $oldRow ?: null, $newValues);
@@ -594,13 +649,23 @@ try {
             requireRole(['admin', 'manager', 'accountant']);
             if ($method === 'GET') {
                 // Include months_covered for each payment
-                $stmt = db()->query("
+                $where = [];
+                $params = [];
+                if (!empty($_GET['student_id'])) {
+                    $where[] = "p.student_id = ?";
+                    $params[] = (int)$_GET['student_id'];
+                }
+                $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+                $q = "
                     SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name
                     FROM payments p
                     JOIN students s ON p.student_id = s.id
                     LEFT JOIN groups g ON p.group_id = g.id
+                    $whereClause
                     ORDER BY p.created_at DESC LIMIT 500
-                ");
+                ";
+                $stmt = $params ? db()->prepare($q) : db()->query($q);
+                if ($params) $stmt->execute($params);
                 $payments = $stmt->fetchAll();
                 // Fetch months for all payments
                 $paymentIds = array_column($payments, 'id');
@@ -1855,6 +1920,73 @@ try {
                 activityLog('profile_update', 'user', $userId);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'student-attendance':
+            requireRole(['admin', 'manager', 'teacher', 'accountant']);
+            if ($method === 'GET') {
+                $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+                if (!$studentId) { jsonError('student_id required'); break; }
+                $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 200) : 60;
+                $stmt = db()->prepare("
+                    SELECT a.attendance_date, a.status, g.name AS group_name, g.id AS group_id
+                    FROM attendance a
+                    JOIN groups g ON a.group_id = g.id
+                    WHERE a.student_id = ?
+                    ORDER BY a.attendance_date DESC, g.name
+                    LIMIT ?
+                ");
+                $stmt->execute([$studentId, $limit]);
+                jsonResponse($stmt->fetchAll());
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'student-notes':
+            requireRole(['admin', 'manager', 'teacher', 'accountant']);
+            if ($method === 'GET') {
+                $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+                if (!$studentId) { jsonError('student_id required'); break; }
+                $stmt = db()->prepare("
+                    SELECT sn.id, sn.student_id, sn.content, sn.created_by, sn.created_at,
+                           u.name AS created_by_name
+                    FROM student_notes sn
+                    LEFT JOIN users u ON sn.created_by = u.id
+                    WHERE sn.student_id = ?
+                    ORDER BY sn.created_at DESC
+                ");
+                $stmt->execute([$studentId]);
+                jsonResponse($stmt->fetchAll());
+            } elseif ($method === 'POST') {
+                $studentId = (int)($input['student_id'] ?? 0);
+                $content = trim($input['content'] ?? '');
+                if (!$studentId || !$content) { jsonError('student_id and content required'); break; }
+                $userId = $_SESSION['user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO student_notes (student_id, content, created_by) VALUES (?, ?, ?)");
+                $stmt->execute([$studentId, $content, $userId]);
+                $noteId = db()->lastInsertId();
+                jsonResponse(['id' => (int)$noteId]);
+            } elseif ($id && $method === 'DELETE') {
+                $stmt = db()->prepare("DELETE FROM student_notes WHERE id = ?");
+                $stmt->execute([$id]);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'birthdays':
+            requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
+            if ($method === 'GET') {
+                // Get today's birthdays (match month and day from dob)
+                $stmt = db()->query("
+                    SELECT id, first_name, last_name, dob, phone, status
+                    FROM students
+                    WHERE deleted_at IS NULL
+                      AND dob IS NOT NULL
+                      AND EXTRACT(MONTH FROM dob) = EXTRACT(MONTH FROM CURRENT_DATE)
+                      AND EXTRACT(DAY FROM dob) = EXTRACT(DAY FROM CURRENT_DATE)
+                    ORDER BY first_name, last_name
+                ");
+                jsonResponse($stmt->fetchAll());
+            } else { jsonError('Not found', 404); }
             break;
 
         default:

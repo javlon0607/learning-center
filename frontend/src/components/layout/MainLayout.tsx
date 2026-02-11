@@ -53,7 +53,7 @@ export function MainLayout() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-auto">
-          <div className="p-4 md:p-6 lg:p-8 max-w-[1600px]">
+          <div className="p-4 md:p-6 lg:p-8">
             <Outlet />
           </div>
         </main>

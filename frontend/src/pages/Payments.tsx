@@ -106,7 +106,7 @@ export function Payments() {
 
   const { data: payments = [], isLoading } = useQuery({
     queryKey: ['payments'],
-    queryFn: paymentsApi.getAll,
+    queryFn: () => paymentsApi.getAll(),
   })
 
   //const { data: students = [] } = useQuery({

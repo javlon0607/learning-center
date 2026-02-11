@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { authApi, User, setSessionExpiredHandler } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
+
 interface AuthContextType {
   user: User | null
   isLoading: boolean
@@ -19,24 +20,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { toast } = useToast()
-  const sessionExpiredRef = useRef(false)
+  const guardRef = useRef(false)
 
-  const handleSessionExpired = useCallback(() => {
-    if (sessionExpiredRef.current) return
-    sessionExpiredRef.current = true
-    setUser(null)
-    toast({
-      title: 'Session expired',
-      description: 'You have been logged out due to inactivity. Please sign in again.',
-      variant: 'destructive',
+  function activateSessionGuard() {
+    setSessionExpiredHandler(() => {
+      if (guardRef.current) return
+      guardRef.current = true
+      setUser(null)
+      setSessionExpiredHandler(null)
+      toast({
+        title: 'Session expired',
+        description: 'You have been logged out due to inactivity. Please sign in again.',
+        variant: 'destructive',
+      })
+      navigate('/login', { replace: true })
+      setTimeout(() => { guardRef.current = false }, 2000)
     })
-    navigate('/login', { replace: true })
-    setTimeout(() => { sessionExpiredRef.current = false }, 2000)
-  }, [navigate, toast])
-
-  useEffect(() => {
-    setSessionExpiredHandler(handleSessionExpired)
-  }, [handleSessionExpired])
+  }
 
   useEffect(() => {
     checkAuth()
@@ -46,7 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await authApi.me()
       setUser(response.user)
-    } catch (error) {
+      activateSessionGuard()
+    } catch {
       setUser(null)
       if (location.pathname !== '/login') {
         navigate('/login', { replace: true })
@@ -59,16 +60,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(username: string, password: string) {
     const response = await authApi.login(username, password)
     setUser(response.user)
+    activateSessionGuard()
     navigate('/', { replace: true })
   }
 
   async function logout() {
     try {
       await authApi.logout()
-    } catch (error) {
+    } catch {
       // Ignore errors on logout
     }
     setUser(null)
+    setSessionExpiredHandler(null)
     navigate('/login', { replace: true })
   }
 

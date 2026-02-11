@@ -281,70 +281,66 @@ export function StudentForm({
               </div>
             </div>
 
-            {/* Source - only show when creating */}
-            {!isEditing && (
-              <>
+            {/* Source */}
+            <div className="space-y-2">
+              <Label htmlFor="source">Source *</Label>
+              <Select
+                value={source}
+                onValueChange={(value) => setValue('source', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sourceOptions.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.source && (
+                <p className="text-sm text-red-600">{errors.source.message}</p>
+              )}
+            </div>
+
+            {/* Referral picker - only for new students */}
+            {!isEditing && source === 'referral' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="source">Source *</Label>
+                  <Label>Referrer Type</Label>
                   <Select
-                    value={source}
-                    onValueChange={(value) => setValue('source', value)}
+                    value={referrerType}
+                    onValueChange={(value) => {
+                      setReferrerType(value as 'student' | 'teacher' | 'user')
+                      setReferrerId(undefined)
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select source" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {sourceOptions.map(({ value, label }) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="teacher">Teacher</SelectItem>
+                      <SelectItem value="user">Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Referred By</Label>
+                  <Select
+                    value={referrerId?.toString() || ''}
+                    onValueChange={(value) => setReferrerId(Number(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select person" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {referrers.map((r: Referrer) => (
+                        <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.source && (
-                    <p className="text-sm text-red-600">{errors.source.message}</p>
-                  )}
                 </div>
-
-                {/* Referral picker */}
-                {source === 'referral' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Referrer Type</Label>
-                      <Select
-                        value={referrerType}
-                        onValueChange={(value) => {
-                          setReferrerType(value as 'student' | 'teacher' | 'user')
-                          setReferrerId(undefined)
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="teacher">Teacher</SelectItem>
-                          <SelectItem value="user">Staff</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Referred By</Label>
-                      <Select
-                        value={referrerId?.toString() || ''}
-                        onValueChange={(value) => setReferrerId(Number(value))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select person" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {referrers.map((r: Referrer) => (
-                            <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-              </>
+              </div>
             )}
 
             <div className="space-y-2">

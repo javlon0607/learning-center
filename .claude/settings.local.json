@@ -23,7 +23,8 @@
       "Bash(docker pull:*)",
       "Bash(docker-compose up:*)",
       "Bash(docker-compose:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(docker compose exec:*)"
     ]
   }
 }

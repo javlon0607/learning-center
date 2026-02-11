@@ -50,6 +50,7 @@ export function Settings() {
   const [paymentReminders, setPaymentReminders] = useState(true)
   const [newLeadAlerts, setNewLeadAlerts] = useState(true)
   const [attendanceAlerts, setAttendanceAlerts] = useState(false)
+  const [birthdayAlerts, setBirthdayAlerts] = useState(true)
 
   // Security settings state
   const [sessionTimeout, setSessionTimeout] = useState('30')
@@ -76,6 +77,7 @@ export function Settings() {
       setPaymentReminders(settings.notification_payment_reminders !== 'false')
       setNewLeadAlerts(settings.notification_new_leads !== 'false')
       setAttendanceAlerts(settings.notification_attendance === 'true')
+      setBirthdayAlerts(settings.notification_birthdays !== 'false')
     }
   }, [settings])
 
@@ -134,6 +136,7 @@ export function Settings() {
       notification_payment_reminders: paymentReminders ? 'true' : 'false',
       notification_new_leads: newLeadAlerts ? 'true' : 'false',
       notification_attendance: attendanceAlerts ? 'true' : 'false',
+      notification_birthdays: birthdayAlerts ? 'true' : 'false',
     }, {
       onSuccess: () => toast({ title: 'Notification preferences saved' }),
     })
@@ -360,6 +363,19 @@ export function Settings() {
                   <Switch
                     checked={attendanceAlerts}
                     onCheckedChange={setAttendanceAlerts}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="font-medium">Birthday Notifications</p>
+                    <p className="text-sm text-muted-foreground">
+                      Show student birthdays in the notification bell
+                    </p>
+                  </div>
+                  <Switch
+                    checked={birthdayAlerts}
+                    onCheckedChange={setBirthdayAlerts}
                   />
                 </div>
                 <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
