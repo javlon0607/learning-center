@@ -321,7 +321,7 @@ export function Teachers() {
                       placeholder="e.g., Math, English, Science"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Salary Type</Label>
                       <Select
@@ -370,7 +370,7 @@ export function Teachers() {
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="first_name">First Name *</Label>
                       <Input
@@ -390,7 +390,7 @@ export function Teachers() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone</Label>
                       <PhoneInput
@@ -418,7 +418,7 @@ export function Teachers() {
                       defaultValue={selectedTeacher?.subjects}
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="salary_type">Salary Type</Label>
                       <Select

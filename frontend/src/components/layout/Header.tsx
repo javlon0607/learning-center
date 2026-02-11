@@ -17,9 +17,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Timetable } from './Timetable'
-import { LogOut, User, Bell, Search, ChevronDown, CalendarDays } from 'lucide-react'
+import { LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu } from 'lucide-react'
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth()
   const [timetableOpen, setTimetableOpen] = useState(false)
 
@@ -41,9 +45,17 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border/60 bg-card px-6 shadow-sm">
-      {/* Left side - Search */}
+    <header className="flex h-16 items-center justify-between border-b border-border/60 bg-card px-4 md:px-6 shadow-sm">
+      {/* Left side - Hamburger + Search */}
       <div className="flex items-center gap-4 flex-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden h-10 w-10 rounded-lg"
+          onClick={onMenuClick}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
         <div className="relative max-w-md w-full hidden md:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input

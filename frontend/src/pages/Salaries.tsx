@@ -346,7 +346,7 @@ export function Salaries() {
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="base_amount">Base Amount *</Label>
                   <Input

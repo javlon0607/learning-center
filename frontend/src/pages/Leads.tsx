@@ -673,7 +673,7 @@ export function Leads() {
             {/* Details */}
             <div className="space-y-3">
               <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Details</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {detailLead.source && (
                   <div>
                     <span className="text-muted-foreground">Source:</span>
@@ -929,7 +929,7 @@ export function Leads() {
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="first_name">First Name *</Label>
                   <Input id="first_name" name="first_name" defaultValue={selectedLead?.first_name} required />
@@ -941,7 +941,7 @@ export function Leads() {
               </div>
 
               {/* Contact */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
                   <PhoneInput id="phone" value={formPhone} onChange={setFormPhone} />
@@ -953,7 +953,7 @@ export function Leads() {
               </div>
 
               {/* Parent */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="parent_name">Parent Name</Label>
                   <Input id="parent_name" name="parent_name" defaultValue={selectedLead?.parent_name} />
@@ -965,7 +965,7 @@ export function Leads() {
               </div>
 
               {/* Status, Priority, Source */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select name="status" defaultValue={selectedLead?.status || 'new'}>
@@ -1003,7 +1003,7 @@ export function Leads() {
 
               {/* Referral picker */}
               {formSource === 'referral' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Referrer Type</Label>
                     <Select value={formReferrerType} onValueChange={(v) => { setFormReferrerType(v as 'student' | 'teacher' | 'user'); setFormReferrerId(undefined); }}>
@@ -1030,7 +1030,7 @@ export function Leads() {
               )}
 
               {/* Interest */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="interested_courses">Interested Courses</Label>
                   <Input id="interested_courses" name="interested_courses" placeholder="e.g. English, Math" defaultValue={selectedLead?.interested_courses} />
@@ -1042,7 +1042,7 @@ export function Leads() {
               </div>
 
               {/* Schedule */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="preferred_schedule">Preferred Schedule</Label>
                   <Input id="preferred_schedule" name="preferred_schedule" placeholder="e.g. Evenings, Weekends" defaultValue={selectedLead?.preferred_schedule} />
@@ -1054,7 +1054,7 @@ export function Leads() {
               </div>
 
               {/* Dates */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="follow_up_date">Follow-up Date</Label>
                   <DateInput id="follow_up_date" value={formFollowUpDate} onChange={setFormFollowUpDate} />

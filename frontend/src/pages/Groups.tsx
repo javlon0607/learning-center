@@ -360,7 +360,7 @@ export function Groups() {
                   <p className="text-xs text-amber-600">No active teachers available. Please add a teacher first.</p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="capacity">Capacity</Label>
                   <Input
@@ -426,7 +426,7 @@ export function Groups() {
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="time_start">Start Time</Label>
                   <TimeInput

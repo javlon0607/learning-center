@@ -30,7 +30,11 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation()
   const { hasRole } = useAuth()
 
@@ -58,6 +62,7 @@ export function Sidebar() {
               <Link
                 key={item.name}
                 to={item.href}
+                onClick={onNavigate}
                 className={cn(
                   'group flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                   isActive
