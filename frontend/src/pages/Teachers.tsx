@@ -111,6 +111,9 @@ export function Teachers() {
       setDeleteDialogOpen(false)
       setTeacherToDelete(null)
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete teacher', description: error.message, variant: 'destructive' })
+    },
   })
 
   const filteredTeachers = teachers.filter(

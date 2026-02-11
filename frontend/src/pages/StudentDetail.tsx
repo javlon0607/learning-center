@@ -221,6 +221,9 @@ export function StudentDetail() {
       toast({ title: 'Student deleted' })
       navigate('/students')
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete student', description: error.message, variant: 'destructive' })
+    },
   })
 
   const updateStudent = useMutation({
@@ -256,6 +259,9 @@ export function StudentDetail() {
       queryClient.invalidateQueries({ queryKey: ['student-notes', studentId] })
       toast({ title: 'Note deleted' })
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete note', description: error.message, variant: 'destructive' })
+    },
   })
 
   const removeEnrollment = useMutation({
@@ -265,6 +271,9 @@ export function StudentDetail() {
       queryClient.invalidateQueries({ queryKey: ['students'] })
       toast({ title: 'Enrollment removed' })
       setRemoveEnrollmentId(null)
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot remove enrollment', description: error.message, variant: 'destructive' })
     },
   })
 

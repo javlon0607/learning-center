@@ -90,6 +90,9 @@ export function Salaries() {
       queryClient.invalidateQueries({ queryKey: ['salary-slips'] })
       toast({ title: 'Salary slip deleted successfully' })
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete salary slip', description: error.message, variant: 'destructive' })
+    },
   })
 
   function handleDelete(id: number) {

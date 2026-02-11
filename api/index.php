@@ -289,9 +289,18 @@ try {
                 $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status FROM teachers WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                db()->prepare("DELETE FROM teachers WHERE id=?")->execute([$id]);
-                auditLog('delete', 'teacher', $id, $oldRow ?: null, null);
-                jsonResponse(['ok' => true]);
+                if (!$oldRow) { jsonError('Teacher not found', 404); break; }
+                try {
+                    // Clear teacher link from user accounts before deleting
+                    db()->prepare("UPDATE users SET teacher_id = NULL WHERE teacher_id = ?")->execute([$id]);
+                    db()->prepare("DELETE FROM teachers WHERE id=?")->execute([$id]);
+                    auditLog('delete', 'teacher', $id, $oldRow, null);
+                    jsonResponse(['ok' => true]);
+                } catch (PDOException $e) {
+                    if (strpos($e->getCode(), '23503') !== false || strpos($e->getMessage(), 'foreign key') !== false) {
+                        jsonError('Cannot delete this teacher because they have associated groups or salary records. Remove those first.', 409);
+                    } else { throw $e; }
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -395,9 +404,15 @@ try {
                 }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                $stmt = db()->prepare("DELETE FROM enrollments WHERE id = ?");
-                $stmt->execute([$id]);
-                jsonResponse(['ok' => true]);
+                try {
+                    $stmt = db()->prepare("DELETE FROM enrollments WHERE id = ?");
+                    $stmt->execute([$id]);
+                    jsonResponse(['ok' => true]);
+                } catch (PDOException $e) {
+                    if (strpos($e->getCode(), '23503') !== false || strpos($e->getMessage(), 'foreign key') !== false) {
+                        jsonError('Cannot remove this enrollment because it has associated payment records.', 409);
+                    } else { throw $e; }
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -825,9 +840,15 @@ try {
                     'amount' => (float)$oldRow['amount'],
                     'reason' => (string)$oldRow['reason']
                 ];
-                db()->prepare("DELETE FROM discounts WHERE id = ?")->execute([$id]);
-                auditLog('delete', 'discount', (int)$id, $oldValues, null);
-                jsonResponse(['ok' => true]);
+                try {
+                    db()->prepare("DELETE FROM discounts WHERE id = ?")->execute([$id]);
+                    auditLog('delete', 'discount', (int)$id, $oldValues, null);
+                    jsonResponse(['ok' => true]);
+                } catch (PDOException $e) {
+                    if (strpos($e->getCode(), '23503') !== false || strpos($e->getMessage(), 'foreign key') !== false) {
+                        jsonError('Cannot delete this discount because it is referenced by other records.', 409);
+                    } else { throw $e; }
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -1590,12 +1611,20 @@ try {
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
+                if ((int)$id === (int)$_SESSION['user']['id']) { jsonError('You cannot delete your own account.', 400); break; }
                 $oldStmt = db()->prepare("SELECT username, name, role FROM users WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                db()->prepare("DELETE FROM users WHERE id = ? AND id != ?")->execute([$id, $_SESSION['user']['id']]);
-                auditLog('delete', 'user', $id, $oldRow ?: null, null);
-                jsonResponse(['ok' => true]);
+                if (!$oldRow) { jsonError('User not found', 404); break; }
+                try {
+                    db()->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
+                    auditLog('delete', 'user', $id, $oldRow, null);
+                    jsonResponse(['ok' => true]);
+                } catch (PDOException $e) {
+                    if (strpos($e->getCode(), '23503') !== false || strpos($e->getMessage(), 'foreign key') !== false) {
+                        jsonError('Cannot delete this user because they have associated activity records.', 409);
+                    } else { throw $e; }
+                }
             } else { jsonError('Not found', 404); }
             break;
 
@@ -1625,8 +1654,14 @@ try {
                 ]);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                db()->prepare("DELETE FROM group_schedules WHERE id = ?")->execute([$id]);
-                jsonResponse(['ok' => true]);
+                try {
+                    db()->prepare("DELETE FROM group_schedules WHERE id = ?")->execute([$id]);
+                    jsonResponse(['ok' => true]);
+                } catch (PDOException $e) {
+                    if (strpos($e->getCode(), '23503') !== false || strpos($e->getMessage(), 'foreign key') !== false) {
+                        jsonError('Cannot delete this schedule because it is referenced by other records.', 409);
+                    } else { throw $e; }
+                }
             } else { jsonError('Not found', 404); }
             break;
 

@@ -350,4 +350,22 @@ function initDB() {
     foreach ($softDeleteColumns as $alter) {
         try { db()->exec($alter); } catch (PDOException $e) { /* ignore */ }
     }
+
+    // Migrate FK constraints to ON DELETE SET NULL for soft-deleted tables referencing teachers
+    $fkMigrations = [
+        ['groups', 'groups_teacher_id_fkey', 'teacher_id', 'teachers(id)'],
+        ['salary_slips', 'salary_slips_teacher_id_fkey', 'teacher_id', 'teachers(id)'],
+    ];
+    foreach ($fkMigrations as [$table, $constraint, $column, $ref]) {
+        try {
+            $exists = db()->query("SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = '$constraint' AND table_name = '$table'")->fetch();
+            if ($exists) {
+                $confrelid = db()->query("SELECT confdeltype FROM pg_constraint WHERE conname = '$constraint'")->fetch();
+                if ($confrelid && $confrelid['confdeltype'] !== 'n') {
+                    db()->exec("ALTER TABLE $table DROP CONSTRAINT $constraint");
+                    db()->exec("ALTER TABLE $table ADD CONSTRAINT $constraint FOREIGN KEY ($column) REFERENCES $ref ON DELETE SET NULL");
+                }
+            }
+        } catch (PDOException $e) { /* ignore */ }
+    }
 }

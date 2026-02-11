@@ -80,6 +80,9 @@ export function Expenses() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast({ title: 'Expense deleted successfully' })
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete expense', description: error.message, variant: 'destructive' })
+    },
   })
 
   function handleDelete(id: number) {

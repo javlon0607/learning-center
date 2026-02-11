@@ -129,6 +129,9 @@ export function Groups() {
       setDeleteDialogOpen(false)
       setGroupToDelete(null)
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete group', description: error.message, variant: 'destructive' })
+    },
   })
 
   const filteredGroups = groups.filter(
@@ -319,28 +322,30 @@ export function Groups() {
           price.reset()
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{selectedGroup ? 'Edit Group' : 'Add New Group'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  defaultValue={selectedGroup?.name}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  name="subject"
-                  defaultValue={selectedGroup?.subject}
-                />
+          <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
+            <div className="grid gap-4 py-4 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    defaultValue={selectedGroup?.name}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input
+                    id="subject"
+                    name="subject"
+                    defaultValue={selectedGroup?.subject}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="teacher_id">Teacher *</Label>
@@ -385,18 +390,35 @@ export function Groups() {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select name="status" defaultValue={selectedGroup?.status || 'active'}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select name="status" defaultValue={selectedGroup?.status || 'active'}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="room">Room</Label>
+                  <Select value={formRoom} onValueChange={setFormRoom}>
+                    <SelectTrigger className={!formRoom ? 'text-muted-foreground' : ''}>
+                      <SelectValue placeholder="Select room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROOMS.map((room) => (
+                        <SelectItem key={room.value} value={room.value}>
+                          {room.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Schedule Days</Label>
@@ -447,21 +469,6 @@ export function Groups() {
                     <p className="text-xs text-red-500">End time must be after start time</p>
                   )}
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="room">Room</Label>
-                <Select value={formRoom} onValueChange={setFormRoom}>
-                  <SelectTrigger className={!formRoom ? 'text-muted-foreground' : ''}>
-                    <SelectValue placeholder="Select room" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROOMS.map((room) => (
-                      <SelectItem key={room.value} value={room.value}>
-                        {room.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <DialogFooter>

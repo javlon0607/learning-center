@@ -11,9 +11,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ./backend/schema_additions.sql:/docker-entrypoint-initdb.d/02-schema_additions.sql
-      - ./backend/schema_v2.sql:/docker-entrypoint-initdb.d/03-schema_v2.sql
-      - ./backend/schema_source_tracking.sql:/docker-entrypoint-initdb.d/04-schema_source_tracking.sql
+      - ./schema_additions.sql:/docker-entrypoint-initdb.d/02-schema_additions.sql
+      - ./schema_v2.sql:/docker-entrypoint-initdb.d/03-schema_v2.sql
+      - ./schema_source_tracking.sql:/docker-entrypoint-initdb.d/04-schema_source_tracking.sql
     ports:
       - "127.0.0.1:${POSTGRES_EXT_PORT:-5433}:5432"
     networks:

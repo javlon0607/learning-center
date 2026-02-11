@@ -174,6 +174,9 @@ export function Leads() {
       setDeleteDialogOpen(false)
       setLeadToDelete(null)
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete lead', description: error.message, variant: 'destructive' })
+    },
   })
 
   const convertLead = useMutation({

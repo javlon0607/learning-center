@@ -145,6 +145,9 @@ export function Students() {
       setDeleteDialogOpen(false)
       setStudentToDelete(null)
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete student', description: error.message, variant: 'destructive' })
+    },
   })
 
   // Filter by debt (search is now server-side)

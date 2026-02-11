@@ -226,6 +226,9 @@ export function Payments() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       toast({ title: 'Payment deleted successfully' })
     },
+    onError: (error: Error) => {
+      toast({ title: 'Cannot delete payment', description: error.message, variant: 'destructive' })
+    },
   })
 
   function handleDelete(id: number) {
