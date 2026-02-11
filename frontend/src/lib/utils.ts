@@ -32,21 +32,38 @@ export function parseAmountFromInput(str: string): number {
   return Number.isFinite(num) ? num : 0
 }
 
+const TZ = 'Asia/Tashkent'
+
 export function formatDate(date: string | Date): string {
   const d = new Date(date)
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).formatToParts(d)
+  const day = parts.find(p => p.type === 'day')!.value
+  const month = parts.find(p => p.type === 'month')!.value
+  const year = parts.find(p => p.type === 'year')!.value
   return `${day}/${month}/${year}`
 }
 
 export function formatDateTime(date: string | Date): string {
   const d = new Date(date)
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  const hours = String(d.getHours()).padStart(2, '0')
-  const minutes = String(d.getMinutes()).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const day = parts.find(p => p.type === 'day')!.value
+  const month = parts.find(p => p.type === 'month')!.value
+  const year = parts.find(p => p.type === 'year')!.value
+  const hours = parts.find(p => p.type === 'hour')!.value
+  const minutes = parts.find(p => p.type === 'minute')!.value
   return `${day}/${month}/${year} ${hours}:${minutes}`
 }
 
