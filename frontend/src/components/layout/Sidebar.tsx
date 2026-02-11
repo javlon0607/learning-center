@@ -11,6 +11,7 @@ import {
   Receipt,
   DollarSign,
   BarChart3,
+  ScrollText,
   Settings,
   UserPlus,
   ChevronRight,
@@ -27,6 +28,7 @@ const navigation = [
   { name: 'Expenses', href: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Salaries', href: '/salaries', icon: DollarSign, roles: ['admin', 'accountant'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'manager', 'accountant'] },
+  { name: 'Logs', href: '/logs', icon: ScrollText, roles: ['admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
 ]
 

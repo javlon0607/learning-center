@@ -11,9 +11,18 @@ export class ApiError extends Error {
   }
 }
 
+// Global session expiry handler — set by AuthProvider
+let onSessionExpired: (() => void) | null = null
+export function setSessionExpiredHandler(handler: () => void) {
+  onSessionExpired = handler
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
+    if (response.status === 401 && data.code === 'SESSION_EXPIRED') {
+      onSessionExpired?.()
+    }
     throw new ApiError(
       response.status,
       data.error || 'An error occurred',

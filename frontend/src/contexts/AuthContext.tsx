@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { authApi, User } from '@/lib/api'
+import { authApi, User, setSessionExpiredHandler } from '@/lib/api'
+import { useToast } from '@/components/ui/use-toast'
 interface AuthContextType {
   user: User | null
   isLoading: boolean
@@ -17,6 +18,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
   const location = useLocation()
+  const { toast } = useToast()
+  const sessionExpiredRef = useRef(false)
+
+  const handleSessionExpired = useCallback(() => {
+    if (sessionExpiredRef.current) return
+    sessionExpiredRef.current = true
+    setUser(null)
+    toast({
+      title: 'Session expired',
+      description: 'You have been logged out due to inactivity. Please sign in again.',
+      variant: 'destructive',
+    })
+    navigate('/login', { replace: true })
+    setTimeout(() => { sessionExpiredRef.current = false }, 2000)
+  }, [navigate, toast])
+
+  useEffect(() => {
+    setSessionExpiredHandler(handleSessionExpired)
+  }, [handleSessionExpired])
 
   useEffect(() => {
     checkAuth()
