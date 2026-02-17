@@ -33,6 +33,9 @@ services:
     restart: always
     volumes:
       - ./backend:/var/www/html
+      - ./schema_additions.sql:/var/www/schemas/schema_additions.sql:ro
+      - ./schema_v2.sql:/var/www/schemas/schema_v2.sql:ro
+      - ./schema_source_tracking.sql:/var/www/schemas/schema_source_tracking.sql:ro
     depends_on:
       postgres:
         condition: service_healthy
