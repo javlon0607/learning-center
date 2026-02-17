@@ -14,7 +14,6 @@ import { Leads } from '@/pages/Leads'
 import { Attendance } from '@/pages/Attendance'
 import { Payments } from '@/pages/Payments'
 import { Expenses } from '@/pages/Expenses'
-import { Salaries } from '@/pages/Salaries'
 import { Reports } from '@/pages/Reports'
 import { Logs } from '@/pages/Logs'
 import { Settings } from '@/pages/Settings'
@@ -37,7 +36,6 @@ function App() {
           <Route path="attendance" element={<Attendance />} />
           <Route path="payments" element={<Payments />} />
           <Route path="expenses" element={<Expenses />} />
-          <Route path="salaries" element={<Salaries />} />
           <Route path="reports" element={<Reports />} />
           <Route path="logs" element={<Logs />} />
           <Route path="settings" element={<Settings />} />

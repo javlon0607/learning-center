@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { expensesApi, Expense } from '@/lib/api'
+import { expensesApi, salarySlipsApi, teachersApi, Expense, TeacherSalaryPreview } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
@@ -56,9 +56,26 @@ export function Expenses() {
   const amount = useAmountInput()
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0])
 
+  // Salary-specific state
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedTeacherId, setSelectedTeacherId] = useState('')
+  const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [salaryPreview, setSalaryPreview] = useState<TeacherSalaryPreview | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
+  const baseAmount = useAmountInput()
+  const bonus = useAmountInput()
+  const deduction = useAmountInput()
+
+  const isSalaryCategory = selectedCategory === 'salaries'
+
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expenses'],
     queryFn: expensesApi.getAll,
+  })
+
+  const { data: teachers = [] } = useQuery({
+    queryKey: ['teachers'],
+    queryFn: teachersApi.getAll,
   })
 
   const createExpense = useMutation({
@@ -72,6 +89,8 @@ export function Expenses() {
       amount.reset()
     },
   })
+
+  const [submittingSalary, setSubmittingSalary] = useState(false)
 
   const deleteExpense = useMutation({
     mutationFn: (id: number) => expensesApi.delete(id),
@@ -91,6 +110,73 @@ export function Expenses() {
     }
   }
 
+  // Reset salary fields when category changes away from salaries
+  useEffect(() => {
+    if (!isSalaryCategory) {
+      setSelectedTeacherId('')
+      setSalaryMonth(new Date().toISOString().slice(0, 7))
+      setSalaryPreview(null)
+      baseAmount.reset()
+      bonus.reset()
+      deduction.reset()
+    }
+  }, [isSalaryCategory])
+
+  // Fetch salary preview when teacher and month are selected
+  useEffect(() => {
+    if (!isSalaryCategory || !selectedTeacherId || !salaryMonth) {
+      setSalaryPreview(null)
+      return
+    }
+    const teacher = teachers.find((t) => t.id === Number(selectedTeacherId))
+    if (!teacher) {
+      setSalaryPreview(null)
+      return
+    }
+
+    if (teacher.salary_type === 'fixed') {
+      baseAmount.setFromNumber(teacher.salary_amount ?? 0)
+      setSalaryPreview({
+        teacher_id: teacher.id,
+        month: salaryMonth,
+        salary_type: 'fixed',
+        salary_percentage: 0,
+        collected_amount: 0,
+        base_amount: teacher.salary_amount ?? 0,
+      })
+      return
+    }
+
+    setLoadingPreview(true)
+    salarySlipsApi
+      .preview(Number(selectedTeacherId), salaryMonth)
+      .then((preview) => {
+        setSalaryPreview(preview)
+        baseAmount.setFromNumber(preview.base_amount)
+      })
+      .catch(() => {
+        setSalaryPreview(null)
+        baseAmount.reset()
+      })
+      .finally(() => setLoadingPreview(false))
+  }, [selectedTeacherId, salaryMonth, teachers, isSalaryCategory])
+
+  // Reset salary state when dialog closes
+  function handleDialogChange(open: boolean) {
+    setFormOpen(open)
+    if (!open) {
+      amount.reset()
+      setSelectedCategory('')
+      setSelectedTeacherId('')
+      setSalaryMonth(new Date().toISOString().slice(0, 7))
+      setSalaryPreview(null)
+      baseAmount.reset()
+      bonus.reset()
+      deduction.reset()
+      setExpenseDate(new Date().toISOString().split('T')[0])
+    }
+  }
+
   const filteredExpenses = expenses.filter(
     (e) =>
       e.category?.toLowerCase().includes(search.toLowerCase()) ||
@@ -99,22 +185,80 @@ export function Expenses() {
 
   const totalExpenses = filteredExpenses.reduce((sum, e) => e.deleted_at ? sum : sum + e.amount, 0)
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const amountValue = parseAmountFromInput((formData.get('amount') as string) ?? '')
-    if (amountValue <= 0) {
-      toast({ title: 'Enter a valid amount', variant: 'destructive' })
-      return
+
+    if (isSalaryCategory) {
+      // Salary submission: create salary slip + expense
+      const total = baseAmount.numericValue() + bonus.numericValue() - deduction.numericValue()
+      if (total <= 0) {
+        toast({ title: 'Salary total must be greater than zero', variant: 'destructive' })
+        return
+      }
+
+      const teacher = teachers.find((t) => t.id === Number(selectedTeacherId))
+      if (!teacher) {
+        toast({ title: 'Please select a teacher', variant: 'destructive' })
+        return
+      }
+
+      const month = salaryMonth
+      const [yearStr, monthStr] = month.split('-')
+      const year = Number(yearStr)
+      const monthNum = Number(monthStr)
+      const periodStart = `${month}-01`
+      const periodEnd = new Date(year, monthNum, 0).toISOString().split('T')[0]
+      const teacherName = `${teacher.first_name} ${teacher.last_name}`
+
+      setSubmittingSalary(true)
+      try {
+        // 1. Create salary slip
+        await salarySlipsApi.create({
+          teacher_id: teacher.id,
+          period_start: periodStart,
+          period_end: periodEnd,
+          base_amount: baseAmount.numericValue(),
+          bonus: bonus.numericValue(),
+          deduction: deduction.numericValue(),
+          status: 'paid',
+          notes: formData.get('notes') as string,
+        })
+
+        // 2. Create expense
+        await expensesApi.create({
+          category: 'salaries',
+          amount: total,
+          description: `Salary: ${teacherName} — ${month}`,
+          expense_date: new Date().toISOString().split('T')[0],
+        })
+
+        queryClient.invalidateQueries({ queryKey: ['salary-slips'] })
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        toast({ title: 'Salary expense recorded successfully' })
+        handleDialogChange(false)
+      } catch (err: any) {
+        toast({ title: 'Failed to create salary expense', description: err.message, variant: 'destructive' })
+      } finally {
+        setSubmittingSalary(false)
+      }
+    } else {
+      // Normal expense submission
+      const amountValue = parseAmountFromInput((formData.get('amount') as string) ?? '')
+      if (amountValue <= 0) {
+        toast({ title: 'Enter a valid amount', variant: 'destructive' })
+        return
+      }
+      const data = {
+        category: selectedCategory,
+        amount: amountValue,
+        description: formData.get('description') as string,
+        expense_date: expenseDate,
+      }
+      createExpense.mutate(data)
+      setExpenseDate(new Date().toISOString().split('T')[0])
     }
-    const data = {
-      category: formData.get('category') as string,
-      amount: amountValue,
-      description: formData.get('description') as string,
-      expense_date: expenseDate,
-    }
-    createExpense.mutate(data)
-    setExpenseDate(new Date().toISOString().split('T')[0])
   }
 
   return (
@@ -215,8 +359,8 @@ export function Expenses() {
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) amount.reset(); }}>
-        <DialogContent>
+      <Dialog open={formOpen} onOpenChange={handleDialogChange}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Expense</DialogTitle>
           </DialogHeader>
@@ -224,7 +368,12 @@ export function Expenses() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
-                <Select name="category" required>
+                <Select
+                  name="category"
+                  required
+                  value={selectedCategory}
+                  onValueChange={setSelectedCategory}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -237,51 +386,176 @@ export function Expenses() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount *</Label>
-                  <Input
-                    ref={amount.ref}
-                    id="amount"
-                    name="amount"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={amount.value}
-                    onChange={amount.onChange}
-                    onBlur={amount.onBlur}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="expense_date">Date *</Label>
-                  <DateInput
-                    id="expense_date"
-                    value={expenseDate}
-                    onChange={setExpenseDate}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  placeholder="Enter expense details..."
-                  rows={3}
-                />
-              </div>
+
+              {isSalaryCategory ? (
+                <>
+                  {/* Salary-specific fields */}
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher_id">Teacher *</Label>
+                    <Select
+                      name="teacher_id"
+                      required
+                      value={selectedTeacherId}
+                      onValueChange={setSelectedTeacherId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select teacher" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teachers.filter(t => t.status === 'active').map((teacher) => (
+                          <SelectItem key={teacher.id} value={teacher.id.toString()}>
+                            {teacher.first_name} {teacher.last_name} - {formatCurrency(teacher.salary_amount)} ({teacher.salary_type === 'per_student' ? `${teacher.salary_amount}%` : 'fixed'})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="salary_month">Month *</Label>
+                    <Input
+                      id="salary_month"
+                      type="month"
+                      value={salaryMonth}
+                      onChange={(e) => setSalaryMonth(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* Salary Preview */}
+                  {loadingPreview && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Calculating salary...
+                    </div>
+                  )}
+                  {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'per_student' && (
+                    <div className="rounded-md bg-blue-50 p-3 text-sm space-y-1">
+                      <p className="font-medium text-blue-900">Per-Student Salary Calculation</p>
+                      <p className="text-blue-700">
+                        Collected payments: <span className="font-semibold">{formatCurrency(salaryPreview.collected_amount)}</span>
+                      </p>
+                      <p className="text-blue-700">
+                        Teacher rate: <span className="font-semibold">{salaryPreview.salary_percentage}%</span>
+                      </p>
+                      <p className="text-blue-700">
+                        Calculated base: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
+                      </p>
+                    </div>
+                  )}
+                  {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'fixed' && (
+                    <div className="rounded-md bg-green-50 p-3 text-sm">
+                      <p className="text-green-700">
+                        Fixed salary: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="base_amount">Base Amount *</Label>
+                      <Input
+                        ref={baseAmount.ref}
+                        id="base_amount"
+                        name="base_amount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={baseAmount.value}
+                        onChange={baseAmount.onChange}
+                        onBlur={baseAmount.onBlur}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="bonus">Bonus</Label>
+                      <Input
+                        ref={bonus.ref}
+                        id="bonus"
+                        name="bonus"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={bonus.value}
+                        onChange={bonus.onChange}
+                        onBlur={bonus.onBlur}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="deduction">Deduction</Label>
+                      <Input
+                        ref={deduction.ref}
+                        id="deduction"
+                        name="deduction"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={deduction.value}
+                        onChange={deduction.onChange}
+                        onBlur={deduction.onBlur}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      name="notes"
+                      placeholder="Any additional notes..."
+                      rows={2}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Normal expense fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount *</Label>
+                      <Input
+                        ref={amount.ref}
+                        id="amount"
+                        name="amount"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={amount.value}
+                        onChange={amount.onChange}
+                        onBlur={amount.onBlur}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expense_date">Date *</Label>
+                      <DateInput
+                        id="expense_date"
+                        value={expenseDate}
+                        onChange={setExpenseDate}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      name="description"
+                      placeholder="Enter expense details..."
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => handleDialogChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createExpense.isPending}>
-                {createExpense.isPending && (
+              <Button type="submit" disabled={createExpense.isPending || submittingSalary}>
+                {(createExpense.isPending || submittingSalary) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Add Expense
+                {isSalaryCategory ? 'Add Salary Expense' : 'Add Expense'}
               </Button>
             </DialogFooter>
           </form>
