@@ -37,11 +37,8 @@ COPY . .
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
 
-# Make entrypoint executable
-RUN chmod +x /var/www/html/docker-entrypoint.sh
-
 # Expose port
 EXPOSE 9000
 
 # Run migrations then start PHP-FPM
-ENTRYPOINT ["/var/www/html/docker-entrypoint.sh"]
+ENTRYPOINT ["sh", "/var/www/html/docker-entrypoint.sh"]
