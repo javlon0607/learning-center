@@ -17,10 +17,88 @@ export function setSessionExpiredHandler(handler: (() => void) | null) {
   onSessionExpired = handler
 }
 
+// ── Token management (in-memory only) ────────────────────────────────────
+
+let accessToken: string | null = null
+let tokenExpiresAt = 0
+
+export function setAccessToken(token: string, expiresIn: number) {
+  accessToken = token
+  tokenExpiresAt = Date.now() + expiresIn * 1000
+}
+
+export function getAccessToken() {
+  return accessToken
+}
+
+export function clearTokens() {
+  accessToken = null
+  tokenExpiresAt = 0
+}
+
+// ── Refresh logic ────────────────────────────────────────────────────────
+
+let refreshPromise: Promise<boolean> | null = null
+
+export async function refreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        clearTokens()
+        return false
+      }
+      const data = await res.json()
+      setAccessToken(data.access_token, data.expires_in)
+      return true
+    } catch {
+      clearTokens()
+      return false
+    } finally {
+      refreshPromise = null
+    }
+  })()
+  return refreshPromise
+}
+
+// ── Fetch with auth ──────────────────────────────────────────────────────
+
+async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Response> {
+  // Proactive refresh if token expires within 60s
+  if (accessToken && tokenExpiresAt - Date.now() < 60_000) {
+    await refreshAccessToken()
+  }
+
+  const headers = new Headers(init.headers)
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  let response = await fetch(url, { ...init, headers, credentials: 'include' })
+
+  // On 401, try refresh once and retry
+  if (response.status === 401 && accessToken) {
+    const ok = await refreshAccessToken()
+    if (ok) {
+      const retryHeaders = new Headers(init.headers)
+      retryHeaders.set('Authorization', `Bearer ${accessToken}`)
+      response = await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' })
+    }
+  }
+
+  return response
+}
+
+// ── Response handler ─────────────────────────────────────────────────────
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
-    if (response.status === 401 && data.code === 'SESSION_EXPIRED') {
+    if (response.status === 401) {
       onSessionExpired?.()
     }
     throw new ApiError(
@@ -40,40 +118,35 @@ export const api = {
         if (value) url.searchParams.append(key, value)
       })
     }
-    const response = await fetch(url.toString(), {
-      credentials: 'include',
-    })
+    const response = await fetchWithAuth(url.toString())
     return handleResponse<T>(response)
   },
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetchWithAuth(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
     })
     return handleResponse<T>(response)
   },
 
   async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetchWithAuth(`${API_BASE}${endpoint}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
     })
     return handleResponse<T>(response)
   },
 
   async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetchWithAuth(`${API_BASE}${endpoint}`, {
       method: 'DELETE',
-      credentials: 'include',
     })
     return handleResponse<T>(response)
   },
@@ -101,11 +174,11 @@ export interface Referrer {
 // Auth API
 export const authApi = {
   login: (username: string, password: string) =>
-    api.post<{ user: User }>('/login', { username, password }),
+    api.post<{ user: User; access_token: string; expires_in: number }>('/login', { username, password }),
 
   logout: () => api.post<{ ok: boolean }>('/logout'),
 
-  me: () => api.get<{ user: User; last_activity: number }>('/me'),
+  me: () => api.get<{ user: User }>('/me'),
 }
 
 // Students API
@@ -385,6 +458,7 @@ export interface Notification {
   type: string
   title: string
   message?: string
+  link?: string
   is_read: boolean
   created_at: string
 }
@@ -401,8 +475,11 @@ export interface SystemSettings {
   currency?: string
   session_timeout?: string
   payment_reminder_days?: string
+  payment_reminder_day?: string
   notification_payment_reminders?: string
   notification_new_leads?: string
+  notification_enrollment?: string
+  notification_schedule?: string
   notification_attendance?: string
   notification_birthdays?: string
   contact_email?: string
@@ -412,6 +489,11 @@ export interface SystemSettings {
 export const settingsApi = {
   getAll: () => api.get<SystemSettings>('/settings'),
   update: (data: Partial<SystemSettings>) => api.put<{ ok: boolean }>('/settings', data),
+}
+
+// Cron Notifications API (admin trigger)
+export const cronNotificationsApi = {
+  run: () => api.post<{ ok: boolean; notifications_created: number }>('/cron-notifications'),
 }
 
 // Profile API (update current user)

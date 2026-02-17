@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { authApi, User, setSessionExpiredHandler } from '@/lib/api'
+import { authApi, User, setSessionExpiredHandler, setAccessToken, clearTokens, refreshAccessToken } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
 
 interface AuthContextType {
@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (guardRef.current) return
       guardRef.current = true
       setUser(null)
+      clearTokens()
       setSessionExpiredHandler(null)
       toast({
         title: 'Session expired',
@@ -44,6 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function checkAuth() {
     try {
+      // On page reload, access token is lost (in-memory). Try refresh first.
+      const refreshed = await refreshAccessToken()
+      if (!refreshed) {
+        throw new Error('No session')
+      }
       const response = await authApi.me()
       setUser(response.user)
       activateSessionGuard()
@@ -59,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(username: string, password: string) {
     const response = await authApi.login(username, password)
+    setAccessToken(response.access_token, response.expires_in)
     setUser(response.user)
     activateSessionGuard()
     navigate('/', { replace: true })
@@ -71,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignore errors on logout
     }
     setUser(null)
+    clearTokens()
     setSessionExpiredHandler(null)
     navigate('/login', { replace: true })
   }

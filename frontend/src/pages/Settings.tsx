@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
-import { settingsApi, profileApi, SystemSettings } from '@/lib/api'
+import { settingsApi, profileApi, cronNotificationsApi, SystemSettings } from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +48,10 @@ export function Settings() {
 
   // Notification settings state
   const [paymentReminders, setPaymentReminders] = useState(true)
+  const [paymentReminderDay, setPaymentReminderDay] = useState('10')
   const [newLeadAlerts, setNewLeadAlerts] = useState(true)
+  const [enrollmentAlerts, setEnrollmentAlerts] = useState(true)
+  const [scheduleAlerts, setScheduleAlerts] = useState(true)
   const [attendanceAlerts, setAttendanceAlerts] = useState(false)
   const [birthdayAlerts, setBirthdayAlerts] = useState(true)
 
@@ -75,7 +78,10 @@ export function Settings() {
       setOrgPhone(settings.contact_phone || '')
       setSessionTimeout(settings.session_timeout || '30')
       setPaymentReminders(settings.notification_payment_reminders !== 'false')
+      setPaymentReminderDay(settings.payment_reminder_day || '10')
       setNewLeadAlerts(settings.notification_new_leads !== 'false')
+      setEnrollmentAlerts(settings.notification_enrollment !== 'false')
+      setScheduleAlerts(settings.notification_schedule !== 'false')
       setAttendanceAlerts(settings.notification_attendance === 'true')
       setBirthdayAlerts(settings.notification_birthdays !== 'false')
     }
@@ -134,13 +140,28 @@ export function Settings() {
   const handleSaveNotifications = () => {
     updateSettingsMutation.mutate({
       notification_payment_reminders: paymentReminders ? 'true' : 'false',
+      payment_reminder_day: paymentReminderDay,
       notification_new_leads: newLeadAlerts ? 'true' : 'false',
+      notification_enrollment: enrollmentAlerts ? 'true' : 'false',
+      notification_schedule: scheduleAlerts ? 'true' : 'false',
       notification_attendance: attendanceAlerts ? 'true' : 'false',
       notification_birthdays: birthdayAlerts ? 'true' : 'false',
     }, {
       onSuccess: () => toast({ title: 'Notification preferences saved' }),
     })
   }
+
+  // Cron notifications trigger mutation
+  const cronMutation = useMutation({
+    mutationFn: () => cronNotificationsApi.run(),
+    onSuccess: (data) => {
+      toast({ title: `Check complete`, description: `${data.notifications_created} notification(s) created` })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Check failed', description: err.message, variant: 'destructive' })
+    },
+  })
 
   const handleSaveSecurity = () => {
     updateSettingsMutation.mutate({
@@ -339,17 +360,71 @@ export function Settings() {
                     onCheckedChange={setPaymentReminders}
                   />
                 </div>
+                {paymentReminders && (
+                  <div className="ml-1 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Label htmlFor="payment_reminder_day" className="text-sm whitespace-nowrap">Reminder from day</Label>
+                      <Input
+                        id="payment_reminder_day"
+                        type="number"
+                        min="1"
+                        max="28"
+                        value={paymentReminderDay}
+                        onChange={(e) => setPaymentReminderDay(e.target.value)}
+                        className="w-20"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => cronMutation.mutate()}
+                        disabled={cronMutation.isPending}
+                      >
+                        {cronMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                        Check now
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Notifications are generated when the day of month reaches this value
+                    </p>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">New Lead Alerts</p>
+                    <p className="font-medium">Lead Follow-up Alerts</p>
                     <p className="text-sm text-muted-foreground">
-                      Get notified when new leads are added
+                      Get notified when lead follow-ups are overdue
                     </p>
                   </div>
                   <Switch
                     checked={newLeadAlerts}
                     onCheckedChange={setNewLeadAlerts}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="font-medium">Enrollment Alerts</p>
+                    <p className="text-sm text-muted-foreground">
+                      Notify teachers when students are enrolled or removed
+                    </p>
+                  </div>
+                  <Switch
+                    checked={enrollmentAlerts}
+                    onCheckedChange={setEnrollmentAlerts}
+                  />
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="font-medium">Schedule Change Alerts</p>
+                    <p className="text-sm text-muted-foreground">
+                      Notify teachers when group schedules are modified
+                    </p>
+                  </div>
+                  <Switch
+                    checked={scheduleAlerts}
+                    onCheckedChange={setScheduleAlerts}
                   />
                 </div>
                 <Separator />

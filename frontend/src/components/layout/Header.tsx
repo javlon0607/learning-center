@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
-import { birthdaysApi, settingsApi, BirthdayStudent } from '@/lib/api'
+import { birthdaysApi, settingsApi, notificationsApi, BirthdayStudent, Notification } from '@/lib/api'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,8 +25,42 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Timetable } from './Timetable'
-import { LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu, Cake, PartyPopper } from 'lucide-react'
+import {
+  LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu,
+  Cake, PartyPopper, DollarSign, Clock, UserPlus, UserMinus, CheckCheck,
+} from 'lucide-react'
 import { calculateAge } from '@/lib/utils'
+
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDays = Math.floor(diffHr / 24)
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString()
+}
+
+function getNotificationIcon(type: string) {
+  switch (type) {
+    case 'payment_reminder':
+      return { icon: DollarSign, bg: 'bg-red-100', color: 'text-red-600' }
+    case 'lead_followup_overdue':
+      return { icon: Clock, bg: 'bg-orange-100', color: 'text-orange-600' }
+    case 'student_enrolled':
+      return { icon: UserPlus, bg: 'bg-green-100', color: 'text-green-600' }
+    case 'student_removed':
+      return { icon: UserMinus, bg: 'bg-red-100', color: 'text-red-600' }
+    case 'schedule_change':
+      return { icon: CalendarDays, bg: 'bg-blue-100', color: 'text-blue-600' }
+    default:
+      return { icon: Bell, bg: 'bg-gray-100', color: 'text-gray-600' }
+  }
+}
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -35,6 +69,7 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [timetableOpen, setTimetableOpen] = useState(false)
 
   const { data: settings } = useQuery({
@@ -49,8 +84,36 @@ export function Header({ onMenuClick }: HeaderProps) {
     queryKey: ['birthdays', 'today'],
     queryFn: birthdaysApi.getToday,
     enabled: birthdaysEnabled,
-    refetchInterval: 10 * 60 * 1000, // Refresh every 10 min
+    refetchInterval: 10 * 60 * 1000,
   })
+
+  // DB notifications
+  const { data: dbNotifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: notificationsApi.getAll,
+    refetchInterval: 60 * 1000,
+  })
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => notificationsApi.markRead(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  })
+
+  const unreadCount = dbNotifications.filter((n: Notification) => !n.is_read).length
+
+  const handleNotificationClick = (notification: Notification) => {
+    if (!notification.is_read) {
+      markReadMutation.mutate(notification.id)
+    }
+    if (notification.link) {
+      navigate(notification.link)
+    }
+  }
 
   const initials = user?.name
     ?.split(' ')
@@ -69,7 +132,7 @@ export function Header({ onMenuClick }: HeaderProps) {
     }
   }
 
-  const hasNotifications = birthdaysEnabled && birthdays.length > 0
+  const hasBirthdays = birthdaysEnabled && birthdays.length > 0
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border/60 bg-card px-4 md:px-6 shadow-sm">
@@ -119,17 +182,34 @@ export function Header({ onMenuClick }: HeaderProps) {
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-lg">
               <Bell className="h-5 w-5 text-muted-foreground" />
-              {hasNotifications && (
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-card" />
+              {unreadCount > 0 && (
+                <span className="absolute right-1.5 top-1.5 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-destructive ring-2 ring-card text-[10px] font-bold text-white px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+              {unreadCount === 0 && hasBirthdays && (
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-card" />
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
-            <div className="px-4 py-3 border-b">
+          <PopoverContent align="end" className="w-96 p-0">
+            <div className="px-4 py-3 border-b flex items-center justify-between">
               <h4 className="font-semibold text-sm">Notifications</h4>
+              {unreadCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => markAllReadMutation.mutate()}
+                >
+                  <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                  Mark all read
+                </Button>
+              )}
             </div>
-            <div className="max-h-[320px] overflow-y-auto">
-              {hasNotifications ? (
+            <div className="max-h-[400px] overflow-y-auto">
+              {/* Birthdays Section */}
+              {hasBirthdays && (
                 <div className="p-2">
                   <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
                     <PartyPopper className="h-4 w-4 text-amber-500" />
@@ -139,7 +219,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </div>
                   {birthdays.map((student: BirthdayStudent) => (
                     <button
-                      key={student.id}
+                      key={`bday-${student.id}`}
                       onClick={() => navigate(`/students/${student.id}`)}
                       className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
                     >
@@ -158,7 +238,51 @@ export function Header({ onMenuClick }: HeaderProps) {
                     </button>
                   ))}
                 </div>
-              ) : (
+              )}
+
+              {/* DB Notifications Section */}
+              {dbNotifications.length > 0 && (
+                <div className="p-2">
+                  {hasBirthdays && (
+                    <div className="border-t my-1" />
+                  )}
+                  {dbNotifications.map((notification: Notification) => {
+                    const { icon: Icon, bg, color } = getNotificationIcon(notification.type)
+                    return (
+                      <button
+                        key={`notif-${notification.id}`}
+                        onClick={() => handleNotificationClick(notification)}
+                        className={`w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left ${
+                          !notification.is_read ? 'bg-primary/5' : ''
+                        }`}
+                      >
+                        <div className={`h-9 w-9 rounded-full ${bg} flex items-center justify-center shrink-0`}>
+                          <Icon className={`h-4 w-4 ${color}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm truncate ${!notification.is_read ? 'font-semibold' : 'font-medium'}`}>
+                            {notification.title}
+                          </p>
+                          {notification.message && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {notification.message}
+                            </p>
+                          )}
+                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                            {timeAgo(notification.created_at)}
+                          </p>
+                        </div>
+                        {!notification.is_read && (
+                          <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!hasBirthdays && dbNotifications.length === 0 && (
                 <div className="py-8 text-center">
                   <Bell className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">No notifications</p>

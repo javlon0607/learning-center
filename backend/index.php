@@ -5,14 +5,6 @@
  */
 define('IS_API', true);
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-}
 
 require_once __DIR__ . '/config.php';
 initDB();
@@ -49,7 +41,6 @@ try {
     switch ($resource) {
 	case 'login':
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
-            session_start(); // Start session
             $stmt = db()->prepare("SELECT id, username, password, name, role, is_active FROM users WHERE username = ?");
             $stmt->execute([$input['username'] ?? '']);
             $u = $stmt->fetch();
@@ -63,29 +54,91 @@ try {
             }
             unset($u['password'], $u['is_active']);
             $u['id'] = (int)$u['id'];
-            
-            // Set both session variables
-            $_SESSION['user'] = $u;
-            $_SESSION['user_id'] = $u['id']; // Add this line!
-            $_SESSION['last_activity'] = time();
-            
+
+            $tokens = generateTokenPair($u);
+            setRefreshTokenCookie($tokens['refresh_token']);
+
             // Update last login
             db()->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$u['id']]);
-            
+
+            // Set jwt_user for activityLog
+            $GLOBALS['jwt_user'] = ['id' => $u['id'], 'name' => $u['name'], 'role' => $u['role']];
             activityLog('login', 'user', $u['id']);
-            jsonResponse(['user' => $_SESSION['user']]);
+            jsonResponse([
+                'user' => $u,
+                'access_token' => $tokens['access_token'],
+                'expires_in' => $tokens['expires_in'],
+            ]);
             break;
 
         case 'logout':
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
-            activityLog('logout', 'user', $_SESSION['user']['id'] ?? null);
-            unset($_SESSION['user'], $_SESSION['last_activity']);
+            // Best-effort: read access token for logging
+            $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            if (strpos($header, 'Bearer ') === 0) {
+                $payload = jwtDecode(substr($header, 7));
+                if ($payload) {
+                    $GLOBALS['jwt_user'] = ['id' => (int)$payload['sub'], 'name' => $payload['name'], 'role' => $payload['role']];
+                }
+            }
+            // Revoke refresh token
+            $rt = $_COOKIE['refresh_token'] ?? '';
+            if ($rt) {
+                $hash = hash('sha256', $rt);
+                db()->prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = ? AND revoked_at IS NULL")->execute([$hash]);
+            }
+            clearRefreshTokenCookie();
+            activityLog('logout', 'user', $GLOBALS['jwt_user']['id'] ?? null);
             jsonResponse(['ok' => true]);
             break;
 
         case 'me':
             requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
-            jsonResponse(['user' => $_SESSION['user'], 'last_activity' => $_SESSION['last_activity'] ?? null]);
+            $stmt = db()->prepare("SELECT id, username, name, role, teacher_id, email, phone, is_active, last_login FROM users WHERE id = ?");
+            $stmt->execute([$GLOBALS['jwt_user']['id']]);
+            $meUser = $stmt->fetch();
+            if ($meUser) { $meUser['id'] = (int)$meUser['id']; unset($meUser['is_active']); }
+            jsonResponse(['user' => $meUser]);
+            break;
+
+        case 'refresh':
+            if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+            $rt = $_COOKIE['refresh_token'] ?? '';
+            if (!$rt) { http_response_code(401); echo json_encode(['error' => 'No refresh token']); break; }
+            $hash = hash('sha256', $rt);
+            $stmt = db()->prepare("SELECT rt.*, u.id AS uid, u.username, u.name, u.role, u.is_active FROM refresh_tokens rt JOIN users u ON rt.user_id = u.id WHERE rt.token_hash = ? AND rt.revoked_at IS NULL");
+            $stmt->execute([$hash]);
+            $row = $stmt->fetch();
+            if (!$row) {
+                clearRefreshTokenCookie();
+                http_response_code(401);
+                echo json_encode(['error' => 'Invalid refresh token']);
+                break;
+            }
+            if (strtotime($row['expires_at']) < time()) {
+                db()->prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ?")->execute([$row['id']]);
+                clearRefreshTokenCookie();
+                http_response_code(401);
+                echo json_encode(['error' => 'Refresh token expired']);
+                break;
+            }
+            if ($row['is_active'] === false || $row['is_active'] === 'f' || $row['is_active'] === 0) {
+                db()->prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ?")->execute([$row['id']]);
+                clearRefreshTokenCookie();
+                http_response_code(403);
+                echo json_encode(['error' => 'Account deactivated']);
+                break;
+            }
+            // Rotate: revoke old, issue new
+            db()->prepare("UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ?")->execute([$row['id']]);
+            $u = ['id' => (int)$row['uid'], 'username' => $row['username'], 'name' => $row['name'], 'role' => $row['role']];
+            $tokens = generateTokenPair($u);
+            setRefreshTokenCookie($tokens['refresh_token']);
+            jsonResponse([
+                'user' => $u,
+                'access_token' => $tokens['access_token'],
+                'expires_in' => $tokens['expires_in'],
+            ]);
             break;
 
         case 'students':
@@ -249,7 +302,7 @@ try {
                     $referredByType = $input['referred_by_type'] ?? null;
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
-                $createdBy = $_SESSION['user']['id'] ?? null;
+                $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
                 $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null, $input['phone'] ?? '', $input['email'] ?? '',
@@ -447,8 +500,22 @@ try {
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
                 $discountPct = isset($input['discount_percentage']) ? max(0, min(100, (float)$input['discount_percentage'])) : 0;
+                $enrollStudentId = (int)($input['student_id'] ?? 0);
+                $enrollGroupId = (int)($input['group_id'] ?? 0);
                 $stmt = db()->prepare("INSERT INTO enrollments (student_id, group_id, discount_percentage) VALUES (?,?,?) ON CONFLICT (student_id, group_id) DO UPDATE SET discount_percentage = EXCLUDED.discount_percentage");
-                $stmt->execute([(int)($input['student_id'] ?? 0), (int)($input['group_id'] ?? 0), $discountPct]);
+                $stmt->execute([$enrollStudentId, $enrollGroupId, $discountPct]);
+
+                // Notify teacher about new student
+                $teacherUserId = getTeacherUserId($enrollGroupId);
+                if ($teacherUserId) {
+                    $infoStmt = db()->prepare("SELECT s.first_name || ' ' || s.last_name AS sname, g.name AS gname FROM students s, groups g WHERE s.id = ? AND g.id = ?");
+                    $infoStmt->execute([$enrollStudentId, $enrollGroupId]);
+                    $info = $infoStmt->fetch();
+                    if ($info) {
+                        createNotification($teacherUserId, 'student_enrolled', "New student in {$info['gname']}", "{$info['sname']} enrolled in {$info['gname']}", "/students/{$enrollStudentId}");
+                    }
+                }
+
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'PUT') {
                 $discountPct = isset($input['discount_percentage']) ? max(0, min(100, (float)$input['discount_percentage'])) : null;
@@ -458,8 +525,22 @@ try {
                 }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                // Fetch enrollment details before deleting for notification
+                $enrollInfoStmt = db()->prepare("SELECT e.student_id, e.group_id, s.first_name || ' ' || s.last_name AS sname, g.name AS gname FROM enrollments e JOIN students s ON e.student_id = s.id JOIN groups g ON e.group_id = g.id WHERE e.id = ?");
+                $enrollInfoStmt->execute([$id]);
+                $enrollInfo = $enrollInfoStmt->fetch();
+
                 $stmt = db()->prepare("DELETE FROM enrollments WHERE id = ?");
                 $stmt->execute([$id]);
+
+                // Notify teacher about student removal
+                if ($enrollInfo) {
+                    $teacherUserId = getTeacherUserId((int)$enrollInfo['group_id']);
+                    if ($teacherUserId) {
+                        createNotification($teacherUserId, 'student_removed', "Student left {$enrollInfo['gname']}", "{$enrollInfo['sname']} was removed from {$enrollInfo['gname']}", "/students/{$enrollInfo['student_id']}");
+                    }
+                }
+
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -596,7 +677,7 @@ try {
                     $addStmt->execute([$studentId, $toGroupId, $discountPct]);
 
                     // Record transfer history
-                    $userId = $_SESSION['user_id'] ?? null;
+                    $userId = $GLOBALS['jwt_user']['id'] ?? null;
                     $histStmt = db()->prepare("
                         INSERT INTO group_transfers (student_id, from_group_id, to_group_id, reason, paid_month, discount_percentage, transferred_by)
                         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -626,6 +707,28 @@ try {
                     }
 
                     db()->commit();
+
+                    // Notify teachers about the transfer
+                    $transferStudentStmt = db()->prepare("SELECT first_name || ' ' || last_name AS sname FROM students WHERE id = ?");
+                    $transferStudentStmt->execute([$studentId]);
+                    $transferStudentName = $transferStudentStmt->fetchColumn();
+                    $fromGroupStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                    $fromGroupStmt->execute([$fromGroupId]);
+                    $fromGroupName = $fromGroupStmt->fetchColumn();
+                    $toGroupStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                    $toGroupStmt->execute([$toGroupId]);
+                    $toGroupName = $toGroupStmt->fetchColumn();
+
+                    // Notify old group teacher (student removed)
+                    $oldTeacherUserId = getTeacherUserId($fromGroupId);
+                    if ($oldTeacherUserId) {
+                        createNotification($oldTeacherUserId, 'student_removed', "Student left {$fromGroupName}", "{$transferStudentName} was transferred to {$toGroupName}", "/students/{$studentId}");
+                    }
+                    // Notify new group teacher (student enrolled)
+                    $newTeacherUserId = getTeacherUserId($toGroupId);
+                    if ($newTeacherUserId && $newTeacherUserId !== $oldTeacherUserId) {
+                        createNotification($newTeacherUserId, 'student_enrolled', "New student in {$toGroupName}", "{$transferStudentName} transferred from {$fromGroupName}", "/students/{$studentId}");
+                    }
 
                     $message = $paidMonth ? 'Student transferred. Current month payment credited to new group.' : 'Student transferred successfully.';
                     if ($sourceGroupDebt > 0) {
@@ -961,7 +1064,7 @@ try {
                         jsonError('Lead not found or already converted', 404);
                         break;
                     }
-                    $createdBy = $_SESSION['user']['id'] ?? null;
+                    $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
                     $stmt = db()->prepare("INSERT INTO students (first_name, last_name, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, lead_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
                     $stmt->execute([
                         $l['first_name'], $l['last_name'], $l['phone'], $l['email'], $l['parent_name'], $l['parent_phone'],
@@ -985,7 +1088,7 @@ try {
                     $referredByType = $input['referred_by_type'] ?? null;
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
-                $createdBy = $_SESSION['user']['id'] ?? null;
+                $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
                 $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget, created_by, referred_by_type, referred_by_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
@@ -1042,7 +1145,7 @@ try {
                 $stmt->execute([$id]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($id && $sub === 'interactions' && $method === 'POST') {
-                $userId = $_SESSION['user']['id'] ?? null;
+                $userId = $GLOBALS['jwt_user']['id'] ?? null;
                 $stmt = db()->prepare("INSERT INTO lead_interactions (lead_id, type, notes, scheduled_at, completed_at, created_by) VALUES (?,?,?,?,?,?)");
                 $stmt->execute([
                     $id, $input['type'] ?? 'note', $input['notes'] ?? '',
@@ -1666,7 +1769,7 @@ try {
                 $oldStmt = db()->prepare("SELECT username, name, role FROM users WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                db()->prepare("DELETE FROM users WHERE id = ? AND id != ?")->execute([$id, $_SESSION['user']['id']]);
+                db()->prepare("DELETE FROM users WHERE id = ? AND id != ?")->execute([$id, $GLOBALS['jwt_user']['id']]);
                 auditLog('delete', 'user', $id, $oldRow ?: null, null);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
@@ -1684,21 +1787,67 @@ try {
                 }
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
+                $schedGroupId = (int)($input['group_id'] ?? 0);
                 $stmt = db()->prepare("INSERT INTO group_schedules (group_id, day_of_week, start_time, end_time, classroom) VALUES (?,?,?,?,?)");
                 $stmt->execute([
-                    (int)($input['group_id'] ?? 0), (int)($input['day_of_week'] ?? 0),
+                    $schedGroupId, (int)($input['day_of_week'] ?? 0),
                     $input['start_time'] ?? '09:00', $input['end_time'] ?? '10:00', $input['classroom'] ?? ''
                 ]);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
+                $newSchedId = (int)db()->lastInsertId();
+
+                // Notify teacher about schedule change
+                $schedTeacher = getTeacherUserId($schedGroupId);
+                if ($schedTeacher) {
+                    $gNameStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                    $gNameStmt->execute([$schedGroupId]);
+                    $gName = $gNameStmt->fetchColumn();
+                    createNotification($schedTeacher, 'schedule_change', "Schedule updated for {$gName}", "A new schedule entry was added", "/schedules");
+                }
+
+                jsonResponse(['id' => $newSchedId]);
             } elseif ($id && $method === 'PUT') {
+                // Get group_id before update for notification
+                $schedInfoStmt = db()->prepare("SELECT group_id FROM group_schedules WHERE id = ?");
+                $schedInfoStmt->execute([$id]);
+                $schedGroupId = (int)$schedInfoStmt->fetchColumn();
+
                 $stmt = db()->prepare("UPDATE group_schedules SET day_of_week=?, start_time=?, end_time=?, classroom=? WHERE id=?");
                 $stmt->execute([
                     (int)($input['day_of_week'] ?? 0), $input['start_time'] ?? '09:00',
                     $input['end_time'] ?? '10:00', $input['classroom'] ?? '', $id
                 ]);
+
+                // Notify teacher about schedule change
+                if ($schedGroupId) {
+                    $schedTeacher = getTeacherUserId($schedGroupId);
+                    if ($schedTeacher) {
+                        $gNameStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                        $gNameStmt->execute([$schedGroupId]);
+                        $gName = $gNameStmt->fetchColumn();
+                        createNotification($schedTeacher, 'schedule_change', "Schedule updated for {$gName}", "Schedule entry was modified", "/schedules");
+                    }
+                }
+
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                // Get group_id before delete for notification
+                $schedInfoStmt = db()->prepare("SELECT group_id FROM group_schedules WHERE id = ?");
+                $schedInfoStmt->execute([$id]);
+                $schedGroupId = (int)$schedInfoStmt->fetchColumn();
+
                 db()->prepare("DELETE FROM group_schedules WHERE id = ?")->execute([$id]);
+
+                // Notify teacher about schedule change
+                if ($schedGroupId) {
+                    $schedTeacher = getTeacherUserId($schedGroupId);
+                    if ($schedTeacher) {
+                        $gNameStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                        $gNameStmt->execute([$schedGroupId]);
+                        $gName = $gNameStmt->fetchColumn();
+                        createNotification($schedTeacher, 'schedule_change', "Schedule updated for {$gName}", "A schedule entry was removed", "/schedules");
+                    }
+                }
+
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -1724,10 +1873,10 @@ try {
                     $stmt->execute([$key]);
                     if ($stmt->fetch()) {
                         $stmt = db()->prepare("UPDATE settings SET value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?");
-                        $stmt->execute([$value, $_SESSION['user']['id'], $key]);
+                        $stmt->execute([$value, $GLOBALS['jwt_user']['id'], $key]);
                     } else {
                         $stmt = db()->prepare("INSERT INTO settings (key, value, updated_by) VALUES (?, ?, ?)");
-                        $stmt->execute([$key, $value, $_SESSION['user']['id']]);
+                        $stmt->execute([$key, $value, $GLOBALS['jwt_user']['id']]);
                     }
                 }
                 jsonResponse(['ok' => true]);
@@ -1736,7 +1885,7 @@ try {
 
         case 'notifications':
             requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
-            $userId = $_SESSION['user']['id'];
+            $userId = $GLOBALS['jwt_user']['id'];
             if ($method === 'GET') {
                 $stmt = db()->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50");
                 $stmt->execute([$userId]);
@@ -1877,7 +2026,7 @@ try {
 
         case 'profile':
             requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
-            $userId = $_SESSION['user']['id'];
+            $userId = $GLOBALS['jwt_user']['id'];
             if ($method === 'PUT' && $sub === 'password') {
                 // Change password
                 $currentPassword = $input['current_password'] ?? '';
@@ -1913,10 +2062,6 @@ try {
                 }
                 $stmt = db()->prepare("UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?");
                 $stmt->execute([$name, $email ?: null, $phone ?: null, $userId]);
-                // Update session
-                $_SESSION['user']['name'] = $name;
-                $_SESSION['user']['email'] = $email;
-                $_SESSION['user']['phone'] = $phone;
                 activityLog('profile_update', 'user', $userId);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Method not allowed', 405); }
@@ -1960,7 +2105,7 @@ try {
                 $studentId = (int)($input['student_id'] ?? 0);
                 $content = trim($input['content'] ?? '');
                 if (!$studentId || !$content) { jsonError('student_id and content required'); break; }
-                $userId = $_SESSION['user']['id'] ?? null;
+                $userId = $GLOBALS['jwt_user']['id'] ?? null;
                 $stmt = db()->prepare("INSERT INTO student_notes (student_id, content, created_by) VALUES (?, ?, ?)");
                 $stmt->execute([$studentId, $content, $userId]);
                 $noteId = db()->lastInsertId();
@@ -1987,6 +2132,96 @@ try {
                 ");
                 jsonResponse($stmt->fetchAll());
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'cron-notifications':
+            requireRole(['admin']);
+            if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+
+            $created = 0;
+
+            // Get admin/manager user IDs for bulk notifications
+            $admMgrStmt = db()->query("SELECT id FROM users WHERE is_active = true AND (role LIKE '%admin%' OR role LIKE '%manager%')");
+            $adminManagerIds = array_column($admMgrStmt->fetchAll(), 'id');
+
+            // 3a. Payment reminders
+            if (isNotificationEnabled('payment_reminder')) {
+            $reminderDayStmt = db()->prepare("SELECT value FROM settings WHERE key = 'payment_reminder_day'");
+            $reminderDayStmt->execute();
+            $reminderDay = (int)($reminderDayStmt->fetchColumn() ?: 10);
+            $todayDay = (int)date('j');
+
+            if ($todayDay >= $reminderDay) {
+                $currentMonth = date('Y-m-01');
+                // Find active students enrolled in groups who haven't fully paid for current month
+                $unpaidStmt = db()->prepare("
+                    SELECT * FROM (
+                        SELECT s.id AS student_id,
+                               s.first_name || ' ' || s.last_name AS student_name,
+                               g.id AS group_id,
+                               g.name AS group_name,
+                               g.price * (1 - e.discount_percentage / 100.0) AS expected,
+                               COALESCE((
+                                   SELECT SUM(pm.amount)
+                                   FROM payment_months pm
+                                   JOIN payments p ON pm.payment_id = p.id
+                                   WHERE p.student_id = s.id AND p.group_id = g.id
+                                     AND pm.for_month = ? AND p.deleted_at IS NULL
+                               ), 0) AS paid
+                        FROM students s
+                        JOIN enrollments e ON s.id = e.student_id
+                        JOIN groups g ON e.group_id = g.id
+                        WHERE s.status = 'active' AND s.deleted_at IS NULL
+                          AND g.status = 'active'
+                    ) sub
+                    WHERE paid < expected
+                ");
+                $unpaidStmt->execute([$currentMonth]);
+                $unpaidStudents = $unpaidStmt->fetchAll();
+
+                foreach ($unpaidStudents as $us) {
+                    $link = "/students/{$us['student_id']}";
+                    foreach ($adminManagerIds as $admId) {
+                        // Deduplicate: check if notification already exists today for this combo
+                        $dupStmt = db()->prepare("SELECT 1 FROM notifications WHERE user_id = ? AND type = 'payment_reminder' AND link = ? AND created_at::date = CURRENT_DATE");
+                        $dupStmt->execute([$admId, $link]);
+                        if (!$dupStmt->fetch()) {
+                            createNotification((int)$admId, 'payment_reminder', "Payment due: {$us['student_name']}", "{$us['student_name']} hasn't paid for {$us['group_name']} this month", $link);
+                            $created++;
+                        }
+                    }
+                }
+            }
+            } // end if payment reminders enabled
+
+            // 3b. Lead follow-up overdue
+            if (isNotificationEnabled('lead_followup_overdue')) {
+            $overdueStmt = db()->query("
+                SELECT id, first_name, last_name, follow_up_date
+                FROM leads
+                WHERE follow_up_date <= CURRENT_DATE
+                  AND status NOT IN ('enrolled', 'lost')
+                  AND deleted_at IS NULL
+            ");
+            $overdueLeads = $overdueStmt->fetchAll();
+
+            foreach ($overdueLeads as $lead) {
+                $link = "/leads";
+                $leadName = $lead['first_name'] . ' ' . $lead['last_name'];
+                foreach ($adminManagerIds as $admId) {
+                    // Deduplicate
+                    $dupLink = "/leads";
+                    $dupStmt = db()->prepare("SELECT 1 FROM notifications WHERE user_id = ? AND type = 'lead_followup_overdue' AND message LIKE ? AND created_at::date = CURRENT_DATE");
+                    $dupStmt->execute([$admId, "%{$leadName}%"]);
+                    if (!$dupStmt->fetch()) {
+                        createNotification((int)$admId, 'lead_followup_overdue', "Follow-up overdue: {$leadName}", "Follow-up was due on {$lead['follow_up_date']}", $dupLink);
+                        $created++;
+                    }
+                }
+            }
+            } // end if lead follow-up enabled
+
+            jsonResponse(['ok' => true, 'notifications_created' => $created]);
             break;
 
         default:

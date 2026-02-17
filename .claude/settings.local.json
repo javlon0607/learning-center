@@ -24,7 +24,11 @@
       "Bash(docker-compose up:*)",
       "Bash(docker-compose:*)",
       "Bash(docker exec:*)",
-      "Bash(docker compose exec:*)"
+      "Bash(docker compose exec:*)",
+      "Bash(openssl rand:*)",
+      "Bash(docker compose:*)",
+      "Bash(NEW_TOKEN=\"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsIm5hbWUiOiJBZG1pbmlzdHJhdG9yIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzcxMzEzNTQ4LCJleHAiOjE3NzEzMTUzNDh9.rhxtUvQ7C65525-tkq8BGFF1vBEje7FmLz_Vv3S0iKU\")",
+      "Bash(grep:*)"
     ]
   }
 }
