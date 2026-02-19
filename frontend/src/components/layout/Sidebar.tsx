@@ -14,6 +14,7 @@ import {
   Settings,
   UserPlus,
   ChevronRight,
+  PhoneCall,
 } from 'lucide-react'
 
 const navigation = [
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Attendance', href: '/attendance', icon: Calendar, roles: ['admin', 'manager', 'teacher', 'accountant'] },
   { name: 'Payments', href: '/payments', icon: CreditCard, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Expenses', href: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
+  { name: 'Collections', href: '/collections', icon: PhoneCall, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'manager', 'accountant'] },
   { name: 'Logs', href: '/logs', icon: ScrollText, roles: ['admin'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },

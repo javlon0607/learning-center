@@ -76,6 +76,14 @@ $inlineMigrations = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )",
     "CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead_id ON lead_interactions(lead_id)",
+    "CREATE TABLE IF NOT EXISTS collection_calls (
+        id SERIAL PRIMARY KEY,
+        student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        notes TEXT NOT NULL,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_collection_calls_student_id ON collection_calls(student_id)",
 ];
 
 foreach ($inlineMigrations as $sql) {

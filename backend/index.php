@@ -179,7 +179,7 @@ try {
                         COALESCE(SUM(
                             (SELECT COALESCE(SUM(pm.amount), 0)
                              FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
-                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ?)
+                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
                         ), 0) AS paid
                     FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?
                 ");
@@ -264,7 +264,7 @@ try {
                             (SELECT COALESCE(SUM(pm.amount), 0)
                              FROM payment_months pm
                              JOIN payments p ON pm.payment_id = p.id
-                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ?)
+                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
                         ), 0) AS paid
                     FROM enrollments e
                     JOIN groups g ON e.group_id = g.id
@@ -644,7 +644,7 @@ try {
                     SELECT COALESCE(SUM(pm.amount), 0) AS paid
                     FROM payment_months pm
                     JOIN payments p ON pm.payment_id = p.id
-                    WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                    WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
                 ");
                 $paidStmt->execute([$studentId, $fromGroupId, $currentMonth]);
                 $paidAmount = (float)$paidStmt->fetchColumn();
@@ -843,7 +843,7 @@ try {
                                 SELECT COALESCE(SUM(pm.amount), 0) AS paid
                                 FROM payment_months pm
                                 JOIN payments p ON pm.payment_id = p.id
-                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
                             ");
                             $paidStmt->execute([$studentId, $groupId, $monthStart]);
                             $paidForMonth = (float)$paidStmt->fetchColumn();
@@ -899,7 +899,7 @@ try {
                                 SELECT COALESCE(SUM(pm.amount), 0) AS paid
                                 FROM payment_months pm
                                 JOIN payments p ON pm.payment_id = p.id
-                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
                             ");
                             $paidStmt->execute([$studentId, $groupId, $monthStart]);
                             $paidForMonth = (float)$paidStmt->fetchColumn();
@@ -924,7 +924,7 @@ try {
                 activityLog('create', 'payment', $pid);
                 jsonResponse(['id' => (int)$pid, 'invoice_no' => $invNo]);
             } elseif ($id && $method === 'PUT') {
-                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ?");
+                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 $oldRow = $old->fetch();
                 if (!$oldRow) { jsonError('Payment not found', 404); break; }
@@ -951,7 +951,7 @@ try {
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
-                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ?");
+                $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 $oldRow = $old->fetch();
                 if (!$oldRow) { jsonError('Payment not found', 404); break; }
@@ -971,10 +971,10 @@ try {
                     $stmt = db()->prepare("SELECT d.* FROM discounts d WHERE d.payment_id = ? ORDER BY d.created_at DESC");
                     $stmt->execute([$paymentId]);
                 } elseif ($studentId) {
-                    $stmt = db()->prepare("SELECT d.*, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id WHERE d.student_id = ? ORDER BY d.created_at DESC");
+                    $stmt = db()->prepare("SELECT d.*, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id WHERE d.student_id = ? AND p.deleted_at IS NULL ORDER BY d.created_at DESC");
                     $stmt->execute([$studentId]);
                 } else {
-                    $stmt = db()->query("SELECT d.*, p.student_id, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id ORDER BY d.created_at DESC LIMIT 500");
+                    $stmt = db()->query("SELECT d.*, p.student_id, p.amount AS payment_amount FROM discounts d JOIN payments p ON d.payment_id = p.id WHERE p.deleted_at IS NULL ORDER BY d.created_at DESC LIMIT 500");
                 }
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
@@ -1044,7 +1044,7 @@ try {
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
-                $old = db()->prepare("SELECT id FROM expenses WHERE id = ?");
+                $old = db()->prepare("SELECT id FROM expenses WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 if (!$old->fetch()) { jsonError('Expense not found', 404); break; }
                 db()->prepare("UPDATE expenses SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
@@ -1316,7 +1316,7 @@ try {
                             FROM payment_months pm
                             JOIN payments p ON pm.payment_id = p.id
                             JOIN groups g ON p.group_id = g.id
-                            WHERE g.teacher_id = ? AND pm.for_month = ?
+                            WHERE g.teacher_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
                         ");
                         $paidStmt->execute([$tid, $monthStart]);
                         $collectedAmount = (float)$paidStmt->fetchColumn();
@@ -1341,7 +1341,7 @@ try {
         case 'salary-slips':
             requireRole(['admin', 'accountant']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT sl.*, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name FROM salary_slips sl JOIN teachers t ON sl.teacher_id = t.id ORDER BY sl.period_end DESC LIMIT 200");
+                $stmt = db()->query("SELECT sl.*, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name FROM salary_slips sl JOIN teachers t ON sl.teacher_id = t.id WHERE sl.deleted_at IS NULL ORDER BY sl.period_end DESC LIMIT 200");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
                 $tid = (int)($input['teacher_id'] ?? 0);
@@ -1373,7 +1373,7 @@ try {
                                     FROM payment_months pm
                                     JOIN payments p ON pm.payment_id = p.id
                                     JOIN groups g ON p.group_id = g.id
-                                    WHERE g.teacher_id = ? AND pm.for_month = ?
+                                    WHERE g.teacher_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
                                 ");
                                 $paidStmt->execute([$tid, $monthStart]);
                                 $collected = (float)$paidStmt->fetchColumn();
@@ -1407,7 +1407,7 @@ try {
                 auditLog('create', 'salary_slip', (int)$sid, null, $newPayload);
                 jsonResponse(['id' => (int)$sid]);
             } elseif ($id && $method === 'PUT') {
-                $old = db()->prepare("SELECT id, status, paid_at FROM salary_slips WHERE id = ?");
+                $old = db()->prepare("SELECT id, status, paid_at FROM salary_slips WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 $oldRow = $old->fetch();
                 if (!$oldRow) { jsonError('Salary slip not found', 404); break; }
@@ -1421,7 +1421,7 @@ try {
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
-                $old = db()->prepare("SELECT id FROM salary_slips WHERE id = ?");
+                $old = db()->prepare("SELECT id FROM salary_slips WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 if (!$old->fetch()) { jsonError('Salary slip not found', 404); break; }
                 db()->prepare("UPDATE salary_slips SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
@@ -2030,7 +2030,7 @@ try {
                 SELECT COALESCE(SUM(pm.amount), 0) AS paid
                 FROM payment_months pm
                 JOIN payments p ON pm.payment_id = p.id
-                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ?
+                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
             ");
             $paidStmt->execute([$studentId, $groupId, $monthStart]);
             $paidAmount = (float)$paidStmt->fetchColumn();
@@ -2138,6 +2138,155 @@ try {
                 $stmt = db()->prepare("DELETE FROM student_notes WHERE id = ?");
                 $stmt->execute([$id]);
                 jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'group-debtors':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $groupId = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+            $month = $_GET['month'] ?? date('Y-m');
+            if (!$groupId) { jsonError('group_id required'); break; }
+            $monthStart = $month . '-01';
+
+            $stmt = db()->prepare("
+                SELECT
+                    s.id,
+                    s.first_name,
+                    s.last_name,
+                    s.phone,
+                    g.price AS group_price,
+                    e.discount_percentage,
+                    g.price * (1 - COALESCE(e.discount_percentage, 0) / 100) AS expected,
+                    COALESCE(
+                        (SELECT SUM(pm.amount)
+                         FROM payment_months pm
+                         JOIN payments p ON pm.payment_id = p.id
+                         WHERE p.student_id = s.id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL),
+                        0
+                    ) AS paid
+                FROM enrollments e
+                JOIN students s ON e.student_id = s.id
+                JOIN groups g ON e.group_id = g.id
+                WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
+                ORDER BY s.first_name, s.last_name
+            ");
+            $stmt->execute([$monthStart, $groupId]);
+            $rows = $stmt->fetchAll();
+            $result = [];
+            foreach ($rows as $row) {
+                $expected = round((float)$row['expected'], 2);
+                $paid = round((float)$row['paid'], 2);
+                $debt = round(max(0, $expected - $paid), 2);
+                $result[] = [
+                    'id' => (int)$row['id'],
+                    'first_name' => $row['first_name'],
+                    'last_name' => $row['last_name'],
+                    'phone' => $row['phone'],
+                    'expected' => $expected,
+                    'paid' => $paid,
+                    'debt' => $debt,
+                ];
+            }
+            jsonResponse($result);
+            break;
+
+        case 'collections':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method === 'GET') {
+                $currentMonth = date('Y-m-01');
+                $stmt = db()->prepare("
+                    SELECT
+                        s.id,
+                        s.first_name,
+                        s.last_name,
+                        s.phone,
+                        s.parent_phone,
+                        COALESCE(
+                            (SELECT json_agg(json_build_object('group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage))
+                             FROM enrollments e
+                             JOIN groups g ON e.group_id = g.id
+                             WHERE e.student_id = s.id),
+                            '[]'
+                        ) AS enrollments_json,
+                        debt.expected,
+                        debt.paid,
+                        debt.expected - debt.paid AS debt,
+                        cc_agg.last_call_date,
+                        cc_agg.last_call_notes,
+                        cc_agg.call_count
+                    FROM students s
+                    INNER JOIN (
+                        SELECT
+                            e.student_id,
+                            SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
+                            COALESCE(SUM(
+                                (SELECT COALESCE(SUM(pm.amount), 0)
+                                 FROM payment_months pm
+                                 JOIN payments p ON pm.payment_id = p.id
+                                 WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
+                            ), 0) AS paid
+                        FROM enrollments e
+                        JOIN groups g ON e.group_id = g.id
+                        GROUP BY e.student_id
+                        HAVING SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) -
+                               COALESCE(SUM(
+                                   (SELECT COALESCE(SUM(pm.amount), 0)
+                                    FROM payment_months pm
+                                    JOIN payments p ON pm.payment_id = p.id
+                                    WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
+                               ), 0) > 0
+                    ) debt ON debt.student_id = s.id
+                    LEFT JOIN (
+                        SELECT
+                            cc.student_id,
+                            MAX(cc.created_at) AS last_call_date,
+                            (SELECT cc2.notes FROM collection_calls cc2 WHERE cc2.student_id = cc.student_id ORDER BY cc2.created_at DESC LIMIT 1) AS last_call_notes,
+                            COUNT(*) AS call_count
+                        FROM collection_calls cc
+                        GROUP BY cc.student_id
+                    ) cc_agg ON cc_agg.student_id = s.id
+                    WHERE s.deleted_at IS NULL AND s.status = 'active'
+                    ORDER BY debt.expected - debt.paid DESC
+                ");
+                $stmt->execute([$currentMonth, $currentMonth]);
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$row) {
+                    $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
+                    unset($row['enrollments_json']);
+                    $row['expected'] = round((float)$row['expected'], 2);
+                    $row['paid'] = round((float)$row['paid'], 2);
+                    $row['debt'] = round((float)$row['debt'], 2);
+                    $row['call_count'] = (int)($row['call_count'] ?? 0);
+                }
+                jsonResponse($rows);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'collection-calls':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method === 'GET') {
+                $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+                if (!$studentId) { jsonError('student_id required'); break; }
+                $stmt = db()->prepare("
+                    SELECT cc.id, cc.student_id, cc.notes, cc.created_by, cc.created_at,
+                           u.name AS created_by_name
+                    FROM collection_calls cc
+                    LEFT JOIN users u ON cc.created_by = u.id
+                    WHERE cc.student_id = ?
+                    ORDER BY cc.created_at DESC
+                ");
+                $stmt->execute([$studentId]);
+                jsonResponse($stmt->fetchAll());
+            } elseif ($method === 'POST') {
+                $studentId = (int)($input['student_id'] ?? 0);
+                $notes = trim($input['notes'] ?? '');
+                if (!$studentId || !$notes) { jsonError('student_id and notes required'); break; }
+                $userId = $GLOBALS['jwt_user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO collection_calls (student_id, notes, created_by) VALUES (?, ?, ?)");
+                $stmt->execute([$studentId, $notes, $userId]);
+                $callId = db()->lastInsertId();
+                jsonResponse(['id' => (int)$callId]);
             } else { jsonError('Not found', 404); }
             break;
 

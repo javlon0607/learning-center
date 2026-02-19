@@ -18,6 +18,7 @@ import { Reports } from '@/pages/Reports'
 import { Logs } from '@/pages/Logs'
 import { Settings } from '@/pages/Settings'
 import { Users } from '@/pages/Users'
+import { Collections } from '@/pages/Collections'
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
           <Route path="attendance" element={<Attendance />} />
           <Route path="payments" element={<Payments />} />
           <Route path="expenses" element={<Expenses />} />
+          <Route path="collections" element={<Collections />} />
           <Route path="reports" element={<Reports />} />
           <Route path="logs" element={<Logs />} />
           <Route path="settings" element={<Settings />} />

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { reportsApi } from '@/lib/api'
 import { DateInput } from '@/components/ui/date-input'
@@ -25,9 +25,14 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from 'recharts'
-import { TrendingUp, TrendingDown, Calendar, Users, Building2 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Loader2, TrendingUp, TrendingDown, Calendar, Users, Building2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 const COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
@@ -40,6 +45,13 @@ export function Reports() {
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
   const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7))
+  const [debtorGroup, setDebtorGroup] = useState<{ id: number; name: string } | null>(null)
+
+  const { data: groupDebtors, isLoading: debtorsLoading } = useQuery({
+    queryKey: ['group-debtors', debtorGroup?.id, reportMonth],
+    queryFn: () => reportsApi.getGroupDebtors(debtorGroup!.id, reportMonth),
+    enabled: !!debtorGroup,
+  })
 
   const { data: payments = [], isLoading: paymentsLoading } = useQuery({
     queryKey: ['reports', 'payments', dateFrom, dateTo],
@@ -65,24 +77,6 @@ export function Reports() {
     queryFn: () => reportsApi.getMonthly(reportMonth),
     enabled: !!reportMonth,
   })
-
-  // Data for monthly report charts
-  const monthlyChartData = useMemo(() => {
-    if (!monthlyReport) return { barData: [], pieData: [] }
-
-    const barData = monthlyReport.groups.map(g => ({
-      name: g.group_name.length > 15 ? g.group_name.slice(0, 15) + '...' : g.group_name,
-      expected: g.expected_amount,
-      collected: g.collected_amount,
-    }))
-
-    const pieData = [
-      { name: 'Teacher Portions', value: monthlyReport.totals.teacher_portion },
-      { name: 'Center Portion', value: monthlyReport.totals.center_portion },
-    ].filter(d => d.value > 0)
-
-    return { barData, pieData }
-  }, [monthlyReport])
 
   const totalPayments = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
@@ -349,72 +343,6 @@ export function Reports() {
                 </Card>
               </div>
 
-              {/* Charts */}
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Collection by Group</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {monthlyChartData.barData.length > 0 ? (
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={monthlyChartData.barData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} fontSize={12} />
-                            <YAxis />
-                            <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                            <Legend />
-                            <Bar dataKey="expected" fill="#94a3b8" name="Expected" />
-                            <Bar dataKey="collected" fill="#22c55e" name="Collected" />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                        No data
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Revenue Distribution</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {monthlyChartData.pieData.length > 0 ? (
-                      <div className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={monthlyChartData.pieData}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={false}
-                              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                              outerRadius={100}
-                              fill="#8884d8"
-                              dataKey="value"
-                            >
-                              {monthlyChartData.pieData.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={index === 0 ? '#3b82f6' : '#8b5cf6'} />
-                              ))}
-                            </Pie>
-                            <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                            <Legend />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                        No revenue data
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
               {/* Detailed Table */}
               <Card>
                 <CardHeader>
@@ -448,7 +376,12 @@ export function Reports() {
                           <>
                             {monthlyReport.groups.map((group) => (
                               <TableRow key={group.group_id}>
-                                <TableCell className="font-medium">{group.group_name}</TableCell>
+                                <TableCell
+                                  className="font-medium text-blue-600 hover:underline cursor-pointer"
+                                  onClick={() => setDebtorGroup({ id: group.group_id, name: group.group_name })}
+                                >
+                                  {group.group_name}
+                                </TableCell>
                                 <TableCell>{group.teacher_name}</TableCell>
                                 <TableCell className="text-center">{group.student_count}</TableCell>
                                 <TableCell className="text-center">{group.paid_student_count}</TableCell>
@@ -591,6 +524,51 @@ export function Reports() {
         </TabsContent>
 
       </Tabs>
+
+      {/* Group Debtors Dialog */}
+      <Dialog open={!!debtorGroup} onOpenChange={(open) => !open && setDebtorGroup(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{debtorGroup?.name} — Student Debts</DialogTitle>
+          </DialogHeader>
+          {debtorsLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !groupDebtors || groupDebtors.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No students found</p>
+          ) : (
+            <div className="overflow-x-auto max-h-[60vh]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">Student</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Expected</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Paid</TableHead>
+                    <TableHead className="text-right min-w-[120px]">Debt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupDebtors.map((s) => (
+                    <TableRow key={s.id}>
+                      <TableCell className="font-medium whitespace-nowrap">{s.first_name} {s.last_name}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">{formatCurrency(s.expected)}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap text-green-600">{formatCurrency(s.paid)}</TableCell>
+                      <TableCell className="text-right whitespace-nowrap">
+                        {s.debt > 0 ? (
+                          <span className="font-semibold text-red-600">{formatCurrency(s.debt)}</span>
+                        ) : (
+                          <span className="text-green-600">{formatCurrency(0)}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

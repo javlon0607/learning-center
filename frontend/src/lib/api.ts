@@ -377,6 +377,19 @@ export const reportsApi = {
 
   getMonthly: (month: string) =>
     api.get<MonthlyReport>('/reports/monthly', { month }),
+
+  getGroupDebtors: (groupId: number, month: string) =>
+    api.get<GroupDebtor[]>('/group-debtors', { group_id: String(groupId), month }),
+}
+
+export interface GroupDebtor {
+  id: number
+  first_name: string
+  last_name: string
+  phone?: string
+  expected: number
+  paid: number
+  debt: number
 }
 
 // Users API (admin only)
@@ -417,6 +430,39 @@ export const studentAttendanceApi = {
       student_id: String(studentId),
       ...(limit ? { limit: String(limit) } : {}),
     }),
+}
+
+// Collections API
+export interface CollectionDebtor {
+  id: number
+  first_name: string
+  last_name: string
+  phone?: string
+  parent_phone?: string
+  enrollments: { group_id: number; group_name: string; price: number; discount: number }[]
+  expected: number
+  paid: number
+  debt: number
+  last_call_date?: string
+  last_call_notes?: string
+  call_count: number
+}
+
+export interface CollectionCall {
+  id: number
+  student_id: number
+  notes: string
+  created_by: number | null
+  created_by_name: string | null
+  created_at: string
+}
+
+export const collectionsApi = {
+  getDebtors: () => api.get<CollectionDebtor[]>('/collections'),
+  getCallHistory: (studentId: number) =>
+    api.get<CollectionCall[]>('/collection-calls', { student_id: String(studentId) }),
+  addCall: (studentId: number, notes: string) =>
+    api.post<{ id: number }>('/collection-calls', { student_id: studentId, notes }),
 }
 
 // Student Notes API
