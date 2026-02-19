@@ -63,4 +63,27 @@ foreach ($schemaFiles as $file) {
     }
 }
 
+// Inline migrations for tables not covered by schema files
+$inlineMigrations = [
+    "CREATE TABLE IF NOT EXISTS lead_interactions (
+        id SERIAL PRIMARY KEY,
+        lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL DEFAULT 'note',
+        notes TEXT DEFAULT '',
+        scheduled_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        created_by INTEGER REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )",
+    "CREATE INDEX IF NOT EXISTS idx_lead_interactions_lead_id ON lead_interactions(lead_id)",
+];
+
+foreach ($inlineMigrations as $sql) {
+    try {
+        $pdo->exec($sql);
+    } catch (PDOException $e) {
+        // Ignore if already exists
+    }
+}
+
 echo "[migrate] Done.\n";

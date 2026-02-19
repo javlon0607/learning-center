@@ -134,8 +134,8 @@ export function TeacherDetail() {
         <CardHeader>
           <CardTitle>Assigned Groups</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Group Name</TableHead>
@@ -183,8 +183,8 @@ export function TeacherDetail() {
         <CardHeader>
           <CardTitle>Recent Salary Slips</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Period</TableHead>
@@ -211,7 +211,7 @@ export function TeacherDetail() {
                     <TableCell>{formatCurrency(slip.base_amount)}</TableCell>
                     <TableCell className="text-green-600">+{formatCurrency(slip.bonus)}</TableCell>
                     <TableCell className="text-red-600">-{formatCurrency(slip.deduction)}</TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(slip.total_amount)}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(slip.total)}</TableCell>
                     <TableCell>
                       <Badge variant={slip.status === 'paid' ? 'success' : 'warning'}>
                         {slip.status}

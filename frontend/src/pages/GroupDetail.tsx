@@ -236,7 +236,7 @@ export function GroupDetail() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <CardTitle>Enrolled Students</CardTitle>
           <Button
             size="sm"
@@ -247,8 +247,8 @@ export function GroupDetail() {
             Add Student
           </Button>
         </CardHeader>
-        <CardContent className="p-0">
-          <Table>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Student Name</TableHead>

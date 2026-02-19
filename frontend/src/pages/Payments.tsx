@@ -317,7 +317,7 @@ export function Payments() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Payments</h1>
           <p className="text-muted-foreground">Track student payments</p>
@@ -339,7 +339,7 @@ export function Payments() {
           />
         </div>
         <Select value={filterPaymentMonth || '_all'} onValueChange={(v) => setFilterPaymentMonth(v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Payment month" />
           </SelectTrigger>
           <SelectContent>
@@ -350,7 +350,7 @@ export function Payments() {
           </SelectContent>
         </Select>
         <Select value={filterCourseMonth || '_all'} onValueChange={(v) => setFilterCourseMonth(v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Course month" />
           </SelectTrigger>
           <SelectContent>
@@ -361,7 +361,7 @@ export function Payments() {
           </SelectContent>
         </Select>
         <Select value={filterGroupId || '_all'} onValueChange={(v) => setFilterGroupId(v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Group" />
           </SelectTrigger>
           <SelectContent>
@@ -372,7 +372,7 @@ export function Payments() {
           </SelectContent>
         </Select>
         <Select value={filterMethod || '_all'} onValueChange={(v) => setFilterMethod(v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-full sm:w-[140px]">
             <SelectValue placeholder="Method" />
           </SelectTrigger>
           <SelectContent>
@@ -404,8 +404,8 @@ export function Payments() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Date & time</TableHead>

@@ -804,7 +804,7 @@ export function Leads() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Lead Management</h1>
           <p className="text-muted-foreground">Track and convert prospective students</p>
@@ -829,7 +829,7 @@ export function Leads() {
           />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -840,7 +840,7 @@ export function Leads() {
           </SelectContent>
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-full sm:w-[130px]">
             <SelectValue placeholder="All Priorities" />
           </SelectTrigger>
           <SelectContent>
@@ -851,7 +851,7 @@ export function Leads() {
           </SelectContent>
         </Select>
         <Select value={filterSource} onValueChange={setFilterSource}>
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger className="w-full sm:w-[140px]">
             <SelectValue placeholder="All Sources" />
           </SelectTrigger>
           <SelectContent>
@@ -925,7 +925,7 @@ export function Leads() {
 
       {/* Lead Form Dialog — key forces remount so defaultValue fields reset */}
       <Dialog open={formOpen} onOpenChange={(open) => !open && closeForm()}>
-        <DialogContent key={selectedLead ? `edit-${selectedLead.id}` : 'new'} className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent key={selectedLead ? `edit-${selectedLead.id}` : 'new'} className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedLead ? 'Edit Lead' : 'Add New Lead'}</DialogTitle>
           </DialogHeader>

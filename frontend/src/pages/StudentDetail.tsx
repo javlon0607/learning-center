@@ -581,8 +581,8 @@ export function StudentDetail() {
         {/* Enrollments Tab */}
         <TabsContent value="enrollments" className="mt-4">
           <Card>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Group</TableHead>
@@ -653,8 +653,8 @@ export function StudentDetail() {
         {/* Payments Tab */}
         <TabsContent value="payments" className="mt-4 space-y-4">
           <Card>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead>Date</TableHead>
@@ -730,7 +730,7 @@ export function StudentDetail() {
         {/* Attendance Tab */}
         <TabsContent value="attendance" className="mt-4 space-y-4">
           {attendanceRecords.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="bg-card border rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-green-600">{attendanceStats.present}</p>
                 <p className="text-xs text-muted-foreground">Present</p>

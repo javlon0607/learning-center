@@ -332,7 +332,7 @@ export const attendanceApi = {
 export const salarySlipsApi = {
   getAll: () => api.get<SalarySlip[]>('/salary-slips'),
 
-  create: (data: Omit<SalarySlip, 'id' | 'created_at' | 'teacher_name' | 'total_amount'>) =>
+  create: (data: Omit<SalarySlip, 'id' | 'created_at' | 'teacher_name' | 'total'>) =>
     api.post<{ id: number }>('/salary-slips', data),
 
   update: (id: number, data: { status: string; paid_at?: string }) =>
@@ -762,7 +762,7 @@ export interface SalarySlip {
   base_amount: number
   bonus: number
   deduction: number
-  total_amount: number
+  total: number
   status: 'pending' | 'paid'
   paid_at?: string
   notes?: string

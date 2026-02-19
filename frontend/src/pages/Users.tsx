@@ -161,13 +161,15 @@ export function Users() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-          <p className="text-muted-foreground">Manage system users and permissions</p>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-4 flex-1">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
+            <p className="text-muted-foreground">Manage system users and permissions</p>
+          </div>
         </div>
         <Button onClick={() => { setSelectedUser(null); setFormOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
@@ -192,8 +194,8 @@ export function Users() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Username</TableHead>

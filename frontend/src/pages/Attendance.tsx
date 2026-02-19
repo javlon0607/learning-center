@@ -93,11 +93,11 @@ export function Attendance() {
         <p className="text-muted-foreground">Mark daily attendance for groups</p>
       </div>
 
-      <div className="flex items-end gap-4">
-        <div className="space-y-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+        <div className="space-y-2 w-full sm:w-auto">
           <Label>Group</Label>
           <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-            <SelectTrigger className="w-[250px]">
+            <SelectTrigger className="w-full sm:w-[250px]">
               <SelectValue placeholder="Select a group" />
             </SelectTrigger>
             <SelectContent>
@@ -135,11 +135,11 @@ export function Attendance() {
         </Card>
       ) : (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <CardTitle>
               Attendance for {groups.find(g => g.id === Number(selectedGroup))?.name}
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-muted-foreground">Mark all as:</span>
               {statusOptions.map((option) => (
                 <Button
@@ -160,10 +160,10 @@ export function Attendance() {
               {attendance.rows.map((row) => (
                 <div
                   key={row.student_id}
-                  className="flex items-center justify-between rounded-lg border p-4"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border p-4 gap-3"
                 >
                   <div className="font-medium">{row.student_name}</div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {statusOptions.map((option) => {
                       const isSelected = (attendanceData[row.student_id] || row.attendance_status || 'present') === option.value
                       return (
@@ -207,7 +207,7 @@ export function Attendance() {
           <CardTitle className="text-lg">Legend</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             {statusOptions.map((option) => (
               <div key={option.value} className="flex items-center gap-2">
                 <div className={cn("h-4 w-4 rounded", option.color)} />

@@ -393,7 +393,7 @@ export function Students() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -405,7 +405,7 @@ export function Students() {
           </SelectContent>
         </Select>
         <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="All groups" />
           </SelectTrigger>
           <SelectContent>
@@ -416,7 +416,7 @@ export function Students() {
           </SelectContent>
         </Select>
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="All sources" />
           </SelectTrigger>
           <SelectContent>
@@ -464,8 +464,8 @@ export function Students() {
       ) : (
         <>
           {/* Table */}
-          <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft">
-            <Table>
+          <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
+            <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <SortableHeader field="name" className="font-semibold">Student</SortableHeader>

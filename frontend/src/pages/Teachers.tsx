@@ -162,7 +162,7 @@ export function Teachers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Teachers</h1>
           <p className="text-muted-foreground">Manage your teaching staff</p>
@@ -188,8 +188,8 @@ export function Teachers() {
       {isLoading ? (
         <TeachersTableSkeleton />
       ) : (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
@@ -285,7 +285,7 @@ export function Teachers() {
         setFormOpen(open)
         if (!open) setSelectedTeacher(null)
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedTeacher ? 'Edit Teacher' : 'Add New Teacher'}</DialogTitle>
           </DialogHeader>

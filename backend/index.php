@@ -325,11 +325,11 @@ try {
                 $oldRow = $oldStmt->fetch();
                 $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, email=?, parent_name=?, parent_phone=?, status=?, notes=?, source=? WHERE id=?");
                 $newValues = [
-                    'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
-                    'dob' => $input['dob'] ?? null, 'phone' => $input['phone'] ?? '', 'email' => $input['email'] ?? '',
-                    'parent_name' => $input['parent_name'] ?? '', 'parent_phone' => $input['parent_phone'] ?? '',
-                    'status' => $input['status'] ?? 'active', 'notes' => $input['notes'] ?? '',
-                    'source' => $input['source'] ?? ($oldRow['source'] ?? 'walk_in')
+                    'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
+                    'dob' => array_key_exists('dob', $input) ? $input['dob'] : $oldRow['dob'], 'phone' => $input['phone'] ?? $oldRow['phone'], 'email' => $input['email'] ?? $oldRow['email'],
+                    'parent_name' => $input['parent_name'] ?? $oldRow['parent_name'], 'parent_phone' => $input['parent_phone'] ?? $oldRow['parent_phone'],
+                    'status' => $input['status'] ?? $oldRow['status'], 'notes' => $input['notes'] ?? $oldRow['notes'],
+                    'source' => $input['source'] ?? $oldRow['source']
                 ];
                 $stmt->execute(array_merge(array_values($newValues), [$id]));
                 auditLog('update', 'student', $id, $oldRow ?: null, $newValues);
@@ -351,7 +351,13 @@ try {
 
         case 'teachers':
             requireRole(['admin', 'manager', 'accountant']);
-            if ($method === 'GET') {
+            if ($id && $method === 'GET') {
+                $stmt = db()->prepare("SELECT * FROM teachers WHERE id = ?");
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if (!$row) { jsonError('Teacher not found', 404); break; }
+                jsonResponse($row);
+            } elseif ($method === 'GET') {
                 $stmt = db()->query("SELECT * FROM teachers ORDER BY created_at DESC");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
@@ -392,10 +398,10 @@ try {
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
                 $newValues = [
-                    'first_name' => $input['first_name'] ?? '', 'last_name' => $input['last_name'] ?? '',
-                    'phone' => $input['phone'] ?? '', 'email' => $input['email'] ?? '',
-                    'subjects' => $input['subjects'] ?? '', 'salary_type' => $input['salary_type'] ?? 'fixed',
-                    'salary_amount' => $input['salary_amount'] ?? 0, 'status' => $input['status'] ?? 'active'
+                    'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
+                    'phone' => $input['phone'] ?? $oldRow['phone'], 'email' => $input['email'] ?? $oldRow['email'],
+                    'subjects' => $input['subjects'] ?? $oldRow['subjects'], 'salary_type' => $input['salary_type'] ?? $oldRow['salary_type'],
+                    'salary_amount' => $input['salary_amount'] ?? $oldRow['salary_amount'], 'status' => $input['status'] ?? $oldRow['status']
                 ];
                 $stmt = db()->prepare("UPDATE teachers SET first_name=?, last_name=?, phone=?, email=?, subjects=?, salary_type=?, salary_amount=?, status=? WHERE id=?");
                 $stmt->execute(array_merge(array_values($newValues), [$id]));
@@ -413,10 +419,28 @@ try {
 
         case 'groups':
             requireRole(['admin', 'manager', 'teacher', 'accountant']);
-            if ($method === 'GET') {
+            if ($id && $method === 'GET') {
+                $stmt = db()->prepare("
+                    SELECT g.*,
+                           TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name,
+                           COALESCE(e.student_count, 0) AS student_count
+                    FROM groups g
+                    LEFT JOIN teachers t ON g.teacher_id = t.id
+                    LEFT JOIN (
+                        SELECT group_id, COUNT(*) AS student_count
+                        FROM enrollments
+                        GROUP BY group_id
+                    ) e ON g.id = e.group_id
+                    WHERE g.id = ? AND g.deleted_at IS NULL
+                ");
+                $stmt->execute([$id]);
+                $row = $stmt->fetch();
+                if (!$row) { jsonError('Group not found', 404); break; }
+                jsonResponse($row);
+            } elseif ($method === 'GET') {
                 $stmt = db()->query("
                     SELECT g.*,
-                           t.first_name || ' ' || t.last_name AS teacher_name,
+                           TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name,
                            COALESCE(e.student_count, 0) AS student_count
                     FROM groups g
                     LEFT JOIN teachers t ON g.teacher_id = t.id
@@ -451,20 +475,21 @@ try {
                 ]);
                 jsonResponse(['id' => $groupId]);
             } elseif ($id && $method === 'PUT') {
-                $oldStmt = db()->prepare("SELECT name, subject, teacher_id, capacity, price, status FROM groups WHERE id = ?");
+                $oldStmt = db()->prepare("SELECT name, subject, teacher_id, capacity, price, status, schedule_days, schedule_time_start, schedule_time_end, room FROM groups WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
                 $newValues = [
-                    'name' => $input['name'] ?? '', 'subject' => $input['subject'] ?? '',
-                    'teacher_id' => $input['teacher_id'] ?: null, 'capacity' => $input['capacity'] ?? 15,
-                    'price' => $input['price'] ?? 0, 'status' => $input['status'] ?? 'active'
+                    'name' => $input['name'] ?? $oldRow['name'], 'subject' => $input['subject'] ?? $oldRow['subject'],
+                    'teacher_id' => array_key_exists('teacher_id', $input) ? ($input['teacher_id'] ?: null) : $oldRow['teacher_id'],
+                    'capacity' => $input['capacity'] ?? $oldRow['capacity'],
+                    'price' => $input['price'] ?? $oldRow['price'], 'status' => $input['status'] ?? $oldRow['status']
                 ];
                 $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=?, room=? WHERE id=?");
                 $stmt->execute([
                     $newValues['name'], $newValues['subject'], $newValues['teacher_id'],
                     $newValues['capacity'], $newValues['price'], $newValues['status'],
-                    $input['schedule_days'] ?? null, $input['schedule_time_start'] ?? null,
-                    $input['schedule_time_end'] ?? null, $input['room'] ?? null, $id
+                    $input['schedule_days'] ?? $oldRow['schedule_days'], $input['schedule_time_start'] ?? $oldRow['schedule_time_start'],
+                    $input['schedule_time_end'] ?? $oldRow['schedule_time_end'], $input['room'] ?? $oldRow['room'], $id
                 ]);
                 auditLog('update', 'group', $id, $oldRow ?: null, $newValues);
                 jsonResponse(['ok' => true]);
@@ -641,7 +666,7 @@ try {
                     SELECT COALESCE(SUM(expected - paid), 0) AS total_debt
                     FROM (
                         SELECT
-                            :exp_payment AS expected,
+                            CAST(:exp_payment AS numeric) AS expected,
                             COALESCE((
                                 SELECT SUM(pm2.amount)
                                 FROM payment_months pm2
@@ -953,8 +978,9 @@ try {
                 }
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
+                if (empty($input['payment_id'])) { jsonError('payment_id is required', 400); break; }
                 $newPayload = [
-                    'payment_id' => (int)($input['payment_id'] ?? 0),
+                    'payment_id' => (int)$input['payment_id'],
                     'student_id' => isset($input['student_id']) ? (int)$input['student_id'] : null,
                     'discount_type' => $input['discount_type'] ?? 'fixed',
                     'amount' => (float)($input['amount'] ?? 0),
@@ -1029,7 +1055,20 @@ try {
 
         case 'leads':
             requireRole(['admin', 'manager']);
-            if ($method === 'GET') {
+            if ($id && $sub === 'interactions' && $method === 'GET') {
+                $stmt = db()->prepare("SELECT li.*, u.name AS created_by_name FROM lead_interactions li LEFT JOIN users u ON li.created_by = u.id WHERE li.lead_id = ? ORDER BY li.created_at DESC");
+                $stmt->execute([$id]);
+                jsonResponse($stmt->fetchAll());
+            } elseif ($id && $sub === 'interactions' && $method === 'POST') {
+                $userId = $GLOBALS['jwt_user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO lead_interactions (lead_id, type, notes, scheduled_at, completed_at, created_by) VALUES (?,?,?,?,?,?)");
+                $stmt->execute([
+                    $id, $input['type'] ?? 'note', $input['notes'] ?? '',
+                    $input['scheduled_at'] ?? null, $input['completed_at'] ?? null, $userId
+                ]);
+                db()->prepare("UPDATE leads SET last_contact_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
+                jsonResponse(['id' => (int)db()->lastInsertId()]);
+            } elseif ($method === 'GET') {
                 try {
                     $stmt = db()->query("
                         SELECT l.*, g.name AS trial_group_name,
@@ -1140,20 +1179,6 @@ try {
                 auditLog('soft_delete', 'lead', $id, $oldValues, null);
                 activityLog('soft_delete', 'lead', $id);
                 jsonResponse(['ok' => true]);
-            } elseif ($id && $sub === 'interactions' && $method === 'GET') {
-                $stmt = db()->prepare("SELECT li.*, u.name AS created_by_name FROM lead_interactions li LEFT JOIN users u ON li.created_by = u.id WHERE li.lead_id = ? ORDER BY li.created_at DESC");
-                $stmt->execute([$id]);
-                jsonResponse($stmt->fetchAll());
-            } elseif ($id && $sub === 'interactions' && $method === 'POST') {
-                $userId = $GLOBALS['jwt_user']['id'] ?? null;
-                $stmt = db()->prepare("INSERT INTO lead_interactions (lead_id, type, notes, scheduled_at, completed_at, created_by) VALUES (?,?,?,?,?,?)");
-                $stmt->execute([
-                    $id, $input['type'] ?? 'note', $input['notes'] ?? '',
-                    $input['scheduled_at'] ?? null, $input['completed_at'] ?? null, $userId
-                ]);
-                // Update last_contact_date on the lead
-                db()->prepare("UPDATE leads SET last_contact_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP WHERE id = ?")->execute([$id]);
-                jsonResponse(['id' => (int)db()->lastInsertId()]);
             } else { jsonError('Not found', 404); }
             break;
 
@@ -1316,7 +1341,7 @@ try {
         case 'salary-slips':
             requireRole(['admin', 'accountant']);
             if ($method === 'GET') {
-                $stmt = db()->query("SELECT sl.*, t.first_name || ' ' || t.last_name AS teacher_name FROM salary_slips sl JOIN teachers t ON sl.teacher_id = t.id ORDER BY sl.period_end DESC LIMIT 200");
+                $stmt = db()->query("SELECT sl.*, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name FROM salary_slips sl JOIN teachers t ON sl.teacher_id = t.id ORDER BY sl.period_end DESC LIMIT 200");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
                 $tid = (int)($input['teacher_id'] ?? 0);
@@ -1365,8 +1390,8 @@ try {
                 }
 
                 $total = $base + $bonus - $ded;
-                $stmt = db()->prepare("INSERT INTO salary_slips (teacher_id, period_start, period_end, base_amount, bonus, deduction, total_amount, status, notes) VALUES (?,?,?,?,?,?,?,?,?)");
-                $stmt->execute([$tid, $start, $end, $base, $bonus, $ded, $total, $input['status'] ?? 'pending', $input['notes'] ?? '']);
+                $stmt = db()->prepare("INSERT INTO salary_slips (teacher_id, period_start, period_end, base_amount, bonus, deduction, total, status) VALUES (?,?,?,?,?,?,?,?)");
+                $stmt->execute([$tid, $start, $end, $base, $bonus, $ded, $total, $input['status'] ?? 'pending']);
                 $sid = db()->lastInsertId();
                 $newPayload = [
                     'teacher_id' => $tid,
@@ -1375,9 +1400,8 @@ try {
                     'base_amount' => $base,
                     'bonus' => $bonus,
                     'deduction' => $ded,
-                    'total_amount' => $total,
-                    'status' => $input['status'] ?? 'pending',
-                    'notes' => $input['notes'] ?? ''
+                    'total' => $total,
+                    'status' => $input['status'] ?? 'pending'
                 ];
                 $newPayload['id'] = (int)$sid;
                 auditLog('create', 'salary_slip', (int)$sid, null, $newPayload);
@@ -1555,7 +1579,7 @@ try {
                 // Get all active groups with teacher info
                 $groupsStmt = db()->query("
                     SELECT g.id, g.name, g.price, g.teacher_id,
-                           t.first_name || ' ' || t.last_name AS teacher_name,
+                           TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name,
                            t.salary_type, t.salary_amount
                     FROM groups g
                     LEFT JOIN teachers t ON g.teacher_id = t.id
@@ -1685,7 +1709,7 @@ try {
             if ($method === 'GET') {
                 requireRole(['admin', 'manager', 'accountant']);
                 try {
-                    $stmt = db()->query("SELECT u.id, u.username, u.name, u.role, u.teacher_id, u.email, u.phone, u.is_active, u.last_login, u.created_at, t.first_name || ' ' || t.last_name AS teacher_name FROM users u LEFT JOIN teachers t ON u.teacher_id = t.id ORDER BY u.created_at DESC");
+                    $stmt = db()->query("SELECT u.id, u.username, u.name, u.role, u.teacher_id, u.email, u.phone, u.is_active, u.last_login, u.created_at, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name FROM users u LEFT JOIN teachers t ON u.teacher_id = t.id ORDER BY u.created_at DESC");
                 } catch (PDOException $e) {
                     $stmt = db()->query("SELECT id, username, name, role, email, phone, is_active, last_login, created_at FROM users ORDER BY created_at DESC");
                 }

@@ -123,7 +123,7 @@ export function Reports() {
         </div>
       </div>
 
-      <div className="flex items-end gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-4">
         <div className="space-y-2">
           <Label>From</Label>
           <DateInput
@@ -194,12 +194,14 @@ export function Reports() {
       </div>
 
       <Tabs defaultValue="overview">
+        <div className="overflow-x-auto">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="monthly">Monthly Report</TabsTrigger>
           <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
@@ -420,7 +422,7 @@ export function Reports() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table className="min-w-[900px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Group</TableHead>
@@ -501,7 +503,8 @@ export function Reports() {
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
                 </div>
               ) : (
-                <Table>
+                <div className="overflow-x-auto">
+                <Table className="min-w-[600px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
@@ -533,6 +536,7 @@ export function Reports() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -549,7 +553,8 @@ export function Reports() {
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
                 </div>
               ) : (
-                <Table>
+                <div className="overflow-x-auto">
+                <Table className="min-w-[500px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
@@ -579,6 +584,7 @@ export function Reports() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>

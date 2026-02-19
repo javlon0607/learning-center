@@ -263,7 +263,7 @@ export function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Expenses</h1>
           <p className="text-muted-foreground">Track business expenses</p>
@@ -274,7 +274,7 @@ export function Expenses() {
         </Button>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -297,8 +297,8 @@ export function Expenses() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
