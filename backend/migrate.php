@@ -84,6 +84,17 @@ $inlineMigrations = [
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )",
     "CREATE INDEX IF NOT EXISTS idx_collection_calls_student_id ON collection_calls(student_id)",
+    // One-time: copy students.notes into student_notes table for students that have notes
+    // but don't already have a matching entry (safe to run repeatedly)
+    "INSERT INTO student_notes (student_id, content, created_by, created_at)
+     SELECT s.id, s.notes, s.created_by, s.created_at
+     FROM students s
+     WHERE s.notes IS NOT NULL AND TRIM(s.notes) != ''
+       AND s.deleted_at IS NULL
+       AND NOT EXISTS (
+           SELECT 1 FROM student_notes sn
+           WHERE sn.student_id = s.id AND sn.content = s.notes
+       )",
 ];
 
 foreach ($inlineMigrations as $sql) {

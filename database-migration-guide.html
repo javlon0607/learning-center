@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Database Migration Guide — Docker to Native PostgreSQL</title>
+<style>
+  @page { margin: 2cm; size: A4; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    line-height: 1.7;
+    color: #1a1a1a;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    font-size: 14px;
+  }
+  h1 {
+    text-align: center;
+    color: #1e3a5f;
+    font-size: 24px;
+    border-bottom: 3px solid #1e3a5f;
+    padding-bottom: 15px;
+    margin-bottom: 10px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 30px;
+    font-size: 13px;
+  }
+  h2 {
+    color: #1e3a5f;
+    font-size: 18px;
+    margin-top: 35px;
+    border-left: 4px solid #1e3a5f;
+    padding-left: 12px;
+  }
+  h3 {
+    color: #2c5282;
+    font-size: 15px;
+    margin-top: 20px;
+  }
+  .step-box {
+    background: #f0f4f8;
+    border: 1px solid #d0d8e0;
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 15px 0;
+    page-break-inside: avoid;
+  }
+  .step-number {
+    display: inline-block;
+    background: #1e3a5f;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-weight: bold;
+    font-size: 14px;
+    margin-right: 10px;
+  }
+  .step-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1e3a5f;
+  }
+  code {
+    background: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+  }
+  .command-box {
+    background: #1a1a2e;
+    color: #a8d8a8;
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    margin: 10px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+  .command-box .comment {
+    color: #6a9fb5;
+  }
+  .warning-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 15px 0;
+    page-break-inside: avoid;
+  }
+  .warning-box strong { color: #856404; }
+  .info-box {
+    background: #d1ecf1;
+    border: 1px solid #17a2b8;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 15px 0;
+    page-break-inside: avoid;
+  }
+  .info-box strong { color: #0c5460; }
+  .success-box {
+    background: #d4edda;
+    border: 1px solid #28a745;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 15px 0;
+    page-break-inside: avoid;
+  }
+  .success-box strong { color: #155724; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .page-break { page-break-before: always; }
+  .section-divider {
+    border: none;
+    border-top: 2px dashed #ccc;
+    margin: 30px 0;
+  }
+  .toc {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+  }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { padding: 4px 0; }
+  .toc li::before { content: ""; }
+  .footer {
+    text-align: center;
+    color: #999;
+    font-size: 11px;
+    margin-top: 40px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Database Migration Guide</h1>
+<p class="subtitle">Moving PostgreSQL from Docker to Native Installation<br>Learning Center Web Application</p>
+
+<div class="toc">
+  <strong>What's in this guide:</strong>
+  <ul>
+    <li><span class="step-number" style="font-size:11px; width:22px; height:22px; line-height:22px;">A</span> What we're doing and why</li>
+    <li><span class="step-number" style="font-size:11px; width:22px; height:22px; line-height:22px;">B</span> Before you start (checklist)</li>
+    <li><span class="step-number" style="font-size:11px; width:22px; height:22px; line-height:22px;">1</span> Part 1 — Migration on the Production Server</li>
+    <li><span class="step-number" style="font-size:11px; width:22px; height:22px; line-height:22px;">2</span> Part 2 — Migration on your Local Computer</li>
+    <li><span class="step-number" style="font-size:11px; width:22px; height:22px; line-height:22px;">3</span> Part 3 — How to verify everything works</li>
+  </ul>
+</div>
+
+<!-- ===== SECTION A ===== -->
+<h2>What are we doing?</h2>
+
+<p>Right now, our database (where all student data, payments, groups, etc. are stored) runs <strong>inside Docker</strong> — think of it as a mini virtual computer running inside your server.</p>
+
+<p>We want to move it to run <strong>natively</strong> — meaning PostgreSQL is installed directly on the server/computer, like any other program (Chrome, Word, etc.).</p>
+
+<p><strong>Why?</strong></p>
+<ul>
+  <li>Better performance — the database talks directly to the system, no middleman</li>
+  <li>Easier to manage — you can access it with standard tools</li>
+  <li>More reliable — one less thing that can break</li>
+</ul>
+
+<div class="warning-box">
+  <strong>Important:</strong> No data will be lost during this process. We save a full copy of the database before making any changes. If anything goes wrong, we can always restore from that copy.
+</div>
+
+<!-- ===== SECTION B ===== -->
+<h2>Before you start (checklist)</h2>
+
+<div class="step-box">
+  <p>Make sure you have:</p>
+  <ul>
+    <li>Access to the server terminal (SSH or direct access)</li>
+    <li>The application is currently running with Docker (<code>docker compose ps</code> shows services)</li>
+    <li>About 15-20 minutes of time</li>
+    <li>PostgreSQL installed natively (we'll cover this below if not)</li>
+  </ul>
+</div>
+
+<hr class="section-divider">
+
+<!-- ===== PART 1: PRODUCTION ===== -->
+<h2 class="page-break">Part 1 — Production Server Migration</h2>
+
+<p>Connect to your production server via SSH first:</p>
+<div class="command-box">ssh your-user@your-server-ip</div>
+<p>Then navigate to the project folder:</p>
+<div class="command-box">cd /path/to/learning-center-web</div>
+
+<!-- Step 1 -->
+<div class="step-box">
+  <span class="step-number">1</span>
+  <span class="step-title">Save a backup of your database</span>
+  <p>This creates a file with ALL your data (students, payments, everything):</p>
+  <div class="command-box">docker compose exec -T postgres pg_dump -U learning_center_user -d learning_center_db > backup_prod.sql</div>
+  <p>Check that the file was created and is not empty:</p>
+  <div class="command-box">ls -lh backup_prod.sql</div>
+  <p>You should see a file size (e.g., 500K, 2M, etc.). If it says 0, something went wrong — do NOT continue.</p>
+</div>
+
+<div class="warning-box">
+  <strong>Keep this backup file safe!</strong> This is your safety net. Even after everything is done, keep a copy somewhere. You can also download it to your computer:
+  <div class="command-box"><span class="comment"># Run this from your LOCAL computer, not the server</span>
+scp your-user@your-server-ip:/path/to/learning-center-web/backup_prod.sql ~/Desktop/</div>
+</div>
+
+<!-- Step 2 -->
+<div class="step-box">
+  <span class="step-number">2</span>
+  <span class="step-title">Install PostgreSQL on the server (if not already installed)</span>
+  <p>For Ubuntu/Debian servers:</p>
+  <div class="command-box">sudo apt update
+sudo apt install postgresql postgresql-contrib -y</div>
+  <p>Start the PostgreSQL service:</p>
+  <div class="command-box">sudo systemctl start postgresql
+sudo systemctl enable postgresql</div>
+  <p>Verify it's running:</p>
+  <div class="command-box">sudo systemctl status postgresql</div>
+  <p>You should see <strong>"active (running)"</strong> in green.</p>
+</div>
+
+<!-- Step 3 -->
+<div class="step-box">
+  <span class="step-number">3</span>
+  <span class="step-title">Create the database and user</span>
+  <p>This creates the same user and database that our application expects:</p>
+  <div class="command-box">sudo -u postgres psql -c "CREATE USER learning_center_user WITH PASSWORD 'postgres123';"
+sudo -u postgres psql -c "CREATE DATABASE learning_center_db OWNER learning_center_user;"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE learning_center_db TO learning_center_user;"</div>
+  <p>If you see <code>"already exists"</code> errors, that's fine — it means they were already created.</p>
+</div>
+
+<!-- Step 4 -->
+<div class="step-box">
+  <span class="step-number">4</span>
+  <span class="step-title">Import your data into the native database</span>
+  <p>This loads all your data from the backup into the new native PostgreSQL:</p>
+  <div class="command-box">sudo -u postgres psql -d learning_center_db < backup_prod.sql</div>
+  <p>You'll see many lines of output (CREATE TABLE, INSERT, etc.). Some warnings are normal — look out for <strong>ERROR</strong> messages. A few permission-related errors are usually OK.</p>
+  <p>Give ownership to the correct user:</p>
+  <div class="command-box">sudo -u postgres psql -d learning_center_db -c "
+  GRANT ALL ON ALL TABLES IN SCHEMA public TO learning_center_user;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO learning_center_user;
+  GRANT USAGE ON SCHEMA public TO learning_center_user;
+"</div>
+</div>
+
+<!-- Step 5 -->
+<div class="step-box">
+  <span class="step-number">5</span>
+  <span class="step-title">Configure PostgreSQL to allow password login</span>
+  <p>Find the pg_hba.conf file:</p>
+  <div class="command-box">sudo find /etc/postgresql -name pg_hba.conf</div>
+  <p>Edit it (replace the path with what the command above returned):</p>
+  <div class="command-box">sudo nano /etc/postgresql/16/main/pg_hba.conf</div>
+  <p>Find the line that looks like this:</p>
+  <div class="command-box">local   all   all   peer</div>
+  <p>Change <code>peer</code> to <code>md5</code>:</p>
+  <div class="command-box">local   all   all   md5</div>
+  <p>Save the file (Ctrl+O, Enter, Ctrl+X) and restart PostgreSQL:</p>
+  <div class="command-box">sudo systemctl restart postgresql</div>
+</div>
+
+<!-- Step 6 -->
+<div class="step-box">
+  <span class="step-number">6</span>
+  <span class="step-title">Update the application to use native database</span>
+  <p>Edit your <code>.env</code> or <code>docker-compose.yml</code> file. Change the database host from the Docker service name to <code>localhost</code>:</p>
+  <div class="command-box"><span class="comment"># Change this:</span>
+DB_HOST=postgres
+
+<span class="comment"># To this:</span>
+DB_HOST=localhost</div>
+  <p>If the database settings are in <code>docker-compose.yml</code> under the backend service environment, change it there.</p>
+</div>
+
+<!-- Step 7 -->
+<div class="step-box">
+  <span class="step-number">7</span>
+  <span class="step-title">Stop the Docker database and restart the app</span>
+  <p>Stop the Docker PostgreSQL container (the app's backend will now use native PostgreSQL):</p>
+  <div class="command-box"><span class="comment"># Stop only the postgres container</span>
+docker compose stop postgres
+
+<span class="comment"># Restart the backend so it connects to native DB</span>
+docker compose restart backend</div>
+</div>
+
+<!-- Step 8 -->
+<div class="step-box">
+  <span class="step-number">8</span>
+  <span class="step-title">Verify it works</span>
+  <p>Open your application in the browser and check:</p>
+  <ul>
+    <li>Can you log in?</li>
+    <li>Do you see all students, groups, and payments?</li>
+    <li>Try creating a test record and then deleting it</li>
+  </ul>
+  <p>You can also check the backend logs:</p>
+  <div class="command-box">docker compose logs backend --tail=20</div>
+  <p>Look for <code>"[migrate] Connected to database."</code> and <code>"[migrate] Done."</code></p>
+</div>
+
+<div class="success-box">
+  <strong>Production migration complete!</strong> Your production server is now using a native PostgreSQL database. All data has been preserved.
+</div>
+
+<hr class="section-divider">
+
+<!-- ===== PART 2: LOCAL ===== -->
+<h2 class="page-break">Part 2 — Local Computer Migration</h2>
+
+<p>This is the same process but on your local development machine (Windows).</p>
+
+<!-- Step 1 -->
+<div class="step-box">
+  <span class="step-number">1</span>
+  <span class="step-title">Save a backup of your local database</span>
+  <p>Open a terminal in your project folder and run:</p>
+  <div class="command-box">docker compose exec -T postgres pg_dump -U learning_center_user -d learning_center_db > backup_local.sql</div>
+</div>
+
+<!-- Step 2 -->
+<div class="step-box">
+  <span class="step-number">2</span>
+  <span class="step-title">Install PostgreSQL on Windows</span>
+  <p>If you don't have PostgreSQL installed natively:</p>
+  <ul>
+    <li>Download from: <code>https://www.postgresql.org/download/windows/</code></li>
+    <li>Run the installer — click "Next" through the steps</li>
+    <li>Remember the password you set for the <code>postgres</code> superuser</li>
+    <li>Keep the default port: <strong>5432</strong></li>
+    <li>After install, make sure the PostgreSQL service is running (check Windows Services)</li>
+  </ul>
+  <p>Add PostgreSQL to your system PATH if the installer didn't do it. The default location is:</p>
+  <div class="command-box">C:\Program Files\PostgreSQL\16\bin</div>
+</div>
+
+<!-- Step 3 -->
+<div class="step-box">
+  <span class="step-number">3</span>
+  <span class="step-title">Create the database and user</span>
+  <p>Open a terminal (Command Prompt or Git Bash) and run:</p>
+  <div class="command-box">psql -U postgres -c "CREATE USER learning_center_user WITH PASSWORD 'postgres123';"
+psql -U postgres -c "CREATE DATABASE learning_center_db OWNER learning_center_user;"
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE learning_center_db TO learning_center_user;"</div>
+  <p>It will ask for the <code>postgres</code> superuser password (the one you set during installation).</p>
+</div>
+
+<!-- Step 4 -->
+<div class="step-box">
+  <span class="step-number">4</span>
+  <span class="step-title">Import your data</span>
+  <div class="command-box">psql -U learning_center_user -d learning_center_db &lt; backup_local.sql</div>
+  <p>When prompted for a password, enter: <code>postgres123</code></p>
+</div>
+
+<!-- Step 5 -->
+<div class="step-box">
+  <span class="step-number">5</span>
+  <span class="step-title">Update the application config</span>
+  <p>Same as production — change <code>DB_HOST</code> from <code>postgres</code> to <code>localhost</code> in your environment config.</p>
+</div>
+
+<!-- Step 6 -->
+<div class="step-box">
+  <span class="step-number">6</span>
+  <span class="step-title">Stop Docker database and restart</span>
+  <div class="command-box">docker compose stop postgres
+docker compose restart backend</div>
+</div>
+
+<div class="success-box">
+  <strong>Local migration complete!</strong> Your local development machine is now using native PostgreSQL.
+</div>
+
+<hr class="section-divider">
+
+<!-- ===== PART 3: VERIFY ===== -->
+<h2 class="page-break">Part 3 — How to Verify Everything Works</h2>
+
+<div class="step-box">
+  <span class="step-number">1</span>
+  <span class="step-title">Check the database connection</span>
+  <p>You can connect to the native database directly to make sure your data is there:</p>
+  <div class="command-box">psql -U learning_center_user -d learning_center_db -c "SELECT COUNT(*) FROM students;"</div>
+  <p>This should show the number of students. Compare it with what you see in the app.</p>
+</div>
+
+<div class="step-box">
+  <span class="step-number">2</span>
+  <span class="step-title">Test the application</span>
+  <p>Go through this checklist in your browser:</p>
+  <ul>
+    <li>Log in with your account</li>
+    <li>Check the Students page — all students should appear</li>
+    <li>Check the Payments page — all payments should appear</li>
+    <li>Check the Groups page — all groups should appear</li>
+    <li>Check the Reports page — numbers should match</li>
+    <li>Try adding a test payment and then deleting it</li>
+    <li>Check the Dashboard — stats should look correct</li>
+  </ul>
+</div>
+
+<div class="step-box">
+  <span class="step-number">3</span>
+  <span class="step-title">Optional: Remove Docker PostgreSQL data</span>
+  <p>Once you've confirmed everything works (give it a few days), you can remove the Docker PostgreSQL container and its data to free up space:</p>
+  <div class="command-box"><span class="comment"># Remove the stopped postgres container</span>
+docker compose rm postgres
+
+<span class="comment"># Remove the database volume (frees disk space)</span>
+docker volume ls <span class="comment"># find the postgres volume name</span>
+docker volume rm learning-center-web_postgres_data</div>
+  <div class="warning-box">
+    <strong>Only do this after you've verified everything works!</strong> Once you remove the Docker volume, the old database copy inside Docker is gone forever. But your data is safe in the native PostgreSQL.
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ===== TROUBLESHOOTING ===== -->
+<h2>Troubleshooting</h2>
+
+<div class="step-box">
+  <h3>Problem: "Connection refused" error</h3>
+  <p>This means the native PostgreSQL is not running. Start it:</p>
+  <ul>
+    <li><strong>Linux:</strong> <code>sudo systemctl start postgresql</code></li>
+    <li><strong>Windows:</strong> Open "Services" app, find "PostgreSQL", click "Start"</li>
+  </ul>
+</div>
+
+<div class="step-box">
+  <h3>Problem: "Authentication failed" error</h3>
+  <p>The password doesn't match. Reset it:</p>
+  <div class="command-box">sudo -u postgres psql -c "ALTER USER learning_center_user WITH PASSWORD 'postgres123';"</div>
+</div>
+
+<div class="step-box">
+  <h3>Problem: "Database does not exist" error</h3>
+  <p>The database wasn't created. Go back to Step 3 and create it.</p>
+</div>
+
+<div class="step-box">
+  <h3>Problem: Data is missing after import</h3>
+  <p>Re-import from your backup:</p>
+  <div class="command-box"><span class="comment"># Drop and recreate</span>
+sudo -u postgres psql -c "DROP DATABASE learning_center_db;"
+sudo -u postgres psql -c "CREATE DATABASE learning_center_db OWNER learning_center_user;"
+
+<span class="comment"># Import again</span>
+sudo -u postgres psql -d learning_center_db &lt; backup_prod.sql</div>
+</div>
+
+<div class="step-box">
+  <h3>Want to go back to Docker? (Emergency rollback)</h3>
+  <p>If something goes wrong, you can always go back:</p>
+  <div class="command-box"><span class="comment"># Change DB_HOST back to "postgres"</span>
+<span class="comment"># Then restart everything</span>
+docker compose up -d</div>
+  <p>Your Docker database still has all the original data (as long as you haven't removed the volume).</p>
+</div>
+
+<div class="footer">
+  Learning Center Web — Database Migration Guide<br>
+  Generated: February 2026
+</div>
+
+</body>
+</html>

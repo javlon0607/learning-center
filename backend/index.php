@@ -310,6 +310,12 @@ try {
                     $source, $referredByType, $referredById, $createdBy
                 ]);
                 $id = db()->lastInsertId();
+                // If notes provided, also create a student_note so it appears in the Notes tab
+                $notes = trim($input['notes'] ?? '');
+                if ($notes !== '') {
+                    db()->prepare("INSERT INTO student_notes (student_id, content, created_by) VALUES (?, ?, ?)")
+                        ->execute([(int)$id, $notes, $createdBy]);
+                }
                 auditLog('create', 'student', (int)$id, null, [
                     'first_name' => $input['first_name'] ?? '',
                     'last_name' => $input['last_name'] ?? '',
