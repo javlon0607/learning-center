@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 type SortField = 'name' | 'phone' | 'groups' | 'expected' | 'paid' | 'debt' | 'last_call' | 'calls'
 type SortDirection = 'asc' | 'desc'
@@ -34,6 +35,7 @@ type SortDirection = 'asc' | 'desc'
 export function Collections() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation()
 
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('debt')
@@ -59,11 +61,11 @@ export function Collections() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections'] })
       queryClient.invalidateQueries({ queryKey: ['collection-calls', callStudent?.id] })
-      toast({ title: 'Call logged successfully' })
+      toast({ title: t('collections.toast_logged', 'Call logged successfully') })
       setCallDialogOpen(false)
     },
     onError: () => {
-      toast({ title: 'Failed to log call', variant: 'destructive' })
+      toast({ title: t('collections.toast_log_error', 'Failed to log call'), variant: 'destructive' })
     },
   })
 
@@ -171,8 +173,8 @@ export function Collections() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Collections</h1>
-        <p className="text-muted-foreground">Students with outstanding debt for {currentMonthLabel}</p>
+        <h1 className="text-2xl font-bold text-slate-900">{t('collections.title', 'Collections')}</h1>
+        <p className="text-muted-foreground">{t('collections.description', 'Students with outstanding debt for')} {currentMonthLabel}</p>
       </div>
 
       {/* Stats */}
@@ -184,7 +186,7 @@ export function Collections() {
                 <Users className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Students with Debt</p>
+                <p className="text-sm text-muted-foreground">{t('collections.stat_debtors', 'Students with Debt')}</p>
                 <p className="text-2xl font-bold">{debtors.length}</p>
               </div>
             </div>
@@ -197,7 +199,7 @@ export function Collections() {
                 <DollarSign className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Outstanding</p>
+                <p className="text-sm text-muted-foreground">{t('collections.stat_total', 'Total Outstanding')}</p>
                 <p className="text-2xl font-bold">{formatCurrency(totalDebt)}</p>
               </div>
             </div>
@@ -210,7 +212,7 @@ export function Collections() {
                 <PhoneCall className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Calls Made</p>
+                <p className="text-sm text-muted-foreground">{t('collections.stat_calls', 'Calls Made')}</p>
                 <p className="text-2xl font-bold">{totalCalls}</p>
               </div>
             </div>
@@ -222,7 +224,7 @@ export function Collections() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by name or phone..."
+          placeholder={t('collections.search', 'Search by name or phone...')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -234,14 +236,14 @@ export function Collections() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <SortableHeader field="name" className="text-left">Student</SortableHeader>
-              <SortableHeader field="phone" className="text-left">Phone</SortableHeader>
-              <SortableHeader field="groups" className="text-left">Groups</SortableHeader>
-              <SortableHeader field="expected" className="text-right">Expected</SortableHeader>
-              <SortableHeader field="paid" className="text-right">Paid</SortableHeader>
-              <SortableHeader field="debt" className="text-right">Debt</SortableHeader>
-              <SortableHeader field="last_call" className="text-left">Last Call</SortableHeader>
-              <SortableHeader field="calls" className="text-center">Calls</SortableHeader>
+              <SortableHeader field="name" className="text-left">{t('collections.col_student', 'Student')}</SortableHeader>
+              <SortableHeader field="phone" className="text-left">{t('collections.col_phone', 'Phone')}</SortableHeader>
+              <SortableHeader field="groups" className="text-left">{t('collections.col_groups', 'Groups')}</SortableHeader>
+              <SortableHeader field="expected" className="text-right">{t('collections.col_expected', 'Expected')}</SortableHeader>
+              <SortableHeader field="paid" className="text-right">{t('collections.col_paid', 'Paid')}</SortableHeader>
+              <SortableHeader field="debt" className="text-right">{t('collections.col_debt', 'Debt')}</SortableHeader>
+              <SortableHeader field="last_call" className="text-left">{t('collections.col_last_call', 'Last Call')}</SortableHeader>
+              <SortableHeader field="calls" className="text-center">{t('collections.col_calls', 'Calls')}</SortableHeader>
               <th className="text-right p-3 font-medium"></th>
             </tr>
           </thead>
@@ -249,7 +251,7 @@ export function Collections() {
             {sorted.length === 0 ? (
               <tr>
                 <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                  {search ? 'No matching students found.' : 'No students with outstanding debt this month.'}
+                  {search ? t('collections.no_match', 'No matching students found.') : t('collections.no_debtors', 'No students with outstanding debt this month.')}
                 </td>
               </tr>
             ) : (
@@ -302,7 +304,7 @@ export function Collections() {
                         openCallDialog(d)
                       }}
                     >
-                      <PhoneCall className="h-4 w-4 mr-1" />Log Call
+                      <PhoneCall className="h-4 w-4 mr-1" />{t('collections.log_call', 'Log Call')}
                     </Button>
                   </td>
                 </tr>
@@ -324,22 +326,22 @@ export function Collections() {
               {/* Debt summary */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Expected</p>
+                  <p className="text-xs text-muted-foreground">{t('collections.detail_expected', 'Expected')}</p>
                   <p className="text-lg font-bold">{formatCurrency(detailStudent.expected)}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Paid</p>
+                  <p className="text-xs text-muted-foreground">{t('collections.detail_paid', 'Paid')}</p>
                   <p className="text-lg font-bold text-green-600">{formatCurrency(detailStudent.paid)}</p>
                 </div>
                 <div className="rounded-lg bg-red-50 p-3 text-center">
-                  <p className="text-xs text-muted-foreground">Debt</p>
+                  <p className="text-xs text-muted-foreground">{t('collections.detail_debt', 'Debt')}</p>
                   <p className="text-lg font-bold text-red-600">{formatCurrency(detailStudent.debt)}</p>
                 </div>
               </div>
 
               {/* Contact info */}
               <div className="space-y-3">
-                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Contact</h4>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('collections.detail_contact', 'Contact')}</h4>
                 {detailStudent.phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
@@ -350,14 +352,14 @@ export function Collections() {
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
                     <a href={`tel:${detailStudent.parent_phone}`} className="text-blue-600 hover:underline">{detailStudent.parent_phone}</a>
-                    <span className="text-xs text-muted-foreground">(Parent)</span>
+                    <span className="text-xs text-muted-foreground">({t('collections.detail_parent', 'Parent')})</span>
                   </div>
                 )}
               </div>
 
               {/* Groups */}
               <div className="space-y-2">
-                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Groups</h4>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('collections.detail_groups', 'Groups')}</h4>
                 <div className="flex flex-wrap gap-2">
                   {detailStudent.enrollments.map((e) => (
                     <Badge key={e.group_id} variant="outline">
@@ -373,14 +375,14 @@ export function Collections() {
                 className="w-full"
                 onClick={() => openCallDialog(detailStudent)}
               >
-                <PhoneCall className="h-4 w-4 mr-2" />Log New Call
+                <PhoneCall className="h-4 w-4 mr-2" />{t('collections.btn_log_call', 'Log New Call')}
               </Button>
 
               {/* Call history */}
               <div className="space-y-3">
-                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Call History</h4>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('collections.detail_call_history', 'Call History')}</h4>
                 {callHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No calls recorded yet.</p>
+                  <p className="text-sm text-muted-foreground">{t('collections.no_calls', 'No calls recorded yet.')}</p>
                 ) : (
                   <ScrollArea className="h-[250px]">
                     <div className="space-y-2 pr-4">
@@ -417,7 +419,7 @@ export function Collections() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Log Call — {callStudent?.first_name} {callStudent?.last_name}
+              {t('collections.dialog_log_call', 'Log Call')} — {callStudent?.first_name} {callStudent?.last_name}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleLogCall}>
@@ -425,17 +427,17 @@ export function Collections() {
               <Textarea
                 name="notes"
                 rows={4}
-                placeholder="What was discussed during the call?"
+                placeholder={t('collections.call_notes_placeholder', 'What was discussed during the call?')}
                 required
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCallDialogOpen(false)}>
-                Cancel
+                {t('common.btn_cancel', 'Cancel')}
               </Button>
               <Button type="submit" disabled={addCallMutation.isPending}>
                 {addCallMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save
+                {t('common.btn_save', 'Save')}
               </Button>
             </DialogFooter>
           </form>

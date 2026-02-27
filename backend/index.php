@@ -956,7 +956,7 @@ try {
                 activityLog('update', 'payment', $id);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                requireRole(['admin']);
+                requireFeature('payments_delete');
                 $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 $oldRow = $old->fetch();
@@ -1049,7 +1049,7 @@ try {
                 $stmt->execute([$input['category'] ?? '', (float)($input['amount'] ?? 0), $input['description'] ?? '', $input['expense_date'] ?? date('Y-m-d')]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'DELETE') {
-                requireRole(['admin']);
+                requireFeature('expenses_delete');
                 $old = db()->prepare("SELECT id FROM expenses WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
                 if (!$old->fetch()) { jsonError('Expense not found', 404); break; }
@@ -2401,6 +2401,59 @@ try {
             } // end if lead follow-up enabled
 
             jsonResponse(['ok' => true, 'notifications_created' => $created]);
+            break;
+
+        case 'permissions':
+            requireFeature('permissions');
+            if ($method === 'GET') {
+                $stmt = db()->query("SELECT role, feature FROM role_permissions ORDER BY feature, role");
+                $map = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $map[$row['feature']][] = $row['role'];
+                }
+                jsonResponse($map);
+            } elseif ($method === 'PUT') {
+                $body = json_decode(file_get_contents('php://input'), true) ?? [];
+                db()->beginTransaction();
+                db()->exec("DELETE FROM role_permissions");
+                $stmt = db()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+                foreach ($body as $feat => $roles) {
+                    if (!is_array($roles)) continue;
+                    foreach ($roles as $role) {
+                        $stmt->execute([(string)$role, (string)$feat]);
+                    }
+                }
+                db()->commit();
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'translations':
+            if ($method === 'GET') {
+                // Public endpoint — no auth required so login page can fetch translations
+                $lang = $_GET['lang'] ?? 'en';
+                if (!in_array($lang, ['en', 'uz'])) $lang = 'en';
+                $stmt = db()->prepare("SELECT key, value FROM translations WHERE lang = ? ORDER BY key");
+                $stmt->execute([$lang]);
+                $map = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $map[$row['key']] = $row['value'];
+                }
+                jsonResponse($map);
+            } elseif ($method === 'PUT') {
+                requireFeature('translations');
+                $body = json_decode(file_get_contents('php://input'), true) ?? [];
+                // body: [{lang, key, value}, ...]
+                db()->beginTransaction();
+                $stmt = db()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO UPDATE SET value = EXCLUDED.value");
+                foreach ($body as $item) {
+                    if (!isset($item['lang'], $item['key'], $item['value'])) continue;
+                    if (!in_array($item['lang'], ['en', 'uz'])) continue;
+                    $stmt->execute([(string)$item['lang'], (string)$item['key'], (string)$item['value']]);
+                }
+                db()->commit();
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Method not allowed', 405); }
             break;
 
         default:

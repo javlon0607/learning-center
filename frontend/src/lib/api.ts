@@ -392,6 +392,21 @@ export interface GroupDebtor {
   debt: number
 }
 
+// Permissions API
+export const permissionsApi = {
+  getAll: () => api.get<Record<string, string[]>>('/permissions'),
+  update: (data: Record<string, string[]>) => api.put<{ ok: boolean }>('/permissions', data),
+}
+
+// Translations API
+export const translationsApi = {
+  // Public — works without auth (for login page)
+  getByLang: (lang: string) => api.get<Record<string, string>>('/translations', { lang }),
+  // Bulk upsert — requires auth + translations feature
+  update: (data: { lang: string; key: string; value: string }[]) =>
+    api.put<{ ok: boolean }>('/translations', data),
+}
+
 // Users API (admin only)
 export const usersApi = {
   getAll: () => api.get<User[]>('/users'),
@@ -551,7 +566,7 @@ export const profileApi = {
 }
 
 // Types
-export type UserRole = 'admin' | 'manager' | 'teacher' | 'accountant' | 'user'
+export type UserRole = 'admin' | 'manager' | 'teacher' | 'accountant' | 'user' | 'owner' | 'developer'
 
 export interface User {
   id: number

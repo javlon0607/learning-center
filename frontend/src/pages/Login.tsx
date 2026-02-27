@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from '@/contexts/I18nContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,7 @@ import { ApiError } from '@/lib/api'
 
 export function Login() {
   const { isAuthenticated, login } = useAuth()
+  const { t } = useTranslation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -104,9 +106,9 @@ export function Login() {
 
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t('login.welcome', 'Welcome back')}</h1>
             <p className="mt-2 text-muted-foreground">
-              Sign in to access your dashboard
+              {t('login.subtitle', 'Sign in to access your dashboard')}
             </p>
           </div>
 
@@ -120,14 +122,14 @@ export function Login() {
 
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium">
-                Username
+                {t('login.username', 'Username')}
               </Label>
               <Input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
+                placeholder={t('login.username', 'Username')}
                 className="h-11"
                 required
                 autoComplete="username"
@@ -136,7 +138,7 @@ export function Login() {
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium">
-                Password
+                {t('login.password', 'Password')}
               </Label>
               <div className="relative">
                 <Input
@@ -144,7 +146,7 @@ export function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  placeholder={t('login.password', 'Password')}
                   className="h-11 pr-10"
                   required
                   autoComplete="current-password"
@@ -171,10 +173,10 @@ export function Login() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {t('login.signing_in', 'Signing in...')}
                 </>
               ) : (
-                'Sign in'
+                t('login.sign_in', 'Sign in')
               )}
             </Button>
           </form>

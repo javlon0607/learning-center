@@ -14,8 +14,9 @@ import {
 } from 'recharts'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, masked }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-card border border-border rounded-lg shadow-lg p-3">
@@ -27,7 +28,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
               style={{ backgroundColor: entry.color }}
             />
             <span className="text-muted-foreground">{entry.name}:</span>
-            <span className="font-medium">{formatCurrency(entry.value)}</span>
+            <span className="font-medium">{masked ? '***' : formatCurrency(entry.value)}</span>
           </div>
         ))}
       </div>
@@ -36,7 +37,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-export function RevenueChart() {
+export function RevenueChart({ masked = false }: { masked?: boolean }) {
+  const { t } = useTranslation()
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard', 'revenue-chart'],
     queryFn: dashboardApi.getRevenueChart,
@@ -49,10 +51,10 @@ export function RevenueChart() {
     <Card className="border-border/60">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-semibold">Revenue Overview</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">Monthly revenue vs expenses</p>
+          <CardTitle className="text-lg font-semibold">{t('chart.revenue_overview', 'Revenue Overview')}</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">{t('chart.subtitle', 'Monthly revenue vs expenses')}</p>
         </div>
-        {!isLoading && data && growth !== 0 && (
+        {!masked && !isLoading && data && growth !== 0 && (
           <div className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
             isPositiveGrowth ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'
           }`}>
@@ -71,11 +73,11 @@ export function RevenueChart() {
             <ChartSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
-              Failed to load revenue data
+              {t('chart.failed_load', 'Failed to load revenue data')}
             </div>
           ) : !data?.months?.length ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
-              No revenue data available yet
+              {t('chart.no_data', 'No revenue data available yet')}
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
@@ -102,12 +104,13 @@ export function RevenueChart() {
                   tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12 }}
                   tickFormatter={(value) => {
+                    if (masked) return value === 0 ? '0' : '***'
                     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
                     if (value >= 1000) return `${(value / 1000).toFixed(0)}K`
                     return value.toString()
                   }}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip masked={masked} />} />
                 <Legend
                   verticalAlign="top"
                   height={36}
@@ -120,7 +123,7 @@ export function RevenueChart() {
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  name="Revenue"
+                  name={t('chart.revenue', 'Revenue')}
                   stroke="#22c55e"
                   strokeWidth={2}
                   fill="url(#revenueGradient)"
@@ -128,7 +131,7 @@ export function RevenueChart() {
                 <Area
                   type="monotone"
                   dataKey="expenses"
-                  name="Expenses"
+                  name={t('chart.expenses', 'Expenses')}
                   stroke="#ef4444"
                   strokeWidth={2}
                   fill="url(#expensesGradient)"

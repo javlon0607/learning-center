@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/contexts/PermissionsContext'
+import { useTranslation } from '@/contexts/I18nContext'
 import {
   LayoutDashboard,
   Users,
@@ -15,21 +16,25 @@ import {
   UserPlus,
   ChevronRight,
   PhoneCall,
+  ShieldCheck,
+  Languages,
 } from 'lucide-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard, roles: ['admin', 'manager', 'teacher', 'accountant'] },
-  { name: 'Students', href: '/students', icon: Users, roles: ['admin', 'manager', 'teacher', 'accountant'] },
-  { name: 'Groups', href: '/groups', icon: GraduationCap, roles: ['admin', 'manager', 'teacher', 'accountant'] },
-  { name: 'Teachers', href: '/teachers', icon: UserCog, roles: ['admin', 'manager', 'accountant'] },
-  { name: 'Leads', href: '/leads', icon: UserPlus, roles: ['admin', 'manager'] },
-  { name: 'Attendance', href: '/attendance', icon: Calendar, roles: ['admin', 'manager', 'teacher', 'accountant'] },
-  { name: 'Payments', href: '/payments', icon: CreditCard, roles: ['admin', 'manager', 'accountant'] },
-  { name: 'Expenses', href: '/expenses', icon: Receipt, roles: ['admin', 'manager', 'accountant'] },
-  { name: 'Collections', href: '/collections', icon: PhoneCall, roles: ['admin', 'manager', 'accountant'] },
-  { name: 'Reports', href: '/reports', icon: BarChart3, roles: ['admin', 'manager', 'accountant'] },
-  { name: 'Logs', href: '/logs', icon: ScrollText, roles: ['admin'] },
-  { name: 'Settings', href: '/settings', icon: Settings, roles: ['admin'] },
+  { key: 'nav.dashboard',    href: '/',            icon: LayoutDashboard, feature: null },
+  { key: 'nav.students',     href: '/students',     icon: Users,           feature: 'students' },
+  { key: 'nav.groups',       href: '/groups',       icon: GraduationCap,   feature: 'groups' },
+  { key: 'nav.teachers',     href: '/teachers',     icon: UserCog,         feature: 'teachers' },
+  { key: 'nav.leads',        href: '/leads',        icon: UserPlus,        feature: 'leads' },
+  { key: 'nav.attendance',   href: '/attendance',   icon: Calendar,        feature: 'attendance' },
+  { key: 'nav.payments',     href: '/payments',     icon: CreditCard,      feature: 'payments' },
+  { key: 'nav.expenses',     href: '/expenses',     icon: Receipt,         feature: 'expenses' },
+  { key: 'nav.collections',  href: '/collections',  icon: PhoneCall,       feature: 'collections' },
+  { key: 'nav.reports',      href: '/reports',      icon: BarChart3,       feature: 'reports' },
+  { key: 'nav.logs',         href: '/logs',         icon: ScrollText,      feature: 'logs' },
+  { key: 'nav.settings',     href: '/settings',     icon: Settings,        feature: 'settings' },
+  { key: 'nav.permissions',  href: '/permissions',  icon: ShieldCheck,     feature: 'permissions' },
+  { key: 'nav.translations', href: '/translations', icon: Languages,       feature: 'translations' },
 ]
 
 interface SidebarProps {
@@ -38,9 +43,10 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation()
-  const { hasRole } = useAuth()
+  const { hasFeature } = usePermissions()
+  const { t, lang, setLang } = useTranslation()
 
-  const filteredNavigation = navigation.filter(item => hasRole(item.roles))
+  const filteredNavigation = navigation.filter(item => item.feature === null || hasFeature(item.feature))
 
   return (
     <div className="flex h-full w-64 flex-col bg-navy-950">
@@ -62,7 +68,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
               (item.href !== '/' && location.pathname.startsWith(item.href))
             return (
               <Link
-                key={item.name}
+                key={item.key}
                 to={item.href}
                 onClick={onNavigate}
                 className={cn(
@@ -79,7 +85,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
                       isActive ? 'text-gold-400' : 'text-white/50 group-hover:text-white/80'
                     )}
                   />
-                  {item.name}
+                  {t(item.key)}
                 </div>
                 {isActive && (
                   <ChevronRight className="h-4 w-4 text-white/60" />
@@ -91,10 +97,37 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-white/10">
+      <div className="px-4 py-4 border-t border-white/10 space-y-3">
+        {/* Language Switcher */}
+        <div className="flex items-center justify-center gap-1 px-2">
+          <button
+            onClick={() => setLang('en')}
+            className={cn(
+              'flex-1 py-1 text-xs rounded font-medium transition-colors',
+              lang === 'en'
+                ? 'bg-white/20 text-white'
+                : 'text-white/40 hover:text-white/70'
+            )}
+          >
+            EN
+          </button>
+          <div className="w-px h-4 bg-white/20" />
+          <button
+            onClick={() => setLang('uz')}
+            className={cn(
+              'flex-1 py-1 text-xs rounded font-medium transition-colors',
+              lang === 'uz'
+                ? 'bg-white/20 text-white'
+                : 'text-white/40 hover:text-white/70'
+            )}
+          >
+            UZ
+          </button>
+        </div>
+        {/* System status */}
         <div className="flex items-center gap-3 px-2">
           <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs text-white/50">System Online</span>
+          <span className="text-xs text-white/50">{t('nav.system_online', 'System Online')}</span>
         </div>
       </div>
     </div>

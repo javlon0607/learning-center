@@ -57,33 +57,7 @@ import {
 } from 'lucide-react'
 import { formatDate, formatDateTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-
-// Status configuration for learning center pipeline
-const statusConfig = {
-  new: { label: 'New', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Plus },
-  contacted: { label: 'Contacted', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Phone },
-  interested: { label: 'Interested', color: 'bg-cyan-100 text-cyan-800 border-cyan-200', icon: Target },
-  trial_scheduled: { label: 'Trial Scheduled', color: 'bg-amber-100 text-amber-800 border-amber-200', icon: CalendarCheck },
-  trial_completed: { label: 'Trial Done', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: CheckCircle2 },
-  negotiating: { label: 'Negotiating', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: MessageSquare },
-  enrolled: { label: 'Enrolled', color: 'bg-green-100 text-green-800 border-green-200', icon: UserPlus },
-  lost: { label: 'Lost', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
-  postponed: { label: 'Postponed', color: 'bg-gray-100 text-gray-800 border-gray-200', icon: Clock },
-} as const
-
-const priorityConfig = {
-  hot: { label: 'Hot', color: 'bg-red-500 text-white', icon: Flame },
-  warm: { label: 'Warm', color: 'bg-orange-500 text-white', icon: ThermometerSun },
-  cold: { label: 'Cold', color: 'bg-blue-500 text-white', icon: Snowflake },
-} as const
-
-const interactionTypes = [
-  { value: 'call', label: 'Phone Call', icon: Phone },
-  { value: 'whatsapp', label: 'WhatsApp/Telegram', icon: MessageCircle },
-  { value: 'meeting', label: 'Meeting', icon: Users },
-  { value: 'trial', label: 'Trial Class', icon: CalendarCheck },
-  { value: 'note', label: 'Note', icon: MessageSquare },
-]
+import { useTranslation } from '@/contexts/I18nContext'
 
 // Pipeline stages for kanban (active leads only)
 const pipelineStages = ['new', 'contacted', 'interested', 'trial_scheduled', 'trial_completed', 'negotiating'] as const
@@ -91,6 +65,33 @@ const pipelineStages = ['new', 'contacted', 'interested', 'trial_scheduled', 'tr
 export function Leads() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation()
+
+  const statusConfig = useMemo(() => ({
+    new: { label: t('leads.status_new', 'New'), color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Plus },
+    contacted: { label: t('leads.status_contacted', 'Contacted'), color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Phone },
+    interested: { label: t('leads.status_interested', 'Interested'), color: 'bg-cyan-100 text-cyan-800 border-cyan-200', icon: Target },
+    trial_scheduled: { label: t('leads.status_trial_scheduled', 'Trial Scheduled'), color: 'bg-amber-100 text-amber-800 border-amber-200', icon: CalendarCheck },
+    trial_completed: { label: t('leads.status_trial_done', 'Trial Done'), color: 'bg-orange-100 text-orange-800 border-orange-200', icon: CheckCircle2 },
+    negotiating: { label: t('leads.status_negotiating', 'Negotiating'), color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: MessageSquare },
+    enrolled: { label: t('leads.status_enrolled', 'Enrolled'), color: 'bg-green-100 text-green-800 border-green-200', icon: UserPlus },
+    lost: { label: t('leads.status_lost', 'Lost'), color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+    postponed: { label: t('leads.status_postponed', 'Postponed'), color: 'bg-gray-100 text-gray-800 border-gray-200', icon: Clock },
+  }), [t])
+
+  const priorityConfig = useMemo(() => ({
+    hot: { label: t('leads.priority_hot', 'Hot'), color: 'bg-red-500 text-white', icon: Flame },
+    warm: { label: t('leads.priority_warm', 'Warm'), color: 'bg-orange-500 text-white', icon: ThermometerSun },
+    cold: { label: t('leads.priority_cold', 'Cold'), color: 'bg-blue-500 text-white', icon: Snowflake },
+  }), [t])
+
+  const interactionTypes = useMemo(() => [
+    { value: 'call', label: t('leads.interaction_call', 'Phone Call'), icon: Phone },
+    { value: 'whatsapp', label: t('leads.interaction_whatsapp', 'WhatsApp/Telegram'), icon: MessageCircle },
+    { value: 'meeting', label: t('leads.interaction_meeting', 'Meeting'), icon: Users },
+    { value: 'trial', label: t('leads.interaction_trial', 'Trial Class'), icon: CalendarCheck },
+    { value: 'note', label: t('leads.interaction_note', 'Note'), icon: MessageSquare },
+  ], [t])
 
   // State
   const [search, setSearch] = useState('')
@@ -150,7 +151,7 @@ export function Leads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
-      toast({ title: 'Lead created successfully' })
+      toast({ title: t('leads.toast_created', 'Lead created successfully') })
       closeForm()
     },
   })
@@ -160,7 +161,7 @@ export function Leads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
-      toast({ title: 'Lead updated successfully' })
+      toast({ title: t('leads.toast_updated', 'Lead updated successfully') })
       closeForm()
     },
   })
@@ -170,12 +171,12 @@ export function Leads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
-      toast({ title: 'Lead deleted successfully' })
+      toast({ title: t('leads.toast_deleted', 'Lead deleted successfully') })
       setDeleteDialogOpen(false)
       setLeadToDelete(null)
     },
     onError: (error: Error) => {
-      toast({ title: 'Cannot delete lead', description: error.message, variant: 'destructive' })
+      toast({ title: t('leads.toast_delete_error', 'Cannot delete lead'), description: error.message, variant: 'destructive' })
     },
   })
 
@@ -185,7 +186,7 @@ export function Leads() {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      toast({ title: 'Lead converted to student!' })
+      toast({ title: t('leads.toast_converted', 'Lead converted to student!') })
       setConvertDialogOpen(false)
       setLeadToConvert(null)
       setDetailLead(null)
@@ -198,7 +199,7 @@ export function Leads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-interactions', interactionLead?.id] })
       queryClient.invalidateQueries({ queryKey: ['leads'] })
-      toast({ title: 'Interaction added' })
+      toast({ title: t('leads.toast_interaction', 'Interaction added') })
       setInteractionDialogOpen(false)
       setInteractionLead(null)
     },
@@ -340,7 +341,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{activeLeads}</p>
-                <p className="text-xs text-muted-foreground">Active Leads</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_active', 'Active Leads')}</p>
               </div>
             </div>
           </CardContent>
@@ -356,7 +357,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.hot_leads || 0}</p>
-                <p className="text-xs text-muted-foreground">Hot Leads</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_hot', 'Hot Leads')}</p>
               </div>
             </div>
           </CardContent>
@@ -369,7 +370,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{(stats?.follow_ups_today || 0) + (stats?.follow_ups_overdue || 0)}</p>
-                <p className="text-xs text-muted-foreground">Follow-ups Due</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_followups', 'Follow-ups Due')}</p>
               </div>
             </div>
           </CardContent>
@@ -385,7 +386,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.trials_scheduled || 0}</p>
-                <p className="text-xs text-muted-foreground">Trials Scheduled</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_trials', 'Trials Scheduled')}</p>
               </div>
             </div>
           </CardContent>
@@ -401,7 +402,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.conversions_this_month || 0}</p>
-                <p className="text-xs text-muted-foreground">Enrolled (Month)</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_enrolled', 'Enrolled (Month)')}</p>
               </div>
             </div>
           </CardContent>
@@ -417,7 +418,7 @@ export function Leads() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.by_status?.lost || 0}</p>
-                <p className="text-xs text-muted-foreground">Lost (Total)</p>
+                <p className="text-xs text-muted-foreground">{t('leads.stat_lost', 'Lost (Total)')}</p>
               </div>
             </div>
           </CardContent>
@@ -472,25 +473,25 @@ export function Leads() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenuItem onClick={() => openEditForm(lead)}>
-                  <Pencil className="mr-2 h-4 w-4" />Edit
+                  <Pencil className="mr-2 h-4 w-4" />{t('leads.menu_edit', 'Edit')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { setInteractionLead(lead); setInteractionDialogOpen(true); }}>
-                  <MessageSquare className="mr-2 h-4 w-4" />Add Note
+                  <MessageSquare className="mr-2 h-4 w-4" />{t('leads.card_add_note', 'Add Note')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {lead.status !== 'enrolled' && (
                   <DropdownMenuItem onClick={() => { setLeadToConvert(lead); setConvertDialogOpen(true); }}>
-                    <UserPlus className="mr-2 h-4 w-4" />Convert to Student
+                    <UserPlus className="mr-2 h-4 w-4" />{t('leads.menu_convert', 'Convert to Student')}
                   </DropdownMenuItem>
                 )}
                 {!['enrolled', 'lost'].includes(lead.status) && (
                   <DropdownMenuItem onClick={() => handleQuickStatusChange(lead, 'lost')} className="text-red-600">
-                    <XCircle className="mr-2 h-4 w-4" />Mark as Lost
+                    <XCircle className="mr-2 h-4 w-4" />{t('leads.card_mark_lost', 'Mark as Lost')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => { setLeadToDelete(lead); setDeleteDialogOpen(true); }} className="text-red-600">
-                  <Trash2 className="mr-2 h-4 w-4" />Delete
+                  <Trash2 className="mr-2 h-4 w-4" />{t('leads.menu_delete', 'Delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -521,7 +522,7 @@ export function Leads() {
                 className={cn("text-xs h-5", trialToday && "bg-purple-100 text-purple-700 border-purple-200")}
               >
                 <CalendarCheck className="h-3 w-3 mr-1" />
-                Trial: {formatDate(lead.trial_date)}
+                {t('leads.card_trial', 'Trial')}: {formatDate(lead.trial_date)}
               </Badge>
             )}
             {(lead.interaction_count || 0) > 0 && (
@@ -551,7 +552,7 @@ export function Leads() {
             <LeadCard key={lead.id} lead={lead} compact />
           ))}
           {stageLeads.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-8">No leads</p>
+            <p className="text-center text-sm text-muted-foreground py-8">{t('leads.pipeline_empty', 'No leads')}</p>
           )}
         </div>
       </div>
@@ -608,7 +609,7 @@ export function Leads() {
                   }}
                 >
                   <ArrowRight className="h-4 w-4 mr-1" />
-                  Move to {statusConfig[status].label}
+                  {t('leads.detail_move_to', 'Move to')} {statusConfig[status].label}
                 </Button>
               ))}
               {!['enrolled', 'lost'].includes(detailLead.status) && (
@@ -622,7 +623,7 @@ export function Leads() {
                     setConvertDialogOpen(true)
                   }}
                 >
-                  <UserPlus className="h-4 w-4 mr-1" />Convert
+                  <UserPlus className="h-4 w-4 mr-1" />{t('leads.detail_convert', 'Convert')}
                 </Button>
               )}
               <Button
@@ -634,7 +635,7 @@ export function Leads() {
                   openEditForm(detailLead)
                 }}
               >
-                <Pencil className="h-4 w-4 mr-1" />Edit
+                <Pencil className="h-4 w-4 mr-1" />{t('leads.detail_edit', 'Edit')}
               </Button>
               <Button
                 size="sm"
@@ -646,13 +647,13 @@ export function Leads() {
                   setInteractionDialogOpen(true)
                 }}
               >
-                <MessageSquare className="h-4 w-4 mr-1" />Add Note
+                <MessageSquare className="h-4 w-4 mr-1" />{t('leads.detail_add_note', 'Add Note')}
               </Button>
             </div>
 
             {/* Contact Info */}
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Contact</h4>
+              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('leads.detail_contact', 'Contact')}</h4>
               {detailLead.phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground" />
@@ -667,7 +668,7 @@ export function Leads() {
               )}
               {detailLead.parent_name && (
                 <div className="text-sm">
-                  <span className="text-muted-foreground">Parent:</span> {detailLead.parent_name}
+                  <span className="text-muted-foreground">{t('leads.detail_parent', 'Parent')}:</span> {detailLead.parent_name}
                   {detailLead.parent_phone && ` (${detailLead.parent_phone})`}
                 </div>
               )}
@@ -675,35 +676,35 @@ export function Leads() {
 
             {/* Details */}
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Details</h4>
+              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('leads.detail_section', 'Details')}</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 {detailLead.source && (
                   <div>
-                    <span className="text-muted-foreground">Source:</span>
+                    <span className="text-muted-foreground">{t('leads.detail_source', 'Source')}:</span>
                     <p>{sourceOptions.find(s => s.value === detailLead.source)?.label || detailLead.source}</p>
                   </div>
                 )}
                 {detailLead.interested_courses && (
                   <div>
-                    <span className="text-muted-foreground">Interested in:</span>
+                    <span className="text-muted-foreground">{t('leads.detail_interested', 'Interested in')}:</span>
                     <p>{detailLead.interested_courses}</p>
                   </div>
                 )}
                 {detailLead.birth_year && (
                   <div>
-                    <span className="text-muted-foreground">Birth Year:</span>
-                    <p>{detailLead.birth_year} ({new Date().getFullYear() - detailLead.birth_year} years)</p>
+                    <span className="text-muted-foreground">{t('leads.detail_birth_year', 'Birth Year')}:</span>
+                    <p>{detailLead.birth_year} ({new Date().getFullYear() - detailLead.birth_year} {t('leads.detail_years', 'years')})</p>
                   </div>
                 )}
                 {detailLead.preferred_schedule && (
                   <div>
-                    <span className="text-muted-foreground">Preferred Schedule:</span>
+                    <span className="text-muted-foreground">{t('leads.detail_schedule', 'Preferred Schedule')}:</span>
                     <p>{detailLead.preferred_schedule}</p>
                   </div>
                 )}
                 {detailLead.budget && (
                   <div>
-                    <span className="text-muted-foreground">Budget:</span>
+                    <span className="text-muted-foreground">{t('leads.detail_budget', 'Budget')}:</span>
                     <p>{detailLead.budget}</p>
                   </div>
                 )}
@@ -712,7 +713,7 @@ export function Leads() {
 
             {/* Dates */}
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Schedule</h4>
+              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('leads.detail_section_schedule', 'Schedule')}</h4>
               <div className="space-y-2 text-sm">
                 {detailLead.follow_up_date && (
                   <div className={cn(
@@ -721,9 +722,9 @@ export function Leads() {
                     isToday(detailLead.follow_up_date) && !isOverdue(detailLead.follow_up_date) && "bg-amber-100 text-amber-800"
                   )}>
                     <Calendar className="h-4 w-4" />
-                    <span>Follow-up: {formatDate(detailLead.follow_up_date)}</span>
-                    {isOverdue(detailLead.follow_up_date) && <Badge variant="destructive" className="text-xs">Overdue</Badge>}
-                    {isToday(detailLead.follow_up_date) && !isOverdue(detailLead.follow_up_date) && <Badge className="text-xs bg-amber-500">Today</Badge>}
+                    <span>{t('leads.detail_follow_up', 'Follow-up')}: {formatDate(detailLead.follow_up_date)}</span>
+                    {isOverdue(detailLead.follow_up_date) && <Badge variant="destructive" className="text-xs">{t('leads.detail_overdue', 'Overdue')}</Badge>}
+                    {isToday(detailLead.follow_up_date) && !isOverdue(detailLead.follow_up_date) && <Badge className="text-xs bg-amber-500">{t('leads.detail_today', 'Today')}</Badge>}
                   </div>
                 )}
                 {detailLead.trial_date && (
@@ -732,14 +733,14 @@ export function Leads() {
                     isToday(detailLead.trial_date) && "bg-purple-100 text-purple-800"
                   )}>
                     <CalendarCheck className="h-4 w-4" />
-                    <span>Trial: {formatDate(detailLead.trial_date)}</span>
+                    <span>{t('leads.detail_trial', 'Trial')}: {formatDate(detailLead.trial_date)}</span>
                     {detailLead.trial_group_name && <Badge variant="outline">{detailLead.trial_group_name}</Badge>}
                   </div>
                 )}
                 {detailLead.last_contact_date && (
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="h-4 w-4" />
-                    <span>Last contact: {formatDate(detailLead.last_contact_date)}</span>
+                    <span>{t('leads.detail_last_contact', 'Last contact')}: {formatDate(detailLead.last_contact_date)}</span>
                   </div>
                 )}
               </div>
@@ -748,16 +749,16 @@ export function Leads() {
             {/* Notes */}
             {detailLead.notes && (
               <div className="space-y-2">
-                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Notes</h4>
+                <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('leads.detail_section_notes', 'Notes')}</h4>
                 <p className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded">{detailLead.notes}</p>
               </div>
             )}
 
             {/* Interaction History */}
             <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Interaction History</h4>
+              <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{t('leads.detail_section_history', 'Interaction History')}</h4>
               {interactions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No interactions recorded yet.</p>
+                <p className="text-sm text-muted-foreground">{t('leads.detail_no_interactions', 'No interactions recorded yet.')}</p>
               ) : (
                 <ScrollArea className="h-[200px]">
                   <div className="space-y-2 pr-4">
@@ -793,7 +794,7 @@ export function Leads() {
 
             {/* Meta */}
             <div className="text-xs text-muted-foreground border-t pt-4">
-              Created: {formatDateTime(detailLead.created_at)} • Updated: {formatDateTime(detailLead.updated_at)}
+              {t('leads.detail_created', 'Created')}: {formatDateTime(detailLead.created_at)} • {t('leads.detail_updated', 'Updated')}: {formatDateTime(detailLead.updated_at)}
             </div>
           </div>
         </SheetContent>
@@ -806,11 +807,11 @@ export function Leads() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Lead Management</h1>
-          <p className="text-muted-foreground">Track and convert prospective students</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t('leads.title', 'Leads')}</h1>
+          <p className="text-muted-foreground">{t('leads.description', 'Manage prospects and convert them to students')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />Add Lead
+          <Plus className="mr-2 h-4 w-4" />{t('leads.add', 'Add Lead')}
         </Button>
       </div>
 
@@ -822,7 +823,7 @@ export function Leads() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name or phone..."
+            placeholder={t('leads.search_placeholder', 'Search by name or phone...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -830,10 +831,10 @@ export function Leads() {
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="All Statuses" />
+            <SelectValue placeholder={t('leads.filter_all_statuses', 'All Statuses')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="all">{t('leads.filter_all_statuses', 'All Statuses')}</SelectItem>
             {Object.entries(statusConfig).map(([key, { label }]) => (
               <SelectItem key={key} value={key}>{label}</SelectItem>
             ))}
@@ -841,21 +842,21 @@ export function Leads() {
         </Select>
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="w-full sm:w-[130px]">
-            <SelectValue placeholder="All Priorities" />
+            <SelectValue placeholder={t('leads.filter_all_priorities', 'All Priorities')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="hot">Hot</SelectItem>
-            <SelectItem value="warm">Warm</SelectItem>
-            <SelectItem value="cold">Cold</SelectItem>
+            <SelectItem value="all">{t('leads.filter_all_priorities', 'All Priorities')}</SelectItem>
+            <SelectItem value="hot">{t('leads.priority_hot', 'Hot')}</SelectItem>
+            <SelectItem value="warm">{t('leads.priority_warm', 'Warm')}</SelectItem>
+            <SelectItem value="cold">{t('leads.priority_cold', 'Cold')}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterSource} onValueChange={setFilterSource}>
           <SelectTrigger className="w-full sm:w-[140px]">
-            <SelectValue placeholder="All Sources" />
+            <SelectValue placeholder={t('leads.filter_all_sources', 'All Sources')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="all">{t('leads.filter_all_sources', 'All Sources')}</SelectItem>
             {sourceOptions.map(({ value, label }) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
@@ -871,9 +872,9 @@ export function Leads() {
       ) : (
         <Tabs defaultValue="pipeline">
           <TabsList>
-            <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-            <TabsTrigger value="list">List View</TabsTrigger>
-            <TabsTrigger value="closed">Closed ({closedLeads.length})</TabsTrigger>
+            <TabsTrigger value="pipeline">{t('leads.tab_pipeline', 'Pipeline')}</TabsTrigger>
+            <TabsTrigger value="list">{t('leads.tab_list', 'List View')}</TabsTrigger>
+            <TabsTrigger value="closed">{t('leads.tab_closed', 'Closed')} ({closedLeads.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="pipeline" className="mt-4">
@@ -891,7 +892,7 @@ export function Leads() {
               ))}
             </div>
             {filteredLeads.filter(l => !['enrolled', 'lost', 'postponed'].includes(l.status)).length === 0 && (
-              <p className="text-center text-muted-foreground py-12">No active leads found</p>
+              <p className="text-center text-muted-foreground py-12">{t('leads.empty_list', 'No active leads found')}</p>
             )}
           </TabsContent>
 
@@ -910,14 +911,14 @@ export function Leads() {
                       </Badge>
                     </div>
                     {lead.loss_reason && (
-                      <p className="text-xs text-muted-foreground mt-2 truncate">Reason: {lead.loss_reason}</p>
+                      <p className="text-xs text-muted-foreground mt-2 truncate">{t('leads.card_reason', 'Reason')}: {lead.loss_reason}</p>
                     )}
                   </CardContent>
                 </Card>
               ))}
             </div>
             {closedLeads.length === 0 && (
-              <p className="text-center text-muted-foreground py-12">No closed leads</p>
+              <p className="text-center text-muted-foreground py-12">{t('leads.closed_empty', 'No closed leads')}</p>
             )}
           </TabsContent>
         </Tabs>
@@ -927,18 +928,18 @@ export function Leads() {
       <Dialog open={formOpen} onOpenChange={(open) => !open && closeForm()}>
         <DialogContent key={selectedLead ? `edit-${selectedLead.id}` : 'new'} className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedLead ? 'Edit Lead' : 'Add New Lead'}</DialogTitle>
+            <DialogTitle>{selectedLead ? t('leads.dialog_edit_title', 'Edit Lead') : t('leads.dialog_create_title', 'Add New Lead')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               {/* Basic Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="first_name">First Name *</Label>
+                  <Label htmlFor="first_name">{t('leads.form_first_name', 'First Name *')}</Label>
                   <Input id="first_name" name="first_name" defaultValue={selectedLead?.first_name} required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="last_name">Last Name *</Label>
+                  <Label htmlFor="last_name">{t('leads.form_last_name', 'Last Name *')}</Label>
                   <Input id="last_name" name="last_name" defaultValue={selectedLead?.last_name} required />
                 </div>
               </div>
@@ -946,11 +947,11 @@ export function Leads() {
               {/* Contact */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">{t('leads.form_phone', 'Phone')}</Label>
                   <PhoneInput id="phone" value={formPhone} onChange={setFormPhone} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('leads.form_email', 'Email')}</Label>
                   <Input id="email" name="email" type="email" defaultValue={selectedLead?.email} />
                 </div>
               </div>
@@ -958,11 +959,11 @@ export function Leads() {
               {/* Parent */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="parent_name">Parent Name</Label>
+                  <Label htmlFor="parent_name">{t('leads.form_parent_name', 'Parent Name')}</Label>
                   <Input id="parent_name" name="parent_name" defaultValue={selectedLead?.parent_name} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="parent_phone">Parent Phone</Label>
+                  <Label htmlFor="parent_phone">{t('leads.form_parent_phone', 'Parent Phone')}</Label>
                   <PhoneInput id="parent_phone" value={formParentPhone} onChange={setFormParentPhone} />
                 </div>
               </div>
@@ -970,7 +971,7 @@ export function Leads() {
               {/* Status, Priority, Source */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status">{t('leads.form_status', 'Status')}</Label>
                   <Select name="status" defaultValue={selectedLead?.status || 'new'}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -981,20 +982,20 @@ export function Leads() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority">{t('leads.form_priority', 'Priority')}</Label>
                   <Select name="priority" defaultValue={selectedLead?.priority || 'warm'}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="hot">Hot</SelectItem>
-                      <SelectItem value="warm">Warm</SelectItem>
-                      <SelectItem value="cold">Cold</SelectItem>
+                      <SelectItem value="hot">{t('leads.priority_hot', 'Hot')}</SelectItem>
+                      <SelectItem value="warm">{t('leads.priority_warm', 'Warm')}</SelectItem>
+                      <SelectItem value="cold">{t('leads.priority_cold', 'Cold')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="source">Source *</Label>
+                  <Label htmlFor="source">{t('leads.form_source', 'Source *')}</Label>
                   <Select value={formSource} onValueChange={(v) => { setFormSource(v); if (v !== 'referral') { setFormReferrerId(undefined); } }}>
-                    <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('leads.form_select_source', 'Select source')} /></SelectTrigger>
                     <SelectContent>
                       {sourceOptions.map(({ value, label }) => (
                         <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -1008,20 +1009,20 @@ export function Leads() {
               {formSource === 'referral' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Referrer Type</Label>
+                    <Label>{t('leads.form_referrer_type', 'Referrer Type')}</Label>
                     <Select value={formReferrerType} onValueChange={(v) => { setFormReferrerType(v as 'student' | 'teacher' | 'user'); setFormReferrerId(undefined); }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="teacher">Teacher</SelectItem>
-                        <SelectItem value="user">Staff</SelectItem>
+                        <SelectItem value="student">{t('leads.form_referrer_student', 'Student')}</SelectItem>
+                        <SelectItem value="teacher">{t('leads.form_referrer_teacher', 'Teacher')}</SelectItem>
+                        <SelectItem value="user">{t('leads.form_referrer_staff', 'Staff')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Referred By</Label>
+                    <Label>{t('leads.form_referred_by', 'Referred By')}</Label>
                     <Select value={formReferrerId?.toString() || ''} onValueChange={(v) => setFormReferrerId(Number(v))}>
-                      <SelectTrigger><SelectValue placeholder="Select person" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t('leads.form_select_person', 'Select person')} /></SelectTrigger>
                       <SelectContent>
                         {referrers.map((r: Referrer) => (
                           <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
@@ -1035,11 +1036,11 @@ export function Leads() {
               {/* Interest */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="interested_courses">Interested Courses</Label>
+                  <Label htmlFor="interested_courses">{t('leads.form_interested_courses', 'Interested Courses')}</Label>
                   <Input id="interested_courses" name="interested_courses" placeholder="e.g. English, Math" defaultValue={selectedLead?.interested_courses} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="birth_year">Birth Year</Label>
+                  <Label htmlFor="birth_year">{t('leads.form_birth_year', 'Birth Year')}</Label>
                   <Input id="birth_year" name="birth_year" type="number" min="2000" max="2025" placeholder="e.g. 2015" defaultValue={selectedLead?.birth_year} />
                 </div>
               </div>
@@ -1059,7 +1060,7 @@ export function Leads() {
               {/* Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="follow_up_date">Follow-up Date</Label>
+                  <Label htmlFor="follow_up_date">{t('leads.form_follow_up_date', 'Follow-up Date')}</Label>
                   <DateInput id="follow_up_date" value={formFollowUpDate} onChange={setFormFollowUpDate} />
                 </div>
                 <div className="space-y-2">
@@ -1081,16 +1082,16 @@ export function Leads() {
 
               {/* Notes */}
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
+                <Label htmlFor="notes">{t('leads.form_notes', 'Notes')}</Label>
                 <Textarea id="notes" name="notes" defaultValue={selectedLead?.notes} rows={3} />
               </div>
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={closeForm}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={closeForm}>{t('common.btn_cancel', 'Cancel')}</Button>
               <Button type="submit" disabled={createLead.isPending || updateLead.isPending}>
                 {(createLead.isPending || updateLead.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLead ? 'Update' : 'Create'}
+                {selectedLead ? t('common.btn_update', 'Update') : t('common.btn_create', 'Create')}
               </Button>
             </DialogFooter>
           </form>
@@ -1122,7 +1123,7 @@ export function Leads() {
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setInteractionDialogOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => setInteractionDialogOpen(false)}>{t('common.btn_cancel', 'Cancel')}</Button>
               <Button type="submit" disabled={addInteraction.isPending}>
                 {addInteraction.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Add
@@ -1136,13 +1137,13 @@ export function Leads() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Lead</AlertDialogTitle>
+            <AlertDialogTitle>{t('leads.dialog_delete_title', 'Delete Lead')}</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete {leadToDelete?.first_name} {leadToDelete?.last_name}? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => leadToDelete && deleteLead.mutate(leadToDelete.id)} className="bg-red-600 hover:bg-red-700">
               Delete
             </AlertDialogAction>
@@ -1154,15 +1155,15 @@ export function Leads() {
       <AlertDialog open={convertDialogOpen} onOpenChange={setConvertDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Convert to Student</AlertDialogTitle>
+            <AlertDialogTitle>{t('leads.dialog_convert_title', 'Convert to Student')}</AlertDialogTitle>
             <AlertDialogDescription>
               This will create a new student record for {leadToConvert?.first_name} {leadToConvert?.last_name} and mark this lead as enrolled. You can then enroll them in groups.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => leadToConvert && convertLead.mutate(leadToConvert.id)}>
-              Convert to Student
+              {t('leads.dialog_convert_title', 'Convert to Student')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

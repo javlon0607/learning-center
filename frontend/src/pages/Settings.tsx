@@ -29,11 +29,13 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
+import { useTranslation } from '@/contexts/I18nContext'
 
 export function Settings() {
   const { hasRole, user } = useAuth()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
 
   // Fetch settings from API
   const { data: settings, isLoading: loadingSettings } = useQuery({
@@ -214,8 +216,8 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="text-muted-foreground">Manage your application settings</p>
+        <h1 className="text-2xl font-bold text-slate-900">{t('settings.title', 'Settings')}</h1>
+        <p className="text-muted-foreground">{t('settings.description', 'Manage your application settings')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -229,8 +231,8 @@ export function Settings() {
                     <Users className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">User Management</CardTitle>
-                    <CardDescription>Manage users and permissions</CardDescription>
+                    <CardTitle className="text-lg">{t('settings.user_management', 'User Management')}</CardTitle>
+                    <CardDescription>{t('settings.user_management_desc', 'Manage users and permissions')}</CardDescription>
                   </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -246,23 +248,23 @@ export function Settings() {
               <User className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <CardTitle className="text-lg">Profile</CardTitle>
-              <CardDescription>Your personal information</CardDescription>
+              <CardTitle className="text-lg">{t('settings.profile', 'Profile')}</CardTitle>
+              <CardDescription>{t('settings.profile_desc', 'Your personal information')}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="profile_name">Full Name</Label>
+                <Label htmlFor="profile_name">{t('settings.form_full_name', 'Full Name')}</Label>
                 <Input
                   id="profile_name"
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder={t('settings.form_name_placeholder', 'Your name')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="profile_email">Email</Label>
+                <Label htmlFor="profile_email">{t('settings.form_email', 'Email')}</Label>
                 <Input
                   id="profile_email"
                   type="email"
@@ -272,13 +274,13 @@ export function Settings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Username</Label>
+                <Label>{t('settings.form_username', 'Username')}</Label>
                 <Input value={user?.username || ''} disabled className="bg-slate-50" />
-                <p className="text-xs text-muted-foreground">Username cannot be changed</p>
+                <p className="text-xs text-muted-foreground">{t('settings.username_readonly', 'Username cannot be changed')}</p>
               </div>
               <Button onClick={handleSaveProfile} disabled={updateProfileMutation.isPending}>
                 {updateProfileMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Profile
+                {t('settings.btn_save_profile', 'Save Profile')}
               </Button>
             </div>
           </CardContent>
@@ -292,14 +294,14 @@ export function Settings() {
                 <Building className="h-5 w-5 text-purple-600" />
               </div>
               <div>
-                <CardTitle className="text-lg">Organization</CardTitle>
-                <CardDescription>Business information and branding</CardDescription>
+                <CardTitle className="text-lg">{t('settings.organization', 'Organization')}</CardTitle>
+                <CardDescription>{t('settings.organization_desc', 'Business information and branding')}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="org_name">Organization Name</Label>
+                  <Label htmlFor="org_name">{t('settings.form_org_name', 'Organization Name')}</Label>
                   <Input
                     id="org_name"
                     value={orgName}
@@ -307,7 +309,7 @@ export function Settings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="org_email">Contact Email</Label>
+                  <Label htmlFor="org_email">{t('settings.form_contact_email', 'Contact Email')}</Label>
                   <Input
                     id="org_email"
                     type="email"
@@ -317,7 +319,7 @@ export function Settings() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="org_phone">Contact Phone</Label>
+                  <Label htmlFor="org_phone">{t('settings.form_contact_phone', 'Contact Phone')}</Label>
                   <Input
                     id="org_phone"
                     value={orgPhone}
@@ -327,7 +329,7 @@ export function Settings() {
                 </div>
                 <Button onClick={handleSaveOrganization} disabled={updateSettingsMutation.isPending}>
                   {updateSettingsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
+                  {t('settings.btn_save_changes', 'Save Changes')}
                 </Button>
               </div>
             </CardContent>
@@ -342,17 +344,17 @@ export function Settings() {
                 <Bell className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
-                <CardTitle className="text-lg">Notifications</CardTitle>
-                <CardDescription>Configure notification preferences</CardDescription>
+                <CardTitle className="text-lg">{t('settings.notifications', 'Notifications')}</CardTitle>
+                <CardDescription>{t('settings.notifications_desc', 'Configure notification preferences')}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Payment Reminders</p>
+                    <p className="font-medium">{t('settings.notif_payment', 'Payment Reminders')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Send reminders for upcoming payments
+                      {t('settings.notif_payment_desc', 'Send reminders for upcoming payments')}
                     </p>
                   </div>
                   <Switch
@@ -363,7 +365,7 @@ export function Settings() {
                 {paymentReminders && (
                   <div className="ml-1 space-y-2">
                     <div className="flex items-center gap-3">
-                      <Label htmlFor="payment_reminder_day" className="text-sm whitespace-nowrap">Reminder from day</Label>
+                      <Label htmlFor="payment_reminder_day" className="text-sm whitespace-nowrap">{t('settings.notif_reminder_day', 'Reminder from day')}</Label>
                       <Input
                         id="payment_reminder_day"
                         type="number"
@@ -380,20 +382,20 @@ export function Settings() {
                         disabled={cronMutation.isPending}
                       >
                         {cronMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                        Check now
+                        {t('settings.btn_check_now', 'Check now')}
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Notifications are generated when the day of month reaches this value
+                      {t('settings.notif_day_hint', 'Notifications are generated when the day of month reaches this value')}
                     </p>
                   </div>
                 )}
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Lead Follow-up Alerts</p>
+                    <p className="font-medium">{t('settings.notif_leads', 'Lead Follow-up Alerts')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Get notified when lead follow-ups are overdue
+                      {t('settings.notif_leads_desc', 'Get notified when lead follow-ups are overdue')}
                     </p>
                   </div>
                   <Switch
@@ -404,9 +406,9 @@ export function Settings() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Enrollment Alerts</p>
+                    <p className="font-medium">{t('settings.notif_enrollment', 'Enrollment Alerts')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Notify teachers when students are enrolled or removed
+                      {t('settings.notif_enrollment_desc', 'Notify teachers when students are enrolled or removed')}
                     </p>
                   </div>
                   <Switch
@@ -417,9 +419,9 @@ export function Settings() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Schedule Change Alerts</p>
+                    <p className="font-medium">{t('settings.notif_schedule', 'Schedule Change Alerts')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Notify teachers when group schedules are modified
+                      {t('settings.notif_schedule_desc', 'Notify teachers when group schedules are modified')}
                     </p>
                   </div>
                   <Switch
@@ -430,9 +432,9 @@ export function Settings() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Attendance Alerts</p>
+                    <p className="font-medium">{t('settings.notif_attendance', 'Attendance Alerts')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Notify when attendance is not marked
+                      {t('settings.notif_attendance_desc', 'Notify when attendance is not marked')}
                     </p>
                   </div>
                   <Switch
@@ -443,9 +445,9 @@ export function Settings() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <p className="font-medium">Birthday Notifications</p>
+                    <p className="font-medium">{t('settings.notif_birthday', 'Birthday Notifications')}</p>
                     <p className="text-sm text-muted-foreground">
-                      Show student birthdays in the notification bell
+                      {t('settings.notif_birthday_desc', 'Show student birthdays in the notification bell')}
                     </p>
                   </div>
                   <Switch
@@ -454,7 +456,7 @@ export function Settings() {
                   />
                 </div>
                 <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                  Note: Email notifications require email service configuration.
+                  {t('settings.notif_email_note', 'Note: Email notifications require email service configuration.')}
                 </p>
                 <Button
                   onClick={handleSaveNotifications}
@@ -462,7 +464,7 @@ export function Settings() {
                   className="mt-2"
                 >
                   {updateSettingsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Preferences
+                  {t('settings.btn_save_preferences', 'Save Preferences')}
                 </Button>
               </div>
             </CardContent>
@@ -476,15 +478,15 @@ export function Settings() {
               <Shield className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <CardTitle className="text-lg">Security</CardTitle>
-              <CardDescription>Password and session settings</CardDescription>
+              <CardTitle className="text-lg">{t('settings.security', 'Security')}</CardTitle>
+              <CardDescription>{t('settings.security_desc', 'Password and session settings')}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {hasRole('admin') && (
                 <div className="space-y-2">
-                  <Label htmlFor="session_timeout">Session Timeout (minutes)</Label>
+                  <Label htmlFor="session_timeout">{t('settings.session_timeout', 'Session Timeout (minutes)')}</Label>
                   <Input
                     id="session_timeout"
                     type="number"
@@ -494,7 +496,7 @@ export function Settings() {
                     max="120"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Users will be logged out after this period of inactivity
+                    {t('settings.session_timeout_hint', 'Users will be logged out after this period of inactivity')}
                   </p>
                 </div>
               )}
@@ -502,11 +504,11 @@ export function Settings() {
                 {hasRole('admin') && (
                   <Button onClick={handleSaveSecurity} disabled={updateSettingsMutation.isPending}>
                     {updateSettingsMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Settings
+                    {t('settings.btn_save_security', 'Save Settings')}
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => setPasswordDialogOpen(true)}>
-                  Change Password
+                  {t('settings.btn_change_password', 'Change Password')}
                 </Button>
               </div>
             </div>
@@ -521,8 +523,8 @@ export function Settings() {
                 <Database className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <CardTitle className="text-lg">Data Management</CardTitle>
-                <CardDescription>Backup and export options</CardDescription>
+                <CardTitle className="text-lg">{t('settings.data_management', 'Data Management')}</CardTitle>
+                <CardDescription>{t('settings.data_management_desc', 'Backup and export options')}</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -533,7 +535,7 @@ export function Settings() {
                   onClick={() => handleExport('all data')}
                 >
                   <Database className="mr-2 h-4 w-4" />
-                  Export All Data (CSV)
+                  {t('settings.btn_export_all', 'Export All Data (CSV)')}
                 </Button>
                 <Button
                   variant="outline"
@@ -541,7 +543,7 @@ export function Settings() {
                   onClick={() => handleExport('students')}
                 >
                   <Users className="mr-2 h-4 w-4" />
-                  Export Students
+                  {t('settings.btn_export_students', 'Export Students')}
                 </Button>
                 <Button
                   variant="outline"
@@ -549,7 +551,7 @@ export function Settings() {
                   onClick={() => handleExport('financial reports')}
                 >
                   <Building className="mr-2 h-4 w-4" />
-                  Export Financial Reports
+                  {t('settings.btn_export_financial', 'Export Financial Reports')}
                 </Button>
               </div>
             </CardContent>
@@ -561,18 +563,18 @@ export function Settings() {
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>{t('settings.dialog_change_password', 'Change Password')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="current_password">Current Password</Label>
+              <Label htmlFor="current_password">{t('settings.form_current_password', 'Current Password')}</Label>
               <div className="relative">
                 <Input
                   id="current_password"
                   type={showCurrentPassword ? 'text' : 'password'}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
+                  placeholder={t('settings.form_current_password_placeholder', 'Enter current password')}
                 />
                 <Button
                   type="button"
@@ -590,14 +592,14 @@ export function Settings() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new_password">New Password</Label>
+              <Label htmlFor="new_password">{t('settings.form_new_password', 'New Password')}</Label>
               <div className="relative">
                 <Input
                   id="new_password"
                   type={showNewPassword ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder={t('settings.form_new_password_placeholder', 'Enter new password')}
                 />
                 <Button
                   type="button"
@@ -613,16 +615,16 @@ export function Settings() {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
+              <p className="text-xs text-muted-foreground">{t('settings.password_min_chars', 'Minimum 6 characters')}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm_password">Confirm New Password</Label>
+              <Label htmlFor="confirm_password">{t('settings.form_confirm_password', 'Confirm New Password')}</Label>
               <Input
                 id="confirm_password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
+                placeholder={t('settings.form_confirm_password_placeholder', 'Confirm new password')}
               />
             </div>
           </div>
@@ -632,11 +634,11 @@ export function Settings() {
               onClick={() => setPasswordDialogOpen(false)}
               disabled={changePasswordMutation.isPending}
             >
-              Cancel
+              {t('common.btn_cancel', 'Cancel')}
             </Button>
             <Button onClick={handleChangePassword} disabled={changePasswordMutation.isPending}>
               {changePasswordMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Change Password
+              {t('settings.btn_change_password', 'Change Password')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -764,7 +764,7 @@ try {
                 activityLog('update', 'payment', $id);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
-                requireRole(['admin']);
+                requireFeature('payments_delete');
                 $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ?");
                 $old->execute([$id]);
                 $oldRow = $old->fetch();
@@ -862,7 +862,7 @@ try {
                 $stmt->execute([$input['category'] ?? '', (float)($input['amount'] ?? 0), $input['description'] ?? '', $input['expense_date'] ?? date('Y-m-d')]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
             } elseif ($id && $method === 'DELETE') {
-                requireRole(['admin']);
+                requireFeature('expenses_delete');
                 $old = db()->prepare("SELECT id FROM expenses WHERE id = ?");
                 $old->execute([$id]);
                 if (!$old->fetch()) { jsonError('Expense not found', 404); break; }
@@ -1880,6 +1880,31 @@ try {
                 $_SESSION['user']['email'] = $email;
                 $_SESSION['user']['phone'] = $phone;
                 activityLog('profile_update', 'user', $userId);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'permissions':
+            requireFeature('permissions');
+            if ($method === 'GET') {
+                $stmt = db()->query("SELECT role, feature FROM role_permissions ORDER BY feature, role");
+                $map = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $map[$row['feature']][] = $row['role'];
+                }
+                jsonResponse($map);
+            } elseif ($method === 'PUT') {
+                $input = json_decode(file_get_contents('php://input'), true) ?? [];
+                db()->beginTransaction();
+                db()->exec("DELETE FROM role_permissions");
+                $stmt = db()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+                foreach ($input as $feature => $roles) {
+                    if (!is_array($roles)) continue;
+                    foreach ($roles as $role) {
+                        $stmt->execute([(string)$role, (string)$feature]);
+                    }
+                }
+                db()->commit();
                 jsonResponse(['ok' => true]);
             } else { jsonError('Method not allowed', 405); }
             break;

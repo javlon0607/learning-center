@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Check, X, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 const statusOptions = [
   { value: 'present', label: 'Present', icon: Check, color: 'bg-green-500' },
@@ -27,6 +28,7 @@ const statusOptions = [
 export function Attendance() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation()
   const [selectedGroup, setSelectedGroup] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [attendanceData, setAttendanceData] = useState<Record<number, string>>({})
@@ -76,6 +78,16 @@ export function Attendance() {
     }))
   }
 
+  function getStatusLabel(value: string) {
+    switch (value) {
+      case 'present': return t('attendance.present', 'Present')
+      case 'absent': return t('attendance.absent', 'Absent')
+      case 'late': return t('attendance.late', 'Late')
+      case 'excused': return t('attendance.excused', 'Excused')
+      default: return value
+    }
+  }
+
   function handleSelectAll(status: string) {
     if (attendance?.rows) {
       const newData: Record<number, string> = {}
@@ -89,13 +101,13 @@ export function Attendance() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Attendance</h1>
-        <p className="text-muted-foreground">Mark daily attendance for groups</p>
+        <h1 className="text-2xl font-bold text-slate-900">{t('attendance.title', 'Attendance')}</h1>
+        <p className="text-muted-foreground">{t('attendance.description', 'Mark daily attendance for groups')}</p>
       </div>
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div className="space-y-2 w-full sm:w-auto">
-          <Label>Group</Label>
+          <Label>{t('attendance.form_group', 'Group')}</Label>
           <Select value={selectedGroup} onValueChange={setSelectedGroup}>
             <SelectTrigger className="w-full sm:w-[250px]">
               <SelectValue placeholder="Select a group" />
@@ -110,7 +122,7 @@ export function Attendance() {
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>Date</Label>
+          <Label>{t('attendance.form_date', 'Date')}</Label>
           <DateInput
             value={selectedDate}
             onChange={setSelectedDate}
@@ -122,7 +134,7 @@ export function Attendance() {
       {!selectedGroup ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Select a group to mark attendance
+            {t('attendance.empty_no_group', 'Select a group to mark attendance')}
           </CardContent>
         </Card>
       ) : attendanceLoading ? (
@@ -130,7 +142,7 @@ export function Attendance() {
       ) : !attendance?.rows?.length ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No students enrolled in this group
+            {t('attendance.empty_no_students', 'No students enrolled in this group')}
           </CardContent>
         </Card>
       ) : (
@@ -140,7 +152,7 @@ export function Attendance() {
               Attendance for {groups.find(g => g.id === Number(selectedGroup))?.name}
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">Mark all as:</span>
+              <span className="text-sm text-muted-foreground">{t('attendance.mark_all', 'Mark all as:')}</span>
               {statusOptions.map((option) => (
                 <Button
                   key={option.value}
@@ -150,7 +162,7 @@ export function Attendance() {
                   className="h-8"
                 >
                   <option.icon className={cn("h-4 w-4 mr-1", option.value === 'present' ? 'text-green-600' : option.value === 'absent' ? 'text-red-600' : option.value === 'late' ? 'text-yellow-600' : 'text-blue-600')} />
-                  {option.label}
+                  {getStatusLabel(option.value)}
                 </Button>
               ))}
             </div>
@@ -178,7 +190,7 @@ export function Attendance() {
                           )}
                         >
                           <option.icon className="h-4 w-4" />
-                          {option.label}
+                          {getStatusLabel(option.value)}
                         </button>
                       )
                     })}
@@ -195,7 +207,7 @@ export function Attendance() {
                 {saveAttendance.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                Save Attendance
+                {t('attendance.save', 'Save Attendance')}
               </Button>
             </div>
           </CardContent>
@@ -204,14 +216,14 @@ export function Attendance() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Legend</CardTitle>
+          <CardTitle className="text-lg">{t('attendance.legend_title', 'Legend')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             {statusOptions.map((option) => (
               <div key={option.value} className="flex items-center gap-2">
                 <div className={cn("h-4 w-4 rounded", option.color)} />
-                <span className="text-sm">{option.label}</span>
+                <span className="text-sm">{getStatusLabel(option.value)}</span>
               </div>
             ))}
           </div>

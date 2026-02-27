@@ -87,6 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return false
     const userRoles = (user.role || 'user').split(',').map((r) => r.trim()).filter(Boolean)
     if (userRoles.length === 0) userRoles.push('user')
+    // owner and developer inherit all admin permissions
+    if (userRoles.some(r => r === 'owner' || r === 'developer')) {
+      userRoles.push('admin')
+    }
     const allowedRoles = Array.isArray(roles) ? roles : [roles]
     return allowedRoles.some((r) => userRoles.includes(r))
   }

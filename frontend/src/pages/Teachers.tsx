@@ -49,11 +49,13 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 export function Teachers() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
@@ -164,12 +166,12 @@ export function Teachers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Teachers</h1>
-          <p className="text-muted-foreground">Manage your teaching staff</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t('teachers.title', 'Teachers')}</h1>
+          <p className="text-muted-foreground">{t('teachers.description', 'Manage your teaching staff')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Teacher
+          {t('teachers.add', 'Add Teacher')}
         </Button>
       </div>
 
@@ -177,7 +179,7 @@ export function Teachers() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search teachers..."
+            placeholder={t('teachers.search_placeholder', 'Search teachers...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -192,12 +194,12 @@ export function Teachers() {
           <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Subjects</TableHead>
-                <TableHead>Salary</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t('teachers.col_name', 'Name')}</TableHead>
+                <TableHead>{t('teachers.col_phone', 'Phone')}</TableHead>
+                <TableHead>{t('teachers.col_email', 'Email')}</TableHead>
+                <TableHead>{t('teachers.col_subjects', 'Subjects')}</TableHead>
+                <TableHead>{t('teachers.col_salary', 'Salary')}</TableHead>
+                <TableHead>{t('teachers.col_status', 'Status')}</TableHead>
                 <TableHead className="w-[70px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -205,7 +207,7 @@ export function Teachers() {
               {filteredTeachers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No teachers found
+                    {t('teachers.empty_msg', 'No teachers found')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -231,8 +233,8 @@ export function Teachers() {
                         </span>
                         <span className="text-muted-foreground text-sm ml-1">
                           {teacher.salary_type === 'per_student'
-                            ? 'per student'
-                            : `(${teacher.salary_type})`}
+                            ? t('teachers.salary_per_student', 'per student')
+                            : `(${t('teachers.salary_fixed', 'fixed')})`}
                         </span>
                       </div>
                     </TableCell>
@@ -251,14 +253,14 @@ export function Teachers() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/teachers/${teacher.id}`)}>
                             <Eye className="mr-2 h-4 w-4" />
-                            View
+                            {t('teachers.menu_view', 'View')}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setSelectedTeacher(teacher)
                             setFormOpen(true)
                           }}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit
+                            {t('teachers.menu_edit', 'Edit')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -268,7 +270,7 @@ export function Teachers() {
                             className="text-red-600"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            {t('teachers.menu_delete', 'Delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -287,7 +289,7 @@ export function Teachers() {
       }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedTeacher ? 'Edit Teacher' : 'Add New Teacher'}</DialogTitle>
+            <DialogTitle>{selectedTeacher ? t('teachers.dialog_edit_title', 'Edit Teacher') : t('teachers.dialog_create_title', 'Add New Teacher')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
@@ -317,16 +319,16 @@ export function Teachers() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subjects">Subjects</Label>
+                    <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
                     <Input
                       id="subjects"
                       name="subjects"
-                      placeholder="e.g., Math, English, Science"
+                      placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label>Salary Type</Label>
+                      <Label>{t('teachers.form_salary_type', 'Salary Type')}</Label>
                       <Select
                         name="salary_type"
                         value={addSalaryType}
@@ -336,8 +338,8 @@ export function Teachers() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="fixed">Fixed</SelectItem>
-                          <SelectItem value="per_student">Per Student</SelectItem>
+                          <SelectItem value="fixed">{t('teachers.form_salary_fixed', 'Fixed')}</SelectItem>
+                          <SelectItem value="per_student">{t('teachers.form_salary_per_student', 'Per Student')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -358,14 +360,14 @@ export function Teachers() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Status</Label>
+                      <Label>{t('teachers.form_status', 'Status')}</Label>
                       <Select name="status" defaultValue="active">
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="active">{t('teachers.form_status_active', 'Active')}</SelectItem>
+                          <SelectItem value="inactive">{t('teachers.form_status_inactive', 'Inactive')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -413,17 +415,17 @@ export function Teachers() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="subjects">Subjects</Label>
+                    <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
                     <Input
                       id="subjects"
                       name="subjects"
-                      placeholder="e.g., Math, English, Science"
+                      placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
                       defaultValue={selectedTeacher?.subjects}
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="salary_type">Salary Type</Label>
+                      <Label htmlFor="salary_type">{t('teachers.form_salary_type', 'Salary Type')}</Label>
                       <Select
                         name="salary_type"
                         value={salaryType}
@@ -435,8 +437,8 @@ export function Teachers() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="fixed">Fixed</SelectItem>
-                          <SelectItem value="per_student">Per Student</SelectItem>
+                          <SelectItem value="fixed">{t('teachers.form_salary_fixed', 'Fixed')}</SelectItem>
+                          <SelectItem value="per_student">{t('teachers.form_salary_per_student', 'Per Student')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -457,14 +459,14 @@ export function Teachers() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
+                      <Label htmlFor="status">{t('teachers.form_status', 'Status')}</Label>
                       <Select name="status" defaultValue={selectedTeacher?.status || 'active'}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="active">{t('teachers.form_status_active', 'Active')}</SelectItem>
+                          <SelectItem value="inactive">{t('teachers.form_status_inactive', 'Inactive')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -474,7 +476,7 @@ export function Teachers() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
+                {t('common.btn_cancel', 'Cancel')}
               </Button>
               <Button
                 type="submit"
@@ -487,7 +489,7 @@ export function Teachers() {
                 {(createTeacher.isPending || updateTeacher.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {selectedTeacher ? 'Update' : 'Create'}
+                {selectedTeacher ? t('common.btn_update', 'Update') : t('common.btn_create', 'Create')}
               </Button>
             </DialogFooter>
           </form>

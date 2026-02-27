@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { ArrowLeft, Plus, Search, Loader2, Pencil, UserX, UserCheck } from 'lucide-react'
+import { useTranslation } from '@/contexts/I18nContext'
 
 //interface UserWithPassword extends User {
 //  password?: string
@@ -45,11 +46,12 @@ export function Users() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { user: currentUser } = useAuth()
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [toggleUser, setToggleUser] = useState<User | null>(null)
-  const ROLES: UserRole[] = ['admin', 'manager', 'teacher', 'accountant', 'user']
+  const ROLES: UserRole[] = ['owner', 'developer', 'admin', 'manager', 'teacher', 'accountant', 'user']
   const [formRoles, setFormRoles] = useState<UserRole[]>(['user'])
   const [formPhone, setFormPhone] = useState('')
 
@@ -167,13 +169,13 @@ export function Users() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-            <p className="text-muted-foreground">Manage system users and permissions</p>
+            <h1 className="text-2xl font-bold text-slate-900">{t('users.title', 'User Management')}</h1>
+            <p className="text-muted-foreground">{t('users.description', 'Manage system users and permissions')}</p>
           </div>
         </div>
         <Button onClick={() => { setSelectedUser(null); setFormOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
-          Add User
+          {t('users.add', 'Add User')}
         </Button>
       </div>
 
@@ -181,7 +183,7 @@ export function Users() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search users..."
+            placeholder={t('users.search', 'Search users...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -198,20 +200,20 @@ export function Users() {
           <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead className="hidden md:table-cell">Phone</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[100px]">Actions</TableHead>
+                <TableHead>{t('users.col_username', 'Username')}</TableHead>
+                <TableHead>{t('users.col_name', 'Name')}</TableHead>
+                <TableHead>{t('users.col_email', 'Email')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('users.col_phone', 'Phone')}</TableHead>
+                <TableHead>{t('users.col_role', 'Role')}</TableHead>
+                <TableHead>{t('users.col_status', 'Status')}</TableHead>
+                <TableHead className="w-[100px]">{t('common.col_actions', 'Actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No users found
+                    {t('users.no_data', 'No users found')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -232,7 +234,7 @@ export function Users() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.is_active ? 'success' : 'secondary'}>
-                        {user.is_active ? 'Active' : 'Inactive'}
+                        {user.is_active ? t('common.status_active', 'Active') : t('common.status_inactive', 'Inactive')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -277,16 +279,16 @@ export function Users() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {toggleUser?.is_active ? 'Deactivate user?' : 'Activate user?'}
+              {toggleUser?.is_active ? t('users.deactivate_title', 'Deactivate user?') : t('users.activate_title', 'Activate user?')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {toggleUser?.is_active
-                ? `${toggleUser.name || toggleUser.username} will no longer be able to sign in until activated again.`
-                : `${toggleUser?.name || toggleUser?.username} will be able to sign in again.`}
+                ? `${toggleUser.name || toggleUser.username} ${t('users.deactivate_desc', 'will no longer be able to sign in until activated again.')}`
+                : `${toggleUser?.name || toggleUser?.username} ${t('users.activate_desc', 'will be able to sign in again.')}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={toggleActiveMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={toggleActiveMutation.isPending}>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <Button
               type="button"
               onClick={confirmToggleActive}
@@ -296,9 +298,9 @@ export function Users() {
               {toggleActiveMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : toggleUser?.is_active ? (
-                'Deactivate'
+                t('users.btn_deactivate', 'Deactivate')
               ) : (
-                'Activate'
+                t('users.btn_activate', 'Activate')
               )}
             </Button>
           </AlertDialogFooter>
@@ -308,13 +310,13 @@ export function Users() {
       <Dialog open={formOpen} onOpenChange={(open) => { setFormOpen(open); if (!open) setSelectedUser(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{selectedUser ? 'Edit User' : 'Add New User'}</DialogTitle>
+            <DialogTitle>{selectedUser ? t('users.dialog_edit_title', 'Edit User') : t('users.dialog_create_title', 'Add New User')}</DialogTitle>
           </DialogHeader>
           <form key={selectedUser ? selectedUser.id : 'new'} onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username *</Label>
+                  <Label htmlFor="username">{t('users.form_username', 'Username')} *</Label>
                   <Input
                     id="username"
                     name="username"
@@ -324,7 +326,7 @@ export function Users() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name *</Label>
+                  <Label htmlFor="name">{t('users.form_full_name', 'Full Name')} *</Label>
                   <Input
                     id="name"
                     name="name"
@@ -335,7 +337,7 @@ export function Users() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">{t('users.form_email', 'Email')}</Label>
                   <Input
                     id="email"
                     name="email"
@@ -344,7 +346,7 @@ export function Users() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
+                  <Label htmlFor="phone">{t('users.form_phone', 'Phone')}</Label>
                   <PhoneInput
                     id="phone"
                     value={formPhone}
@@ -353,7 +355,7 @@ export function Users() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Roles * (select one or more)</Label>
+                <Label>{t('users.form_roles', 'Roles')} * ({t('users.form_roles_hint', 'select one or more')})</Label>
                 <div className="flex flex-wrap gap-4">
                   {ROLES.map((r) => (
                     <label key={r} className="flex items-center gap-2 cursor-pointer">
@@ -371,23 +373,23 @@ export function Users() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">
-                  Password {selectedUser ? '(leave blank to keep current)' : '*'}
+                  {t('users.form_password', 'Password')} {selectedUser ? `(${t('users.form_password_optional', 'leave blank to keep current')})` : '*'}
                 </Label>
                 <Input
                   id="password"
                   name="password"
                   type="password"
                   required={!selectedUser}
-                  placeholder={selectedUser ? 'Enter new password to change' : 'Enter password'}
+                  placeholder={selectedUser ? t('users.form_password_change_placeholder', 'Enter new password to change') : t('users.form_password_placeholder', 'Enter password')}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
+                {t('common.btn_cancel', 'Cancel')}
               </Button>
               <Button type="submit">
-                {selectedUser ? 'Update' : 'Create'}
+                {selectedUser ? t('common.btn_update', 'Update') : t('common.btn_create', 'Create')}
               </Button>
             </DialogFooter>
           </form>

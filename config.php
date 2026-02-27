@@ -80,6 +80,10 @@ function requireRole($allowed) {
     $userRoles = array_map('trim', explode(',', $roleStr));
     $userRoles = array_filter($userRoles);
     if (empty($userRoles)) $userRoles = ['user'];
+    // owner and developer inherit all admin permissions
+    if (array_intersect($userRoles, ['owner', 'developer'])) {
+        $userRoles[] = 'admin';
+    }
     $allowed = is_array($allowed) ? $allowed : [$allowed];
     $hasAny = count(array_intersect($userRoles, $allowed)) > 0;
     if (!$hasAny) {
@@ -368,4 +372,76 @@ function initDB() {
             }
         } catch (PDOException $e) { /* ignore */ }
     }
+
+    // Role permissions table
+    try {
+        db()->exec("
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                id SERIAL PRIMARY KEY,
+                role VARCHAR(30) NOT NULL,
+                feature VARCHAR(50) NOT NULL,
+                UNIQUE(role, feature)
+            )
+        ");
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Seed default permissions only on first run (table empty = fresh install)
+    try {
+        $existing = (int)db()->query("SELECT COUNT(*) FROM role_permissions")->fetchColumn();
+        if ($existing > 0) return;
+    } catch (PDOException $e) { return; }
+
+    $defaultPermissions = [
+        ['admin', 'dashboard'], ['manager', 'dashboard'], ['teacher', 'dashboard'], ['accountant', 'dashboard'],
+        ['admin', 'students'], ['manager', 'students'], ['teacher', 'students'], ['accountant', 'students'],
+        ['admin', 'teachers'], ['manager', 'teachers'], ['accountant', 'teachers'],
+        ['admin', 'groups'],   ['manager', 'groups'],   ['teacher', 'groups'],   ['accountant', 'groups'],
+        ['admin', 'leads'],    ['manager', 'leads'],
+        ['admin', 'attendance'], ['manager', 'attendance'], ['teacher', 'attendance'], ['accountant', 'attendance'],
+        ['admin', 'payments'],   ['manager', 'payments'],   ['accountant', 'payments'],
+        ['admin', 'payments_delete'], ['manager', 'payments_delete'], ['accountant', 'payments_delete'],
+        ['admin', 'expenses'],   ['manager', 'expenses'],   ['accountant', 'expenses'],
+        ['admin', 'expenses_delete'], ['manager', 'expenses_delete'], ['accountant', 'expenses_delete'],
+        ['admin', 'collections'],['manager', 'collections'],['accountant', 'collections'],
+        ['admin', 'salary_slips'], ['accountant', 'salary_slips'],
+        ['admin', 'reports'],  ['manager', 'reports'],  ['accountant', 'reports'],
+        ['admin', 'logs'],
+        ['admin', 'settings'],
+        ['admin', 'users'],
+        // owner gets all features by default (configurable via permissions page)
+        ['owner', 'dashboard'], ['owner', 'students'], ['owner', 'teachers'], ['owner', 'groups'],
+        ['owner', 'leads'], ['owner', 'attendance'], ['owner', 'payments'], ['owner', 'payments_delete'], ['owner', 'expenses'], ['owner', 'expenses_delete'],
+        ['owner', 'collections'], ['owner', 'salary_slips'], ['owner', 'reports'], ['owner', 'logs'],
+        ['owner', 'settings'], ['owner', 'users'], ['owner', 'permissions'],
+        // developer bypasses all checks but seed permissions anyway
+        ['developer', 'permissions'],
+    ];
+    try {
+        $permStmt = db()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+        foreach ($defaultPermissions as [$role, $feature]) {
+            $permStmt->execute([$role, $feature]);
+        }
+    } catch (PDOException $e) { /* ignore */ }
+}
+
+function requireFeature($feature) {
+    auth();
+    $roleStr = $_SESSION['user']['role'] ?? 'user';
+    $userRoles = array_map('trim', explode(',', $roleStr));
+    $userRoles = array_filter($userRoles);
+    if (empty($userRoles)) $userRoles = ['user'];
+    // only developer bypasses all feature checks
+    if (in_array('developer', $userRoles)) return;
+    try {
+        $placeholders = implode(',', array_fill(0, count($userRoles), '?'));
+        $stmt = db()->prepare("SELECT COUNT(*) FROM role_permissions WHERE feature = ? AND role IN ($placeholders)");
+        $stmt->execute(array_merge([$feature], array_values($userRoles)));
+        if ((int)$stmt->fetchColumn() > 0) return;
+    } catch (PDOException $e) { /* ignore */ }
+    if (IS_API) {
+        header('Content-Type: application/json');
+        http_response_code(403);
+        die(json_encode(['error' => 'Forbidden']));
+    }
+    die('Access denied');
 }

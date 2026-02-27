@@ -54,6 +54,7 @@ import {
   Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, Download
 } from 'lucide-react'
 import { formatDate, formatCurrency, calculateAge, cn } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 type SortField = 'name' | 'phone' | 'status' | 'groups' | 'debt' | 'source' | 'created_at'
 type SortDirection = 'asc' | 'desc'
@@ -72,6 +73,7 @@ export function Students() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { hasRole } = useAuth()
+  const { t } = useTranslation()
 
   // Filters
   const [search, setSearch] = useState('')
@@ -298,17 +300,17 @@ export function Students() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Students</h1>
-          <p className="text-muted-foreground mt-1">Manage and track all student records</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('students.title', 'Students')}</h1>
+          <p className="text-muted-foreground mt-1">{t('students.description', 'Manage and track all student records')}</p>
         </div>
         <div className="flex items-center gap-2">
           {sortedStudents.length > 0 && (
             <Button variant="outline" onClick={exportCSV}>
-              <Download className="mr-2 h-4 w-4" />Export
+              <Download className="mr-2 h-4 w-4" />{t('common.btn_export', 'Export')}
             </Button>
           )}
           <Button onClick={() => setFormOpen(true)} className="bg-navy-950 hover:bg-navy-900">
-            <Plus className="mr-2 h-4 w-4" />Add Student
+            <Plus className="mr-2 h-4 w-4" />{t('students.add', 'Add Student')}
           </Button>
         </div>
       </div>
@@ -326,7 +328,7 @@ export function Students() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total Students</p>
+                <p className="text-xs text-muted-foreground">{t('students.stat_total', 'Total Students')}</p>
               </div>
             </div>
           </CardContent>
@@ -342,7 +344,7 @@ export function Students() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.active}</p>
-                <p className="text-xs text-muted-foreground">Active Students</p>
+                <p className="text-xs text-muted-foreground">{t('students.stat_active', 'Active Students')}</p>
               </div>
             </div>
           </CardContent>
@@ -358,7 +360,7 @@ export function Students() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.withDebt}</p>
-                <p className="text-xs text-muted-foreground">With Debt</p>
+                <p className="text-xs text-muted-foreground">{t('students.stat_with_debt', 'With Debt')}</p>
               </div>
             </div>
           </CardContent>
@@ -374,7 +376,7 @@ export function Students() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatCurrency(stats.totalDebt)}</p>
-                <p className="text-xs text-muted-foreground">Total Debt (Month)</p>
+                <p className="text-xs text-muted-foreground">{t('students.stat_total_debt', 'Total Debt (Month)')}</p>
               </div>
             </div>
           </CardContent>
@@ -386,7 +388,7 @@ export function Students() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name, phone, email..."
+            placeholder={t('students.search_placeholder', 'Search by name, phone, email...')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1) }}
             className="pl-9"
@@ -394,22 +396,22 @@ export function Students() {
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="All statuses" />
+            <SelectValue placeholder={t('common.all_statuses', 'All statuses')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="graduated">Graduated</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="all">{t('common.all_statuses', 'All statuses')}</SelectItem>
+            <SelectItem value="active">{t('common.status_active', 'Active')}</SelectItem>
+            <SelectItem value="inactive">{t('common.status_inactive', 'Inactive')}</SelectItem>
+            <SelectItem value="graduated">{t('students.filter_graduated', 'Graduated')}</SelectItem>
+            <SelectItem value="suspended">{t('students.filter_suspended', 'Suspended')}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={groupFilter} onValueChange={(v) => { setGroupFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="All groups" />
+            <SelectValue placeholder={t('common.all_groups', 'All groups')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All groups</SelectItem>
+            <SelectItem value="all">{t('common.all_groups', 'All groups')}</SelectItem>
             {groups.filter(g => g.status === 'active').map((group) => (
               <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>
             ))}
@@ -417,10 +419,10 @@ export function Students() {
         </Select>
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-full sm:w-[150px]">
-            <SelectValue placeholder="All sources" />
+            <SelectValue placeholder={t('common.all_sources', 'All sources')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All sources</SelectItem>
+            <SelectItem value="all">{t('common.all_sources', 'All sources')}</SelectItem>
             {sourceOptions.map(({ value, label }) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
@@ -428,13 +430,13 @@ export function Students() {
         </Select>
         {debtOnly && (
           <Badge variant="secondary" className="gap-1">
-            Debt only
+            {t('students.filter_debt_only', 'Debt only')}
             <button onClick={() => setDebtOnly(false)} className="ml-1 hover:text-foreground">&times;</button>
           </Badge>
         )}
         {(search || statusFilter !== 'all' || groupFilter !== 'all' || sourceFilter !== 'all' || debtOnly) && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground hover:text-foreground">
-            Clear filters
+            {t('students.btn_clear_filters', 'Clear filters')}
           </Button>
         )}
       </div>
@@ -468,14 +470,14 @@ export function Students() {
             <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <SortableHeader field="name" className="font-semibold">Student</SortableHeader>
-                  <SortableHeader field="phone" className="font-semibold">Contact</SortableHeader>
+                  <SortableHeader field="name" className="font-semibold">{t('students.col_name', 'Name')}</SortableHeader>
+                  <SortableHeader field="phone" className="font-semibold">{t('students.col_phone', 'Phone')}</SortableHeader>
                   <TableHead className="font-semibold">Parent/Guardian</TableHead>
-                  <SortableHeader field="groups" className="font-semibold">Groups</SortableHeader>
-                  <SortableHeader field="debt" className="font-semibold">This Month</SortableHeader>
+                  <SortableHeader field="groups" className="font-semibold">{t('students.col_groups', 'Groups')}</SortableHeader>
+                  <SortableHeader field="debt" className="font-semibold">{t('students.col_debt', 'Debt')}</SortableHeader>
                   <SortableHeader field="status" className="font-semibold">Status</SortableHeader>
-                  <SortableHeader field="source" className="font-semibold">Source</SortableHeader>
-                  <SortableHeader field="created_at" className="font-semibold">Enrolled</SortableHeader>
+                  <SortableHeader field="source" className="font-semibold">{t('students.col_source', 'Source')}</SortableHeader>
+                  <SortableHeader field="created_at" className="font-semibold">{t('students.col_registered', 'Registered')}</SortableHeader>
                   <TableHead className="w-[70px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -551,7 +553,7 @@ export function Students() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-sm">Not enrolled</span>
+                          <span className="text-muted-foreground text-sm">{t('students.not_enrolled', 'Not enrolled')}</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -612,16 +614,16 @@ export function Students() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem onClick={() => navigate(`/students/${student.id}`)} className="cursor-pointer">
-                              <Eye className="mr-2 h-4 w-4" />View Details
+                              <Eye className="mr-2 h-4 w-4" />{t('students.menu_view', 'View Details')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleEdit(student)} className="cursor-pointer">
-                              <Pencil className="mr-2 h-4 w-4" />Edit Student
+                              <Pencil className="mr-2 h-4 w-4" />{t('students.menu_edit', 'Edit Student')}
                             </DropdownMenuItem>
                             {hasRole('admin') && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleDelete(student)} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-                                  <Trash2 className="mr-2 h-4 w-4" />Delete Student
+                                  <Trash2 className="mr-2 h-4 w-4" />{t('students.menu_delete', 'Delete Student')}
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -723,7 +725,7 @@ export function Students() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Student</AlertDialogTitle>
+            <AlertDialogTitle>{t('students.dialog_delete_title', 'Delete Student')}</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete {studentToDelete?.first_name} {studentToDelete?.last_name}? This action cannot be undone.
             </AlertDialogDescription>

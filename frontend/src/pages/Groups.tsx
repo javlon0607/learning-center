@@ -51,6 +51,7 @@ import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'luci
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
 import { useAmountInput } from '@/hooks/useAmountInput'
+import { useTranslation } from '@/contexts/I18nContext'
 
 const statusColors = {
   active: 'success',
@@ -62,6 +63,7 @@ export function Groups() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { toast } = useToast()
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
@@ -180,12 +182,12 @@ export function Groups() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Groups</h1>
-          <p className="text-muted-foreground">Manage your learning groups</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t('groups.title', 'Groups')}</h1>
+          <p className="text-muted-foreground">{t('groups.description', 'Manage your learning groups')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Group
+          {t('groups.add', 'Add Group')}
         </Button>
       </div>
 
@@ -193,7 +195,7 @@ export function Groups() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search groups..."
+            placeholder={t('groups.search_placeholder', 'Search groups...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -208,14 +210,14 @@ export function Groups() {
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Teacher</TableHead>
-                <TableHead>Schedule</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead>Students</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>{t('groups.col_name', 'Name')}</TableHead>
+                <TableHead>{t('groups.col_subject', 'Subject')}</TableHead>
+                <TableHead>{t('groups.col_teacher', 'Teacher')}</TableHead>
+                <TableHead>{t('groups.col_schedule', 'Schedule')}</TableHead>
+                <TableHead>{t('groups.col_room', 'Room')}</TableHead>
+                <TableHead>{t('groups.col_students', 'Students')}</TableHead>
+                <TableHead>{t('groups.col_price', 'Price')}</TableHead>
+                <TableHead>{t('groups.col_status', 'Status')}</TableHead>
                 <TableHead className="w-[70px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -223,7 +225,7 @@ export function Groups() {
               {filteredGroups.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    No groups found
+                    {t('groups.empty_msg', 'No groups found')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -266,7 +268,7 @@ export function Groups() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => navigate(`/groups/${group.id}`)}>
                             <Eye className="mr-2 h-4 w-4" />
-                            View
+                            {t('groups.menu_view', 'View')}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => {
                             setSelectedGroup(group)
@@ -279,7 +281,7 @@ export function Groups() {
                             setFormOpen(true)
                           }}>
                             <Pencil className="mr-2 h-4 w-4" />
-                            Edit
+                            {t('groups.menu_edit', 'Edit')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -289,7 +291,7 @@ export function Groups() {
                             className="text-red-600"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
+                            {t('groups.menu_delete', 'Delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -324,13 +326,13 @@ export function Groups() {
       }}>
         <DialogContent className="max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>{selectedGroup ? 'Edit Group' : 'Add New Group'}</DialogTitle>
+            <DialogTitle>{selectedGroup ? t('groups.dialog_edit_title', 'Edit Group') : t('groups.dialog_create_title', 'Add New Group')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
             <div className="grid gap-4 py-4 overflow-y-auto pr-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
+                  <Label htmlFor="name">{t('groups.form_name', 'Name *')}</Label>
                   <Input
                     id="name"
                     name="name"
@@ -339,7 +341,7 @@ export function Groups() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="subject">Subject</Label>
+                  <Label htmlFor="subject">{t('groups.form_subject', 'Subject')}</Label>
                   <Input
                     id="subject"
                     name="subject"
@@ -348,7 +350,7 @@ export function Groups() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="teacher_id">Teacher *</Label>
+                <Label htmlFor="teacher_id">{t('groups.form_teacher', 'Teacher *')}</Label>
                 <Select value={formTeacherId} onValueChange={setFormTeacherId}>
                   <SelectTrigger className={!formTeacherId ? 'text-muted-foreground' : ''}>
                     <SelectValue placeholder="Select teacher" />
@@ -367,7 +369,7 @@ export function Groups() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="capacity">Capacity</Label>
+                  <Label htmlFor="capacity">{t('groups.form_capacity', 'Capacity')}</Label>
                   <Input
                     id="capacity"
                     name="capacity"
@@ -376,7 +378,7 @@ export function Groups() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="price">Price</Label>
+                  <Label htmlFor="price">{t('groups.form_price', 'Price')}</Label>
                   <Input
                     ref={price.ref}
                     id="price"
@@ -392,20 +394,20 @@ export function Groups() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status">{t('groups.form_status', 'Status')}</Label>
                   <Select name="status" defaultValue={selectedGroup?.status || 'active'}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="active">{t('groups.form_status_active', 'Active')}</SelectItem>
+                      <SelectItem value="inactive">{t('groups.form_status_inactive', 'Inactive')}</SelectItem>
+                      <SelectItem value="completed">{t('groups.form_status_completed', 'Completed')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="room">Room</Label>
+                  <Label htmlFor="room">{t('groups.form_room', 'Room')}</Label>
                   <Select value={formRoom} onValueChange={setFormRoom}>
                     <SelectTrigger className={!formRoom ? 'text-muted-foreground' : ''}>
                       <SelectValue placeholder="Select room" />
@@ -421,7 +423,7 @@ export function Groups() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Schedule Days</Label>
+                <Label>{t('groups.form_schedule_days', 'Schedule Days')}</Label>
                 <div className="flex flex-wrap gap-2">
                   {DAYS_OF_WEEK.map((day) => (
                     <label
@@ -450,7 +452,7 @@ export function Groups() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="time_start">Start Time</Label>
+                  <Label htmlFor="time_start">{t('groups.form_start_time', 'Start Time')}</Label>
                   <TimeInput
                     id="time_start"
                     value={formTimeStart}
@@ -458,7 +460,7 @@ export function Groups() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="time_end">End Time</Label>
+                  <Label htmlFor="time_end">{t('groups.form_end_time', 'End Time')}</Label>
                   <TimeInput
                     id="time_end"
                     value={formTimeEnd}
@@ -473,13 +475,13 @@ export function Groups() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
-                Cancel
+                {t('common.btn_cancel', 'Cancel')}
               </Button>
               <Button type="submit" disabled={createGroup.isPending || updateGroup.isPending}>
                 {(createGroup.isPending || updateGroup.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {selectedGroup ? 'Update' : 'Create'}
+                {selectedGroup ? t('common.btn_update', 'Update') : t('common.btn_create', 'Create')}
               </Button>
             </DialogFooter>
           </form>

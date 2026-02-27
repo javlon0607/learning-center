@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 function formatAuditValues(obj: Record<string, unknown> | null): string {
   if (!obj || typeof obj !== 'object') return '—'
@@ -51,6 +52,7 @@ const actionColors: Record<string, string> = {
 const PAGE_SIZE = 50
 
 export function Logs() {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -128,14 +130,14 @@ export function Logs() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Logs</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t('logs.title', 'Audit Logs')}</h1>
           <p className="text-muted-foreground">
-            System activity and change history
+            {t('logs.description', 'Track all system changes and activities')}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={exportCSV} disabled={filteredLogs.length === 0}>
           <Download className="h-4 w-4 mr-2" />
-          Export CSV
+          {t('logs.btn_export', 'Export CSV')}
         </Button>
       </div>
 
@@ -144,14 +146,14 @@ export function Logs() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search username, entity, IP..."
+            placeholder={t('logs.search', 'Search username, entity, IP...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">From</Label>
+          <Label className="text-xs">{t('common.from', 'From')}</Label>
           <DateInput
             value={dateFrom}
             onChange={(v) => { setDateFrom(v); setPage(1) }}
@@ -159,7 +161,7 @@ export function Logs() {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">To</Label>
+          <Label className="text-xs">{t('common.to', 'To')}</Label>
           <DateInput
             value={dateTo}
             onChange={(v) => { setDateTo(v); setPage(1) }}
@@ -167,47 +169,47 @@ export function Logs() {
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Entity</Label>
+          <Label className="text-xs">{t('logs.filter_entity', 'Entity')}</Label>
           <Select value={entityType} onValueChange={(v) => { setEntityType(v); setPage(1) }}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All entities</SelectItem>
-              <SelectItem value="payment">Payment</SelectItem>
-              <SelectItem value="student">Student</SelectItem>
-              <SelectItem value="lead">Lead</SelectItem>
-              <SelectItem value="group">Group</SelectItem>
-              <SelectItem value="discount">Discount</SelectItem>
-              <SelectItem value="attendance">Attendance</SelectItem>
-              <SelectItem value="salary_slip">Salary</SelectItem>
-              <SelectItem value="teacher">Teacher</SelectItem>
-              <SelectItem value="user">User</SelectItem>
+              <SelectItem value="all">{t('logs.all_entities', 'All entities')}</SelectItem>
+              <SelectItem value="payment">{t('logs.entity_payment', 'Payment')}</SelectItem>
+              <SelectItem value="student">{t('logs.entity_student', 'Student')}</SelectItem>
+              <SelectItem value="lead">{t('logs.entity_lead', 'Lead')}</SelectItem>
+              <SelectItem value="group">{t('logs.entity_group', 'Group')}</SelectItem>
+              <SelectItem value="discount">{t('logs.entity_discount', 'Discount')}</SelectItem>
+              <SelectItem value="attendance">{t('logs.entity_attendance', 'Attendance')}</SelectItem>
+              <SelectItem value="salary_slip">{t('logs.entity_salary', 'Salary')}</SelectItem>
+              <SelectItem value="teacher">{t('logs.entity_teacher', 'Teacher')}</SelectItem>
+              <SelectItem value="user">{t('logs.entity_user', 'User')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Action</Label>
+          <Label className="text-xs">{t('logs.filter_action', 'Action')}</Label>
           <Select value={action} onValueChange={(v) => { setAction(v); setPage(1) }}>
             <SelectTrigger className="w-[130px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All actions</SelectItem>
-              <SelectItem value="create">Create</SelectItem>
-              <SelectItem value="update">Update</SelectItem>
-              <SelectItem value="soft_delete">Soft Delete</SelectItem>
-              <SelectItem value="delete">Delete</SelectItem>
-              <SelectItem value="login">Login</SelectItem>
-              <SelectItem value="logout">Logout</SelectItem>
-              <SelectItem value="lead_convert">Lead Convert</SelectItem>
+              <SelectItem value="all">{t('logs.all_actions', 'All actions')}</SelectItem>
+              <SelectItem value="create">{t('logs.action_create', 'Create')}</SelectItem>
+              <SelectItem value="update">{t('logs.action_update', 'Update')}</SelectItem>
+              <SelectItem value="soft_delete">{t('logs.action_soft_delete', 'Soft Delete')}</SelectItem>
+              <SelectItem value="delete">{t('logs.action_delete', 'Delete')}</SelectItem>
+              <SelectItem value="login">{t('logs.action_login', 'Login')}</SelectItem>
+              <SelectItem value="logout">{t('logs.action_logout', 'Logout')}</SelectItem>
+              <SelectItem value="lead_convert">{t('logs.action_lead_convert', 'Lead Convert')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X className="h-4 w-4 mr-1" />
-            Clear
+            {t('common.btn_clear', 'Clear')}
           </Button>
         )}
       </div>
@@ -215,7 +217,7 @@ export function Logs() {
       {/* Summary */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <ScrollText className="h-4 w-4" />
-        <span>{total} total entries</span>
+        <span>{total} {t('logs.total_entries', 'total entries')}</span>
       </div>
 
       {/* Table */}
@@ -228,20 +230,20 @@ export function Logs() {
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Username</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Before</TableHead>
-                <TableHead>After</TableHead>
-                <TableHead>IP</TableHead>
-                <TableHead>Timestamp</TableHead>
+                <TableHead>{t('logs.col_username', 'Username')}</TableHead>
+                <TableHead>{t('logs.col_entity', 'Entity')}</TableHead>
+                <TableHead>{t('logs.col_action', 'Action')}</TableHead>
+                <TableHead>{t('logs.col_before', 'Before')}</TableHead>
+                <TableHead>{t('logs.col_after', 'After')}</TableHead>
+                <TableHead>{t('logs.col_ip', 'IP')}</TableHead>
+                <TableHead>{t('logs.col_timestamp', 'Timestamp')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredLogs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                    No logs found
+                    {t('logs.no_data', 'No logs found')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -294,7 +296,7 @@ export function Logs() {
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
           <span className="text-sm text-muted-foreground">
-            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+            {t('common.showing', 'Showing')} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} {t('common.of', 'of')} {total}
           </span>
           <div className="flex items-center gap-1">
             <Button
@@ -317,7 +319,7 @@ export function Logs() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm px-3">
-              Page {page} of {totalPages}
+              {t('common.page', 'Page')} {page} {t('common.of', 'of')} {totalPages}
             </span>
             <Button
               variant="outline"

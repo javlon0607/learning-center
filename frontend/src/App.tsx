@@ -19,6 +19,8 @@ import { Logs } from '@/pages/Logs'
 import { Settings } from '@/pages/Settings'
 import { Users } from '@/pages/Users'
 import { Collections } from '@/pages/Collections'
+import { Permissions } from '@/pages/Permissions'
+import { Translations } from '@/pages/Translations'
 
 function App() {
   return (
@@ -44,6 +46,8 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
             <Route path="settings/users" element={<Users />} />
           </Route>
+          <Route path="permissions" element={<Permissions />} />
+          <Route path="translations" element={<Translations />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

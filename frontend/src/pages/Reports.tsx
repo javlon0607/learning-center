@@ -34,10 +34,12 @@ import {
 } from '@/components/ui/dialog'
 import { Loader2, TrendingUp, TrendingDown, Calendar, Users, Building2 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useTranslation } from '@/contexts/I18nContext'
 
 const COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
 
 export function Reports() {
+  const { t } = useTranslation()
   const [dateFrom, setDateFrom] = useState(() => {
     const date = new Date()
     date.setMonth(date.getMonth() - 1)
@@ -112,14 +114,14 @@ export function Reports() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Reports</h1>
-          <p className="text-muted-foreground">Financial reports and analytics</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t('reports.title', 'Reports')}</h1>
+          <p className="text-muted-foreground">{t('reports.description', 'Financial reports and analytics')}</p>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-end gap-4">
         <div className="space-y-2">
-          <Label>From</Label>
+          <Label>{t('common.from', 'From')}</Label>
           <DateInput
             value={dateFrom}
             onChange={setDateFrom}
@@ -127,7 +129,7 @@ export function Reports() {
           />
         </div>
         <div className="space-y-2">
-          <Label>To</Label>
+          <Label>{t('common.to', 'To')}</Label>
           <DateInput
             value={dateTo}
             onChange={setDateTo}
@@ -139,7 +141,7 @@ export function Reports() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.card_income', 'Total Income')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -147,14 +149,14 @@ export function Reports() {
               {formatCurrency(Number.isFinite(totalPayments) ? totalPayments : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {payments.length} payments
+              {payments.length} {t('reports.payments_count', 'payments')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.card_expenses', 'Total Expenses')}</CardTitle>
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -162,14 +164,14 @@ export function Reports() {
               {formatCurrency(Number.isFinite(totalExpenses) ? totalExpenses : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {expenses.length} expenses
+              {expenses.length} {t('reports.expenses_count', 'expenses')}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.card_profit', 'Net Profit')}</CardTitle>
             {netProfit >= 0 ? (
               <TrendingUp className="h-4 w-4 text-green-600" />
             ) : (
@@ -181,7 +183,7 @@ export function Reports() {
               {formatCurrency(Number.isFinite(netProfit) ? netProfit : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Margin: {Number(totalPayments) > 0 && Number.isFinite(netProfit) ? ((netProfit / totalPayments) * 100).toFixed(1) : 0}%
+              {t('reports.margin', 'Margin')}: {Number(totalPayments) > 0 && Number.isFinite(netProfit) ? ((netProfit / totalPayments) * 100).toFixed(1) : 0}%
             </p>
           </CardContent>
         </Card>
@@ -190,10 +192,10 @@ export function Reports() {
       <Tabs defaultValue="overview">
         <div className="overflow-x-auto">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly Report</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="overview">{t('reports.tab_overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="monthly">{t('reports.tab_monthly', 'Monthly')}</TabsTrigger>
+          <TabsTrigger value="payments">{t('reports.tab_payments', 'Payments')}</TabsTrigger>
+          <TabsTrigger value="expenses">{t('reports.tab_expenses', 'Expenses')}</TabsTrigger>
         </TabsList>
         </div>
 
@@ -201,7 +203,7 @@ export function Reports() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Expenses by Category</CardTitle>
+                <CardTitle>{t('reports.chart_expenses_by_cat', 'Expenses by Category')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {expensePieData.length > 0 ? (
@@ -228,7 +230,7 @@ export function Reports() {
                   </div>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    No expense data
+                    {t('reports.no_expense_data', 'No expense data')}
                   </div>
                 )}
               </CardContent>
@@ -236,7 +238,7 @@ export function Reports() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Payment Methods</CardTitle>
+                <CardTitle>{t('reports.chart_payment_methods', 'Payment Methods')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {paymentMethodData.length > 0 ? (
@@ -253,7 +255,7 @@ export function Reports() {
                   </div>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    No payment data
+                    {t('reports.no_payment_data', 'No payment data')}
                   </div>
                 )}
               </CardContent>
@@ -264,7 +266,7 @@ export function Reports() {
         <TabsContent value="monthly" className="mt-4 space-y-4">
           <div className="flex items-center gap-4">
             <div className="space-y-1">
-              <Label>Select Month</Label>
+              <Label>{t('reports.select_month', 'Select Month')}</Label>
               <Input
                 type="month"
                 value={reportMonth}
@@ -284,7 +286,7 @@ export function Reports() {
               <div className="grid gap-4 md:grid-cols-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Expected</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('reports.monthly_expected', 'Expected')}</CardTitle>
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -292,14 +294,14 @@ export function Reports() {
                       {formatCurrency(monthlyReport.totals.expected_amount)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      From {monthlyReport.totals.student_count} students
+                      {t('reports.from_students', 'From')} {monthlyReport.totals.student_count} {t('reports.students', 'students')}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Collected</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('reports.monthly_collected', 'Collected')}</CardTitle>
                     <TrendingUp className="h-4 w-4 text-green-600" />
                   </CardHeader>
                   <CardContent>
@@ -307,14 +309,14 @@ export function Reports() {
                       {formatCurrency(monthlyReport.totals.collected_amount)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {monthlyReport.totals.payment_percentage}% collection rate
+                      {monthlyReport.totals.payment_percentage}% {t('reports.collection_rate', 'collection rate')}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Teacher Portions</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('reports.teacher_portions', 'Teacher Portions')}</CardTitle>
                     <Users className="h-4 w-4 text-blue-600" />
                   </CardHeader>
                   <CardContent>
@@ -322,14 +324,14 @@ export function Reports() {
                       {formatCurrency(monthlyReport.totals.teacher_portion)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      For per-student salary teachers
+                      {t('reports.teacher_portions_desc', 'For per-student salary teachers')}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Center Portion</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('reports.center_portion', 'Center Portion')}</CardTitle>
                     <Building2 className="h-4 w-4 text-purple-600" />
                   </CardHeader>
                   <CardContent>
@@ -337,7 +339,7 @@ export function Reports() {
                       {formatCurrency(monthlyReport.totals.center_portion)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Remaining: {formatCurrency(monthlyReport.totals.remaining_debt)}
+                      {t('reports.remaining', 'Remaining')}: {formatCurrency(monthlyReport.totals.remaining_debt)}
                     </p>
                   </CardContent>
                 </Card>
@@ -346,30 +348,30 @@ export function Reports() {
               {/* Detailed Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Detailed Group Report</CardTitle>
+                  <CardTitle>{t('reports.group_report', 'Detailed Group Report')}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <Table className="min-w-[900px]">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Group</TableHead>
-                          <TableHead>Teacher</TableHead>
-                          <TableHead className="text-center">Students</TableHead>
-                          <TableHead className="text-center">Paid</TableHead>
-                          <TableHead className="text-right">Expected</TableHead>
-                          <TableHead className="text-right">Collected</TableHead>
-                          <TableHead className="text-right">Remaining</TableHead>
+                          <TableHead>{t('reports.col_group', 'Group')}</TableHead>
+                          <TableHead>{t('reports.col_teacher', 'Teacher')}</TableHead>
+                          <TableHead className="text-center">{t('reports.col_students', 'Students')}</TableHead>
+                          <TableHead className="text-center">{t('reports.col_paid', 'Paid')}</TableHead>
+                          <TableHead className="text-right">{t('reports.col_expected', 'Expected')}</TableHead>
+                          <TableHead className="text-right">{t('reports.col_collected', 'Collected')}</TableHead>
+                          <TableHead className="text-right">{t('reports.col_remaining', 'Remaining')}</TableHead>
                           <TableHead className="text-center">%</TableHead>
-                          <TableHead className="text-right">Teacher</TableHead>
-                          <TableHead className="text-right">Center</TableHead>
+                          <TableHead className="text-right">{t('reports.col_teacher_portion', 'Teacher')}</TableHead>
+                          <TableHead className="text-right">{t('reports.col_center', 'Center')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {monthlyReport.groups.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                              No groups found
+                              {t('reports.no_groups', 'No groups found')}
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -399,7 +401,7 @@ export function Reports() {
                             ))}
                             {/* Totals Row */}
                             <TableRow className="bg-muted/50 font-bold">
-                              <TableCell>TOTAL</TableCell>
+                              <TableCell>{t('reports.total_row', 'TOTAL')}</TableCell>
                               <TableCell></TableCell>
                               <TableCell className="text-center">{monthlyReport.totals.student_count}</TableCell>
                               <TableCell className="text-center">{monthlyReport.totals.paid_student_count}</TableCell>
@@ -420,7 +422,7 @@ export function Reports() {
             </>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              Select a month to view report
+              {t('reports.select_month_prompt', 'Select a month to view report')}
             </div>
           )}
         </TabsContent>
@@ -428,7 +430,7 @@ export function Reports() {
         <TabsContent value="payments" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Payment Details</CardTitle>
+              <CardTitle>{t('reports.payment_details', 'Payment Details')}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {paymentsLoading ? (
@@ -440,18 +442,18 @@ export function Reports() {
                 <Table className="min-w-[600px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Group</TableHead>
-                      <TableHead>Method</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t('reports.col_date', 'Date')}</TableHead>
+                      <TableHead>{t('reports.col_student', 'Student')}</TableHead>
+                      <TableHead>{t('reports.col_group', 'Group')}</TableHead>
+                      <TableHead>{t('reports.col_method', 'Method')}</TableHead>
+                      <TableHead className="text-right">{t('reports.col_amount', 'Amount')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                          No payments in this period
+                          {t('reports.no_payments', 'No payments in this period')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -478,7 +480,7 @@ export function Reports() {
         <TabsContent value="expenses" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Expense Details</CardTitle>
+              <CardTitle>{t('reports.expense_details', 'Expense Details')}</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {expensesLoading ? (
@@ -490,17 +492,17 @@ export function Reports() {
                 <Table className="min-w-[500px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>{t('reports.col_date', 'Date')}</TableHead>
+                      <TableHead>{t('reports.col_category', 'Category')}</TableHead>
+                      <TableHead>{t('reports.col_description', 'Description')}</TableHead>
+                      <TableHead className="text-right">{t('reports.col_amount', 'Amount')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {expenses.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                          No expenses in this period
+                          {t('reports.no_expenses', 'No expenses in this period')}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -529,23 +531,23 @@ export function Reports() {
       <Dialog open={!!debtorGroup} onOpenChange={(open) => !open && setDebtorGroup(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{debtorGroup?.name} — Student Debts</DialogTitle>
+            <DialogTitle>{debtorGroup?.name} — {t('reports.student_debts', 'Student Debts')}</DialogTitle>
           </DialogHeader>
           {debtorsLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : !groupDebtors || groupDebtors.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No students found</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t('reports.no_students', 'No students found')}</p>
           ) : (
             <div className="overflow-x-auto max-h-[60vh]">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="min-w-[200px]">Student</TableHead>
-                    <TableHead className="text-right min-w-[120px]">Expected</TableHead>
-                    <TableHead className="text-right min-w-[120px]">Paid</TableHead>
-                    <TableHead className="text-right min-w-[120px]">Debt</TableHead>
+                    <TableHead className="min-w-[200px]">{t('reports.col_student', 'Student')}</TableHead>
+                    <TableHead className="text-right min-w-[120px]">{t('reports.col_expected', 'Expected')}</TableHead>
+                    <TableHead className="text-right min-w-[120px]">{t('reports.col_paid', 'Paid')}</TableHead>
+                    <TableHead className="text-right min-w-[120px]">{t('reports.col_debt', 'Debt')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
