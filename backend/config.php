@@ -119,11 +119,28 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
-    // Migration: ensure admin always has permissions + translations access (idempotent)
+    // Migrations tracking table
     try {
-        $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
-        $stmt->execute(['admin', 'permissions']);
-        $stmt->execute(['admin', 'translations']);
+        getDB()->exec("CREATE TABLE IF NOT EXISTS db_migrations (name VARCHAR(100) PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW())");
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration 202603: restore full admin permissions (fixes DB state from old migration bug)
+    try {
+        $m = 'restore_admin_permissions_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            foreach ([
+                ['admin','dashboard'],['admin','students'],['admin','teachers'],['admin','groups'],
+                ['admin','leads'],['admin','attendance'],['admin','payments'],['admin','payments_delete'],
+                ['admin','expenses'],['admin','expenses_delete'],['admin','collections'],['admin','salary_slips'],
+                ['admin','reports'],['admin','logs'],['admin','settings'],['admin','users'],
+                ['admin','permissions'],['admin','translations'],
+            ] as [$role, $feature]) {
+                $stmt->execute([$role, $feature]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
     } catch (PDOException $e) { /* ignore */ }
 
     // Seed default translations only on first run

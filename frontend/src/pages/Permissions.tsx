@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { permissionsApi } from '@/lib/api'
 import { FEATURES, EDITABLE_ROLES, BYPASS_ROLES } from '@/contexts/PermissionsContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -13,13 +14,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Lock } from 'lucide-react'
+import { Loader2, Lock, AlertTriangle } from 'lucide-react'
 import { useTranslation } from '@/contexts/I18nContext'
 
 export function Permissions() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { t } = useTranslation()
+  const { user } = useAuth()
+
+  // Direct roles from JWT (no inheritance) — these are what requireFeature() checks
+  const myRoles = (user?.role || 'user').split(',').map(r => r.trim()).filter(Boolean)
 
   const { data: permissions, isLoading } = useQuery({
     queryKey: ['permissions'],
@@ -55,6 +60,14 @@ export function Permissions() {
     },
   })
 
+  // Returns true if the current user would lose access to the permissions page after saving
+  function wouldLockSelf(): boolean {
+    // developer always bypasses — can never be locked out
+    if (myRoles.includes('developer')) return false
+    const permRoles = draft['permissions'] ?? []
+    return !myRoles.some(r => permRoles.includes(r))
+  }
+
   function toggle(feature: string, role: string) {
     setDraft(prev => {
       const current = prev[feature] ?? []
@@ -79,12 +92,19 @@ export function Permissions() {
         </div>
         <Button
           onClick={() => saveMutation.mutate(draft)}
-          disabled={saveMutation.isPending || !isDirty}
+          disabled={saveMutation.isPending || !isDirty || wouldLockSelf()}
         >
           {saveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {t('permissions.save', 'Save Permissions')}
         </Button>
       </div>
+
+      {wouldLockSelf() && (
+        <div className="flex items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span>{t('permissions.lockout_warning', 'You are removing your own access to this page. Save is blocked to prevent locking yourself out.')}</span>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-12">

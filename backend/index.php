@@ -2404,8 +2404,10 @@ try {
             break;
 
         case 'permissions':
-            requireFeature('permissions');
             if ($method === 'GET') {
+                // Any authenticated user can read the permissions table —
+                // the frontend needs it to know which sidebar items to show.
+                auth();
                 $stmt = db()->query("SELECT role, feature FROM role_permissions ORDER BY feature, role");
                 $map = [];
                 foreach ($stmt->fetchAll() as $row) {
@@ -2413,6 +2415,7 @@ try {
                 }
                 jsonResponse($map);
             } elseif ($method === 'PUT') {
+                requireFeature('permissions');
                 $body = json_decode(file_get_contents('php://input'), true) ?? [];
                 db()->beginTransaction();
                 db()->exec("DELETE FROM role_permissions");
