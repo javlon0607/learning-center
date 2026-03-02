@@ -28,6 +28,7 @@ import {
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
+import { usePermissions } from '@/contexts/PermissionsContext'
 
 type SortField = 'name' | 'phone' | 'groups' | 'expected' | 'paid' | 'debt' | 'last_call' | 'calls'
 type SortDirection = 'asc' | 'desc'
@@ -36,6 +37,8 @@ export function Collections() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { t } = useTranslation()
+  const { hasFeature } = usePermissions()
+  const hasDashboard = hasFeature('dashboard')
 
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('debt')
@@ -200,7 +203,7 @@ export function Collections() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('collections.stat_total', 'Total Outstanding')}</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalDebt)}</p>
+                <p className="text-2xl font-bold">{hasDashboard ? formatCurrency(totalDebt) : '***'}</p>
               </div>
             </div>
           </CardContent>

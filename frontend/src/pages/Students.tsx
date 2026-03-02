@@ -48,6 +48,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { StudentForm } from '@/components/students/StudentForm'
 import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/contexts/PermissionsContext'
 import {
   Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, User,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
@@ -66,7 +67,9 @@ export function Students() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { hasRole } = useAuth()
+  const { hasFeature } = usePermissions()
   const { t } = useTranslation()
+  const hasDashboard = hasFeature('dashboard')
 
   const statusConfig = useMemo(() => ({
     active: { label: t('common.status_active', 'Active'), className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
@@ -375,7 +378,7 @@ export function Students() {
                 <AlertCircle className={cn("h-5 w-5", stats.totalDebt > 0 ? "text-amber-600" : "text-gray-400")} />
               </div>
               <div>
-                <p className="text-2xl font-bold">{formatCurrency(stats.totalDebt)}</p>
+                <p className="text-2xl font-bold">{hasDashboard ? formatCurrency(stats.totalDebt) : '***'}</p>
                 <p className="text-xs text-muted-foreground">{t('students.stat_total_debt', 'Total Debt (Month)')}</p>
               </div>
             </div>
@@ -565,7 +568,7 @@ export function Students() {
                                   {hasDebt ? (
                                     <div className="flex items-center gap-1">
                                       <AlertCircle className="h-4 w-4" />
-                                      {formatCurrency(student.current_month_debt || 0)}
+                                      {hasDashboard ? formatCurrency(student.current_month_debt || 0) : '***'}
                                     </div>
                                   ) : (
                                     <div className="flex items-center gap-1">
@@ -577,9 +580,9 @@ export function Students() {
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
                                 <div className="text-sm space-y-1">
-                                  <p>{t('students.tooltip_expected', 'Expected')}: {formatCurrency(student.current_month_expected || 0)}</p>
-                                  <p>{t('students.tooltip_paid', 'Paid')}: {formatCurrency(student.current_month_paid || 0)}</p>
-                                  <p>{t('students.tooltip_remaining', 'Remaining')}: {formatCurrency(student.current_month_debt || 0)}</p>
+                                  <p>{t('students.tooltip_expected', 'Expected')}: {hasDashboard ? formatCurrency(student.current_month_expected || 0) : '***'}</p>
+                                  <p>{t('students.tooltip_paid', 'Paid')}: {hasDashboard ? formatCurrency(student.current_month_paid || 0) : '***'}</p>
+                                  <p>{t('students.tooltip_remaining', 'Remaining')}: {hasDashboard ? formatCurrency(student.current_month_debt || 0) : '***'}</p>
                                 </div>
                               </TooltipContent>
                             </Tooltip>
