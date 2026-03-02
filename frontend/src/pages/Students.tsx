@@ -59,13 +59,6 @@ import { useTranslation } from '@/contexts/I18nContext'
 type SortField = 'name' | 'phone' | 'status' | 'groups' | 'debt' | 'source' | 'created_at'
 type SortDirection = 'asc' | 'desc'
 
-const statusConfig = {
-  active: { label: 'Active', className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
-  inactive: { label: 'Inactive', className: 'bg-gray-100 text-gray-700 border-gray-200', icon: XCircle },
-  graduated: { label: 'Graduated', className: 'bg-blue-100 text-blue-700 border-blue-200', icon: GraduationCap },
-  suspended: { label: 'Suspended', className: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle },
-} as const
-
 const pageSizeOptions = [20, 50, 100]
 
 export function Students() {
@@ -74,6 +67,13 @@ export function Students() {
   const { toast } = useToast()
   const { hasRole } = useAuth()
   const { t } = useTranslation()
+
+  const statusConfig = useMemo(() => ({
+    active: { label: t('common.status_active', 'Active'), className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
+    inactive: { label: t('common.status_inactive', 'Inactive'), className: 'bg-gray-100 text-gray-700 border-gray-200', icon: XCircle },
+    graduated: { label: t('common.status_graduated', 'Graduated'), className: 'bg-blue-100 text-blue-700 border-blue-200', icon: GraduationCap },
+    suspended: { label: t('common.status_suspended', 'Suspended'), className: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle },
+  }), [t])
 
   // Filters
   const [search, setSearch] = useState('')
@@ -125,7 +125,7 @@ export function Students() {
     mutationFn: (data: Parameters<typeof studentsApi.create>[0]) => studentsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      toast({ title: 'Student created successfully' })
+      toast({ title: t('students.toast_created', 'Student created successfully') })
       handleCloseForm()
     },
   })
@@ -134,7 +134,7 @@ export function Students() {
     mutationFn: ({ id, data }: { id: number; data: Partial<Student> }) => studentsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      toast({ title: 'Student updated successfully' })
+      toast({ title: t('students.toast_updated', 'Student updated successfully') })
       handleCloseForm()
     },
   })
@@ -143,12 +143,12 @@ export function Students() {
     mutationFn: (id: number) => studentsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['students'] })
-      toast({ title: 'Student deleted successfully' })
+      toast({ title: t('students.toast_deleted', 'Student deleted successfully') })
       setDeleteDialogOpen(false)
       setStudentToDelete(null)
     },
     onError: (error: Error) => {
-      toast({ title: 'Cannot delete student', description: error.message, variant: 'destructive' })
+      toast({ title: t('students.toast_delete_error', 'Cannot delete student'), description: error.message, variant: 'destructive' })
     },
   })
 
@@ -450,16 +450,16 @@ export function Students() {
             <Search className="h-8 w-8 text-muted-foreground" />
           </div>
           <div className="text-center">
-            <h3 className="font-medium text-foreground">No students found</h3>
+            <h3 className="font-medium text-foreground">{t('students.empty_title', 'No students found')}</h3>
             <p className="text-sm text-muted-foreground mt-1">
               {search || statusFilter !== 'all' || groupFilter !== 'all' || sourceFilter !== 'all' || debtOnly
-                ? 'Try adjusting your search or filter criteria'
-                : 'Get started by adding your first student'}
+                ? t('students.empty_filter', 'Try adjusting your search or filter criteria')
+                : t('students.empty_first', 'Get started by adding your first student')}
             </p>
           </div>
           {!search && statusFilter === 'all' && groupFilter === 'all' && sourceFilter === 'all' && !debtOnly && (
             <Button onClick={() => setFormOpen(true)} className="mt-2">
-              <Plus className="mr-2 h-4 w-4" />Add Student
+              <Plus className="mr-2 h-4 w-4" />{t('students.add', 'Add Student')}
             </Button>
           )}
         </div>
@@ -472,10 +472,10 @@ export function Students() {
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <SortableHeader field="name" className="font-semibold">{t('students.col_name', 'Name')}</SortableHeader>
                   <SortableHeader field="phone" className="font-semibold">{t('students.col_phone', 'Phone')}</SortableHeader>
-                  <TableHead className="font-semibold">Parent/Guardian</TableHead>
+                  <TableHead className="font-semibold">{t('students.col_parent', 'Parent/Guardian')}</TableHead>
                   <SortableHeader field="groups" className="font-semibold">{t('students.col_groups', 'Groups')}</SortableHeader>
                   <SortableHeader field="debt" className="font-semibold">{t('students.col_debt', 'Debt')}</SortableHeader>
-                  <SortableHeader field="status" className="font-semibold">Status</SortableHeader>
+                  <SortableHeader field="status" className="font-semibold">{t('common.col_status', 'Status')}</SortableHeader>
                   <SortableHeader field="source" className="font-semibold">{t('students.col_source', 'Source')}</SortableHeader>
                   <SortableHeader field="created_at" className="font-semibold">{t('students.col_registered', 'Registered')}</SortableHeader>
                   <TableHead className="w-[70px]"></TableHead>
@@ -570,16 +570,16 @@ export function Students() {
                                   ) : (
                                     <div className="flex items-center gap-1">
                                       <CheckCircle2 className="h-4 w-4" />
-                                      Paid
+                                      {t('students.paid', 'Paid')}
                                     </div>
                                   )}
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent side="bottom">
                                 <div className="text-sm space-y-1">
-                                  <p>Expected: {formatCurrency(student.current_month_expected || 0)}</p>
-                                  <p>Paid: {formatCurrency(student.current_month_paid || 0)}</p>
-                                  <p>Remaining: {formatCurrency(student.current_month_debt || 0)}</p>
+                                  <p>{t('students.tooltip_expected', 'Expected')}: {formatCurrency(student.current_month_expected || 0)}</p>
+                                  <p>{t('students.tooltip_paid', 'Paid')}: {formatCurrency(student.current_month_paid || 0)}</p>
+                                  <p>{t('students.tooltip_remaining', 'Remaining')}: {formatCurrency(student.current_month_debt || 0)}</p>
                                 </div>
                               </TooltipContent>
                             </Tooltip>
@@ -599,7 +599,7 @@ export function Students() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs font-normal">
-                          {sourceOptions.find(s => s.value === student.source)?.label || student.source || 'Walk-in'}
+                          {sourceOptions.find(s => s.value === student.source)?.label || student.source || t('students.source_walkin', 'Walk-in')}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -640,7 +640,7 @@ export function Students() {
           {/* Pagination */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, sortedStudents.length)} of {sortedStudents.length}</span>
+              <span>{t('common.showing', 'Showing')} {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, sortedStudents.length)} {t('common.of', 'of')} {sortedStudents.length}</span>
               <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}>
                 <SelectTrigger className="w-[80px] h-8">
                   <SelectValue />
@@ -651,7 +651,7 @@ export function Students() {
                   ))}
                 </SelectContent>
               </Select>
-              <span>per page</span>
+              <span>{t('common.per_page', 'per page')}</span>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -674,7 +674,7 @@ export function Students() {
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div className="flex items-center gap-1 px-2">
-                <span className="text-sm">Page</span>
+                <span className="text-sm">{t('common.page', 'Page')}</span>
                 <Input
                   type="number"
                   min={1}
@@ -686,7 +686,7 @@ export function Students() {
                   }}
                   className="w-14 h-8 text-center"
                 />
-                <span className="text-sm">of {totalPages}</span>
+                <span className="text-sm">{t('common.of', 'of')} {totalPages}</span>
               </div>
               <Button
                 variant="outline"
@@ -727,16 +727,16 @@ export function Students() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('students.dialog_delete_title', 'Delete Student')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {studentToDelete?.first_name} {studentToDelete?.last_name}? This action cannot be undone.
+              {t('students.dialog_delete_desc', 'Are you sure you want to delete')} {studentToDelete?.first_name} {studentToDelete?.last_name}? {t('common.are_you_sure', 'This action cannot be undone.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => studentToDelete && deleteStudent.mutate(studentToDelete.id)}
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              {t('common.btn_delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

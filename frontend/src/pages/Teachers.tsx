@@ -88,7 +88,7 @@ export function Teachers() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] })
       queryClient.invalidateQueries({ queryKey: ['users'] })
-      toast({ title: 'Teacher created successfully' })
+      toast({ title: t('teachers.toast_created', 'Teacher created successfully') })
       setFormOpen(false)
       setSelectedUserId(null)
     },
@@ -99,7 +99,7 @@ export function Teachers() {
       teachersApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] })
-      toast({ title: 'Teacher updated successfully' })
+      toast({ title: t('teachers.toast_updated', 'Teacher updated successfully') })
       setFormOpen(false)
       setSelectedTeacher(null)
     },
@@ -109,12 +109,12 @@ export function Teachers() {
     mutationFn: (id: number) => teachersApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] })
-      toast({ title: 'Teacher deleted successfully' })
+      toast({ title: t('teachers.toast_deleted', 'Teacher deleted successfully') })
       setDeleteDialogOpen(false)
       setTeacherToDelete(null)
     },
     onError: (error: Error) => {
-      toast({ title: 'Cannot delete teacher', description: error.message, variant: 'destructive' })
+      toast({ title: t('teachers.toast_delete_error', 'Cannot delete teacher'), description: error.message, variant: 'destructive' })
     },
   })
 
@@ -150,7 +150,7 @@ export function Teachers() {
       return
     }
     if (!selectedUserId) {
-      toast({ title: 'Select a user with teacher role', variant: 'destructive' })
+      toast({ title: t('teachers.toast_select_user', 'Select a user with teacher role'), variant: 'destructive' })
       return
     }
     createTeacher.mutate({
@@ -240,7 +240,7 @@ export function Teachers() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={teacher.status === 'active' ? 'success' : 'secondary'}>
-                        {teacher.status}
+                        {teacher.status === 'active' ? t('teachers.status_active', 'Active') : t('teachers.status_inactive', 'Inactive')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -296,13 +296,13 @@ export function Teachers() {
               {!selectedTeacher ? (
                 <>
                   <div className="space-y-2">
-                    <Label>Select user (teacher role, not yet a teacher) *</Label>
+                    <Label>{t('teachers.form_select_user_label', 'Select user (teacher role, not yet a teacher) *')}</Label>
                     <Select
                       value={selectedUserId != null ? String(selectedUserId) : ''}
                       onValueChange={(v) => setSelectedUserId(v ? Number(v) : null)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select user..." />
+                        <SelectValue placeholder={t('teachers.form_select_user_placeholder', 'Select user...')} />
                       </SelectTrigger>
                       <SelectContent>
                         {usersWithTeacherRole.map((u) => (
@@ -314,7 +314,7 @@ export function Teachers() {
                     </Select>
                     {usersWithTeacherRole.length === 0 && (
                       <p className="text-sm text-muted-foreground">
-                        No users with teacher role that are not yet linked to a teacher. Add a user with teacher role in Settings → Users.
+                        {t('teachers.form_no_users', 'No users with teacher role that are not yet linked to a teacher. Add a user with teacher role in Settings → Users.')}
                       </p>
                     )}
                   </div>
@@ -346,8 +346,8 @@ export function Teachers() {
                     <div className="space-y-2">
                       <Label htmlFor="salary_amount">
                         {addSalaryType === 'per_student'
-                          ? 'Percentage per student (%)'
-                          : 'Salary Amount'}
+                          ? t('teachers.form_salary_percentage', 'Percentage per student (%)')
+                          : t('teachers.form_salary_amount', 'Salary Amount')}
                       </Label>
                       <Input
                         id="salary_amount"
@@ -377,7 +377,7 @@ export function Teachers() {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="first_name">First Name *</Label>
+                      <Label htmlFor="first_name">{t('teachers.form_first_name', 'First Name *')}</Label>
                       <Input
                         id="first_name"
                         name="first_name"
@@ -386,7 +386,7 @@ export function Teachers() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="last_name">Last Name *</Label>
+                      <Label htmlFor="last_name">{t('teachers.form_last_name', 'Last Name *')}</Label>
                       <Input
                         id="last_name"
                         name="last_name"
@@ -397,7 +397,7 @@ export function Teachers() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Phone</Label>
+                      <Label htmlFor="phone">{t('teachers.form_phone', 'Phone')}</Label>
                       <PhoneInput
                         id="phone"
                         value={formPhone}
@@ -405,7 +405,7 @@ export function Teachers() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email">{t('teachers.form_email', 'Email')}</Label>
                       <Input
                         id="email"
                         name="email"
@@ -445,8 +445,8 @@ export function Teachers() {
                     <div className="space-y-2">
                       <Label htmlFor="salary_amount">
                         {salaryType === 'per_student'
-                          ? 'Percentage per student (%)'
-                          : 'Salary Amount'}
+                          ? t('teachers.form_salary_percentage', 'Percentage per student (%)')
+                          : t('teachers.form_salary_amount', 'Salary Amount')}
                       </Label>
                       <Input
                         id="salary_amount"
@@ -499,19 +499,19 @@ export function Teachers() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Teacher</AlertDialogTitle>
+            <AlertDialogTitle>{t('teachers.dialog_delete_title', 'Delete Teacher')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {teacherToDelete?.first_name}{' '}
-              {teacherToDelete?.last_name}? This action cannot be undone.
+              {t('teachers.dialog_delete_desc', 'Are you sure you want to delete')} {teacherToDelete?.first_name}{' '}
+              {teacherToDelete?.last_name}? {t('common.are_you_sure', 'This action cannot be undone.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => teacherToDelete && deleteTeacher.mutate(teacherToDelete.id)}
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              {t('common.btn_delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

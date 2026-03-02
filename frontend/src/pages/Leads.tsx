@@ -1048,11 +1048,11 @@ export function Leads() {
               {/* Schedule */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="preferred_schedule">Preferred Schedule</Label>
+                  <Label htmlFor="preferred_schedule">{t('leads.form_preferred_schedule', 'Preferred Schedule')}</Label>
                   <Input id="preferred_schedule" name="preferred_schedule" placeholder="e.g. Evenings, Weekends" defaultValue={selectedLead?.preferred_schedule} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="budget">Budget</Label>
+                  <Label htmlFor="budget">{t('leads.form_budget', 'Budget')}</Label>
                   <Input id="budget" name="budget" placeholder="e.g. 500,000 - 700,000" defaultValue={selectedLead?.budget} />
                 </div>
               </div>
@@ -1064,11 +1064,11 @@ export function Leads() {
                   <DateInput id="follow_up_date" value={formFollowUpDate} onChange={setFormFollowUpDate} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="trial_date">Trial Date</Label>
+                  <Label htmlFor="trial_date">{t('leads.form_trial_date', 'Trial Date')}</Label>
                   <DateInput id="trial_date" value={formTrialDate} onChange={setFormTrialDate} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="trial_group_id">Trial Group</Label>
+                  <Label htmlFor="trial_group_id">{t('leads.form_trial_group', 'Trial Group')}</Label>
                   <Select name="trial_group_id" defaultValue={selectedLead?.trial_group_id?.toString()}>
                     <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
                     <SelectContent>
@@ -1102,12 +1102,12 @@ export function Leads() {
       <Dialog open={interactionDialogOpen} onOpenChange={setInteractionDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Interaction</DialogTitle>
+            <DialogTitle>{t('leads.interaction_title', 'Add Interaction')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleInteractionSubmit}>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">{t('leads.interaction_type', 'Type')}</Label>
                 <Select name="type" defaultValue="note">
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1118,15 +1118,15 @@ export function Leads() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="int_notes">Notes</Label>
-                <Textarea id="int_notes" name="notes" rows={4} placeholder="What happened during this interaction?" />
+                <Label htmlFor="int_notes">{t('leads.interaction_notes_label', 'Notes')}</Label>
+                <Textarea id="int_notes" name="notes" rows={4} placeholder={t('leads.interaction_placeholder', 'What happened during this interaction?')} />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setInteractionDialogOpen(false)}>{t('common.btn_cancel', 'Cancel')}</Button>
               <Button type="submit" disabled={addInteraction.isPending}>
                 {addInteraction.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add
+                {t('common.add', 'Add')}
               </Button>
             </DialogFooter>
           </form>
@@ -1139,13 +1139,13 @@ export function Leads() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('leads.dialog_delete_title', 'Delete Lead')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {leadToDelete?.first_name} {leadToDelete?.last_name}? This action cannot be undone.
+              {leadToDelete?.first_name} {leadToDelete?.last_name} — {t('leads.delete_description', 'This action cannot be undone.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => leadToDelete && deleteLead.mutate(leadToDelete.id)} className="bg-red-600 hover:bg-red-700">
-              Delete
+              {t('common.btn_delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1157,7 +1157,7 @@ export function Leads() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t('leads.dialog_convert_title', 'Convert to Student')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will create a new student record for {leadToConvert?.first_name} {leadToConvert?.last_name} and mark this lead as enrolled. You can then enroll them in groups.
+              {leadToConvert?.first_name} {leadToConvert?.last_name} — {t('leads.convert_description', 'This will create a new student record and mark this lead as enrolled.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

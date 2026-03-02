@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from '@/contexts/I18nContext'
 import { birthdaysApi, settingsApi, notificationsApi, BirthdayStudent, Notification } from '@/lib/api'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -70,6 +71,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const [timetableOpen, setTimetableOpen] = useState(false)
 
   const { data: settings } = useQuery({
@@ -150,7 +152,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search students, groups, teachers..."
+            placeholder={t('header.search_placeholder', 'Search students, groups, teachers...')}
             className="w-full h-10 pl-10 pr-4 rounded-lg bg-muted/50 border-0 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-background transition-colors"
           />
         </div>
@@ -172,7 +174,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Class Timetable</p>
+              <p>{t('header.class_timetable', 'Class Timetable')}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -194,7 +196,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </PopoverTrigger>
           <PopoverContent align="end" className="w-96 p-0">
             <div className="px-4 py-3 border-b flex items-center justify-between">
-              <h4 className="font-semibold text-sm">Notifications</h4>
+              <h4 className="font-semibold text-sm">{t('header.notifications', 'Notifications')}</h4>
               {unreadCount > 0 && (
                 <Button
                   variant="ghost"
@@ -203,7 +205,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   onClick={() => markAllReadMutation.mutate()}
                 >
                   <CheckCheck className="h-3.5 w-3.5 mr-1" />
-                  Mark all read
+                  {t('header.mark_all_read', 'Mark all read')}
                 </Button>
               )}
             </div>
@@ -214,7 +216,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
                     <PartyPopper className="h-4 w-4 text-amber-500" />
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Today's Birthdays ({birthdays.length})
+                      {t('header.birthdays_section', "Today's Birthdays")} ({birthdays.length})
                     </span>
                   </div>
                   {birthdays.map((student: BirthdayStudent) => (
@@ -231,7 +233,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                           {student.first_name} {student.last_name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Turns {student.dob ? calculateAge(student.dob) : '?'} today
+                          {t('header.turns', 'Turns')} {student.dob ? calculateAge(student.dob) : '?'} {t('header.today_bday', 'today')}
                           {student.phone ? ` \u00B7 ${student.phone}` : ''}
                         </p>
                       </div>
@@ -285,7 +287,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               {!hasBirthdays && dbNotifications.length === 0 && (
                 <div className="py-8 text-center">
                   <Bell className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">No notifications</p>
+                  <p className="text-sm text-muted-foreground">{t('header.no_notifications', 'No notifications')}</p>
                 </div>
               )}
             </div>
@@ -323,12 +325,12 @@ export function Header({ onMenuClick }: HeaderProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
-              Profile Settings
+              {t('header.profile_settings', 'Profile Settings')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
               <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              {t('header.sign_out', 'Sign out')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

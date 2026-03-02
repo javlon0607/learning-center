@@ -96,7 +96,7 @@ export function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings'] })
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to save settings', description: err.message, variant: 'destructive' })
+      toast({ title: t('settings.toast_save_error', 'Failed to save settings'), description: err.message, variant: 'destructive' })
     },
   })
 
@@ -104,12 +104,12 @@ export function Settings() {
   const updateProfileMutation = useMutation({
     mutationFn: (data: { name?: string; email?: string }) => profileApi.update(data),
     onSuccess: () => {
-      toast({ title: 'Profile updated' })
+      toast({ title: t('settings.toast_profile_updated', 'Profile updated') })
       // Refresh user info
       window.location.reload()
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to update profile', description: err.message, variant: 'destructive' })
+      toast({ title: t('settings.toast_profile_error', 'Failed to update profile'), description: err.message, variant: 'destructive' })
     },
   })
 
@@ -122,10 +122,10 @@ export function Settings() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
-      toast({ title: 'Password changed successfully' })
+      toast({ title: t('settings.toast_password_changed', 'Password changed successfully') })
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to change password', description: err.message, variant: 'destructive' })
+      toast({ title: t('settings.toast_password_error', 'Failed to change password'), description: err.message, variant: 'destructive' })
     },
   })
 
@@ -135,7 +135,7 @@ export function Settings() {
       contact_email: orgEmail,
       contact_phone: orgPhone,
     }, {
-      onSuccess: () => toast({ title: 'Organization settings saved' }),
+      onSuccess: () => toast({ title: t('settings.toast_org_saved', 'Organization settings saved') }),
     })
   }
 
@@ -149,7 +149,7 @@ export function Settings() {
       notification_attendance: attendanceAlerts ? 'true' : 'false',
       notification_birthdays: birthdayAlerts ? 'true' : 'false',
     }, {
-      onSuccess: () => toast({ title: 'Notification preferences saved' }),
+      onSuccess: () => toast({ title: t('settings.toast_notifications_saved', 'Notification preferences saved') }),
     })
   }
 
@@ -157,11 +157,11 @@ export function Settings() {
   const cronMutation = useMutation({
     mutationFn: () => cronNotificationsApi.run(),
     onSuccess: (data) => {
-      toast({ title: `Check complete`, description: `${data.notifications_created} notification(s) created` })
+      toast({ title: t('settings.toast_check_complete', 'Check complete'), description: `${data.notifications_created} notification(s) created` })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
     onError: (err: Error) => {
-      toast({ title: 'Check failed', description: err.message, variant: 'destructive' })
+      toast({ title: t('settings.toast_check_failed', 'Check failed'), description: err.message, variant: 'destructive' })
     },
   })
 
@@ -169,13 +169,13 @@ export function Settings() {
     updateSettingsMutation.mutate({
       session_timeout: sessionTimeout,
     }, {
-      onSuccess: () => toast({ title: 'Security settings saved' }),
+      onSuccess: () => toast({ title: t('settings.toast_security_saved', 'Security settings saved') }),
     })
   }
 
   const handleSaveProfile = () => {
     if (!profileName.trim()) {
-      toast({ title: 'Name is required', variant: 'destructive' })
+      toast({ title: t('settings.toast_name_required', 'Name is required'), variant: 'destructive' })
       return
     }
     updateProfileMutation.mutate({ name: profileName, email: profileEmail })
@@ -183,26 +183,26 @@ export function Settings() {
 
   const handleChangePassword = () => {
     if (!currentPassword) {
-      toast({ title: 'Current password is required', variant: 'destructive' })
+      toast({ title: t('settings.toast_current_password_required', 'Current password is required'), variant: 'destructive' })
       return
     }
     if (!newPassword) {
-      toast({ title: 'New password is required', variant: 'destructive' })
+      toast({ title: t('settings.toast_new_password_required', 'New password is required'), variant: 'destructive' })
       return
     }
     if (newPassword.length < 6) {
-      toast({ title: 'Password must be at least 6 characters', variant: 'destructive' })
+      toast({ title: t('settings.toast_password_too_short', 'Password must be at least 6 characters'), variant: 'destructive' })
       return
     }
     if (newPassword !== confirmPassword) {
-      toast({ title: 'Passwords do not match', variant: 'destructive' })
+      toast({ title: t('settings.toast_passwords_mismatch', 'Passwords do not match'), variant: 'destructive' })
       return
     }
     changePasswordMutation.mutate({ current: currentPassword, newPass: newPassword })
   }
 
   const handleExport = async (type: string) => {
-    toast({ title: `Exporting ${type}...`, description: 'Download will start shortly' })
+    toast({ title: `Exporting ${type}...`, description: t('settings.toast_exporting_desc', 'Download will start shortly') })
   }
 
   if (loadingSettings) {
