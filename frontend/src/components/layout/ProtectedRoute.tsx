@@ -12,7 +12,7 @@ type ProtectedRouteProps = {
  * Use for admin-only or role-specific routes.
  */
 export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, hasRole } = useAuth()
 
   if (isLoading) {
     return <PageSkeleton />
@@ -22,8 +22,7 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
     return <Navigate to="/login" replace />
   }
 
-  const hasAccess = allowedRoles.includes(user.role)
-  if (!hasAccess) {
+  if (!hasRole(allowedRoles)) {
     return <Navigate to="/" replace />
   }
 
