@@ -28,7 +28,7 @@ import {
 import { Timetable } from './Timetable'
 import {
   LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu,
-  Cake, PartyPopper, DollarSign, Clock, UserPlus, UserMinus, CheckCheck,
+  Cake, PartyPopper, DollarSign, Clock, UserPlus, UserMinus, CheckCheck, ClipboardCheck,
 } from 'lucide-react'
 import { calculateAge } from '@/lib/utils'
 
@@ -58,6 +58,8 @@ function getNotificationIcon(type: string) {
       return { icon: UserMinus, bg: 'bg-red-100', color: 'text-red-600' }
     case 'schedule_change':
       return { icon: CalendarDays, bg: 'bg-blue-100', color: 'text-blue-600' }
+    case 'payment_approval':
+      return { icon: ClipboardCheck, bg: 'bg-amber-100', color: 'text-amber-600' }
     default:
       return { icon: Bell, bg: 'bg-gray-100', color: 'text-gray-600' }
   }

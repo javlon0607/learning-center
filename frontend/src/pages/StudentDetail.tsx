@@ -662,12 +662,13 @@ export function StudentDetail() {
                     <TableHead>Amount</TableHead>
                     <TableHead>Month(s)</TableHead>
                     <TableHead>Method</TableHead>
+                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedPayments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         No payments recorded
                         <div className="mt-2">
                           <Button size="sm" variant="outline" onClick={() => setPayDialogOpen(true)} disabled={enrollments.length === 0}>
@@ -696,6 +697,13 @@ export function StudentDetail() {
                           ) : '—'}
                         </TableCell>
                         <TableCell className="capitalize">{payment.method}</TableCell>
+                        <TableCell>
+                          {payment.is_approved ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">Approved</Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">Pending</Badge>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

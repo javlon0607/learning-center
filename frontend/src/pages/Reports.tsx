@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import {
   BarChart,
   Bar,
@@ -32,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, TrendingUp, TrendingDown, Calendar, Users, Building2 } from 'lucide-react'
+import { Loader2, TrendingUp, TrendingDown, Calendar, Users, Building2, Clock, ShieldCheck } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 
@@ -80,7 +81,8 @@ export function Reports() {
     enabled: !!reportMonth,
   })
 
-  const totalPayments = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  const totalPayments = payments.filter(p => p.is_approved).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  const pendingPaymentsTotal = payments.filter(p => !p.is_approved).reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
   const netProfit = Number.isFinite(totalPayments) && Number.isFinite(totalExpenses)
     ? totalPayments - totalExpenses
@@ -149,7 +151,12 @@ export function Reports() {
               {formatCurrency(Number.isFinite(totalPayments) ? totalPayments : 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {payments.length} {t('reports.payments_count', 'payments')}
+              {payments.filter(p => p.is_approved).length} {t('reports.payments_count', 'payments')}
+              {pendingPaymentsTotal > 0 && (
+                <span className="ml-1 text-amber-600">
+                  (+{formatCurrency(pendingPaymentsTotal)} {t('payments.pending', 'pending')})
+                </span>
+              )}
             </p>
           </CardContent>
         </Card>
@@ -446,13 +453,14 @@ export function Reports() {
                       <TableHead>{t('reports.col_student', 'Student')}</TableHead>
                       <TableHead>{t('reports.col_group', 'Group')}</TableHead>
                       <TableHead>{t('reports.col_method', 'Method')}</TableHead>
+                      <TableHead>{t('payments.col_status', 'Status')}</TableHead>
                       <TableHead className="text-right">{t('reports.col_amount', 'Amount')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {payments.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           {t('reports.no_payments', 'No payments in this period')}
                         </TableCell>
                       </TableRow>
@@ -463,7 +471,20 @@ export function Reports() {
                           <TableCell>{payment.student_name}</TableCell>
                           <TableCell>{payment.group_name || '-'}</TableCell>
                           <TableCell className="capitalize">{payment.method}</TableCell>
-                          <TableCell className="text-right font-medium text-green-600">
+                          <TableCell>
+                            {payment.is_approved ? (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                                <ShieldCheck className="mr-1 h-3 w-3" />
+                                {t('payments.approved', 'Approved')}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                                <Clock className="mr-1 h-3 w-3" />
+                                {t('payments.pending', 'Pending')}
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className={`text-right font-medium ${payment.is_approved ? 'text-green-600' : 'text-amber-600'}`}>
                             {formatCurrency(payment.amount)}
                           </TableCell>
                         </TableRow>

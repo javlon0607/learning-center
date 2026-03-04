@@ -29,7 +29,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, Loader2, AlertCircle, CheckCircle2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Loader2, AlertCircle, CheckCircle2, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DateInput } from '@/components/ui/date-input'
 import { formatCurrency, formatDateTime, parseAmountFromInput } from '@/lib/utils'
@@ -73,6 +73,7 @@ export function Payments() {
   const { hasFeature } = usePermissions()
   const { t } = useTranslation()
   const canDelete = hasFeature('payments_delete')
+  const canApprove = hasFeature('payment_approve')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const amount = useAmountInput()
@@ -97,6 +98,7 @@ export function Payments() {
   const [filterMethod, setFilterMethod] = useState<string>('')
   const [filterDateFrom, setFilterDateFrom] = useState<string>('')
   const [filterDateTo, setFilterDateTo] = useState<string>('')
+  const [filterApproval, setFilterApproval] = useState<string>('')
 
   // Pagination
   const pageSizeOptions = [20, 50, 100]
@@ -238,6 +240,19 @@ export function Payments() {
     },
   })
 
+  const approvePayment = useMutation({
+    mutationFn: (id: number) => paymentsApi.approve(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      toast({ title: t('payments.toast_approved', 'Payment approved successfully') })
+    },
+    onError: (error: Error) => {
+      toast({ title: t('payments.toast_approve_error', 'Failed to approve payment'), description: error.message, variant: 'destructive' })
+    },
+  })
+
   function handleDelete(id: number) {
     if (window.confirm(t('payments.confirm_delete', 'Are you sure you want to delete this payment? This action marks it as deleted.'))) {
       deletePayment.mutate(id)
@@ -262,7 +277,7 @@ export function Payments() {
     )
   }
 
-  useEffect(() => { setCurrentPage(1) }, [search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod, filterDateFrom, filterDateTo])
+  useEffect(() => { setCurrentPage(1) }, [search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod, filterDateFrom, filterDateTo, filterApproval])
 
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
@@ -289,9 +304,11 @@ export function Payments() {
       if (filterMethod && p.method !== filterMethod) return false
       if (filterDateFrom && p.payment_date < filterDateFrom) return false
       if (filterDateTo && p.payment_date > filterDateTo) return false
+      if (filterApproval === 'pending' && p.is_approved) return false
+      if (filterApproval === 'approved' && !p.is_approved) return false
       return true
     })
-  }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod, filterDateFrom, filterDateTo])
+  }, [payments, search, filterPaymentMonth, filterCourseMonth, filterGroupId, filterMethod, filterDateFrom, filterDateTo, filterApproval])
 
   const totalPages = Math.ceil(filteredPayments.length / pageSize)
   const paginatedPayments = useMemo(() => {
@@ -397,6 +414,16 @@ export function Payments() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={filterApproval || '_all'} onValueChange={(v) => setFilterApproval(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder={t('payments.filter_approval', 'Approval status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">{t('payments.filter_all_status', 'All statuses')}</SelectItem>
+            <SelectItem value="pending">{t('payments.pending', 'Pending')}</SelectItem>
+            <SelectItem value="approved">{t('payments.approved', 'Approved')}</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-2">
           <DateInput
             value={filterDateFrom}
@@ -429,6 +456,7 @@ export function Payments() {
                 <TableHead>{t('payments.col_paid_for', 'Paid for')}</TableHead>
                 <TableHead>{t('payments.col_amount', 'Amount')}</TableHead>
                 <TableHead>{t('payments.col_method', 'Method')}</TableHead>
+                <TableHead>{t('payments.col_status', 'Status')}</TableHead>
                 <TableHead>{t('payments.col_notes', 'Notes')}</TableHead>
                 {canDelete && <TableHead className="w-[80px]">{t('common.col_actions', 'Actions')}</TableHead>}
               </TableRow>
@@ -436,7 +464,7 @@ export function Payments() {
             <TableBody>
               {filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canDelete ? 8 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">
                     {t('payments.no_data', 'No payments found')}
                   </TableCell>
                 </TableRow>
@@ -464,6 +492,32 @@ export function Payments() {
                           </Badge>
                           {isDeleted && <Badge variant="destructive">{t('common.deleted', 'Deleted')}</Badge>}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {payment.is_approved ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            <ShieldCheck className="mr-1 h-3 w-3" />
+                            {t('payments.approved', 'Approved')}
+                          </Badge>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                              <Clock className="mr-1 h-3 w-3" />
+                              {t('payments.pending', 'Pending')}
+                            </Badge>
+                            {canApprove && !isDeleted && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={() => approvePayment.mutate(payment.id)}
+                                disabled={approvePayment.isPending}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {payment.notes || '-'}

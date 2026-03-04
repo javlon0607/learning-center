@@ -94,6 +94,7 @@ function initDB() {
                 ['admin', 'attendance'], ['manager', 'attendance'], ['teacher', 'attendance'], ['accountant', 'attendance'],
                 ['admin', 'payments'],   ['manager', 'payments'],   ['accountant', 'payments'],
                 ['admin', 'payments_delete'], ['manager', 'payments_delete'], ['accountant', 'payments_delete'],
+                ['owner', 'payment_approve'], ['admin', 'payment_approve'],
                 ['admin', 'expenses'],   ['manager', 'expenses'],   ['accountant', 'expenses'],
                 ['admin', 'expenses_delete'], ['manager', 'expenses_delete'], ['accountant', 'expenses_delete'],
                 ['admin', 'collections'],['manager', 'collections'],['accountant', 'collections'],
@@ -139,6 +140,16 @@ function initDB() {
             ] as [$role, $feature]) {
                 $stmt->execute([$role, $feature]);
             }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add marked_by column to attendance table
+    try {
+        $m = 'attendance_marked_by_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE attendance ADD COLUMN IF NOT EXISTS marked_by INT REFERENCES users(id)");
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
@@ -915,6 +926,114 @@ function initDB() {
             $stmt->execute([$lang, $key, $value]);
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration 4: Payment approval notification translations
+    try {
+        $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+        $newKeys4 = [
+            ['en','settings.notification_payment_approval','Payment Approval'],
+            ['uz','settings.notification_payment_approval',"To'lov tasdiqlash"],
+            ['en','settings.notification_payment_approval_desc','Notify when new payments need approval'],
+            ['uz','settings.notification_payment_approval_desc',"Yangi to'lovlar tasdiqlash kerak bo'lganda xabar berish"],
+            // Attendance page
+            ['en','attendance.toast_saved','Attendance saved successfully'],
+            ['uz','attendance.toast_saved','Davomat muvaffaqiyatli saqlandi'],
+            ['en','attendance.toast_save_error','Failed to save attendance'],
+            ['uz','attendance.toast_save_error','Davomatni saqlashda xatolik'],
+            ['en','attendance.select_group','Select a group'],
+            ['uz','attendance.select_group','Guruhni tanlang'],
+            ['en','attendance.future_date_error','Cannot mark attendance for future dates'],
+            ['uz','attendance.future_date_error',"Kelajakdagi sanalar uchun davomat belgilab bo'lmaydi"],
+            ['en','attendance.title_for_group','Attendance for {group}'],
+            ['uz','attendance.title_for_group','{group} uchun davomat'],
+            ['en','attendance.students','students'],
+            ['uz','attendance.students',"o'quvchilar"],
+            ['en','attendance.unsaved_changes','You have unsaved changes'],
+            ['uz','attendance.unsaved_changes',"Saqlanmagan o'zgarishlar mavjud"],
+            ['en','attendance.unmarked','Unmarked'],
+            ['uz','attendance.unmarked','Belgilanmagan'],
+        ];
+        foreach ($newKeys4 as [$lang, $key, $value]) {
+            $stmt->execute([$lang, $key, $value]);
+        }
+
+        // Attendance module improvement keys
+        $newKeys5 = [
+            ['en','attendance.schedule_warning','This group is not scheduled for classes on this day. You can still save for makeup classes.'],
+            ['uz','attendance.schedule_warning',"Bu guruh uchun bu kunda dars rejalashtirilmagan. Qo'shimcha darslar uchun saqlay olasiz."],
+            ['en','attendance.locked_message','Attendance locked after 48 hours. Contact admin to edit.'],
+            ['uz','attendance.locked_message',"Davomat 48 soatdan keyin qulflanadi. Tahrirlash uchun admin bilan bog'laning."],
+            ['en','attendance.last_saved_by','Last saved by {name}'],
+            ['uz','attendance.last_saved_by','{name} tomonidan saqlangan'],
+            ['en','attendance.unmarked_today','{count} groups not yet marked today:'],
+            ['uz','attendance.unmarked_today',"Bugun {count} ta guruh hali belgilanmagan:"],
+            ['en','dashboard.attendance_today','Attendance Today'],
+            ['uz','dashboard.attendance_today','Bugungi davomat'],
+            ['en','dashboard.all_groups_marked','All groups marked for today'],
+            ['uz','dashboard.all_groups_marked','Bugun barcha guruhlar belgilangan'],
+            ['en','dashboard.unmarked_groups','{count} groups not yet marked'],
+            ['uz','dashboard.unmarked_groups','{count} ta guruh hali belgilanmagan'],
+            ['en','dashboard.go_to_attendance','Go to Attendance'],
+            ['uz','dashboard.go_to_attendance','Davomatga o\'tish'],
+        ];
+        foreach ($newKeys5 as [$lang, $key, $value]) {
+            $stmt->execute([$lang, $key, $value]);
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: Add created_by to payments
+    try {
+        $m = 'add_payment_created_by';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE payments ADD COLUMN IF NOT EXISTS created_by INT REFERENCES users(id)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: Add payment approval columns
+    try {
+        $m = 'add_payment_approval_columns';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE payments ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT FALSE");
+            getDB()->exec("ALTER TABLE payments ADD COLUMN IF NOT EXISTS approved_by INT REFERENCES users(id)");
+            getDB()->exec("ALTER TABLE payments ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ");
+            // Bulk-approve all existing payments (non-disruptive deploy)
+            getDB()->exec("UPDATE payments SET is_approved = TRUE, approved_at = created_at WHERE is_approved = FALSE");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: Seed payment_approve permission for owner and admin
+    try {
+        $m = 'seed_payment_approve_permission';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            $stmt->execute(['owner', 'payment_approve']);
+            $stmt->execute(['admin', 'payment_approve']);
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: Add payment approval translation keys
+    try {
+        $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+        $approvalKeys = [
+            ['en','payments.pending','Pending'], ['uz','payments.pending','Kutilmoqda'],
+            ['en','payments.approved','Approved'], ['uz','payments.approved','Tasdiqlangan'],
+            ['en','payments.col_status','Status'], ['uz','payments.col_status','Holati'],
+            ['en','payments.toast_approved','Payment approved successfully'], ['uz','payments.toast_approved',"To'lov muvaffaqiyatli tasdiqlandi"],
+            ['en','payments.toast_approve_error','Failed to approve payment'], ['uz','payments.toast_approve_error',"To'lovni tasdiqlashda xatolik"],
+            ['en','payments.btn_approve','Approve'], ['uz','payments.btn_approve','Tasdiqlash'],
+            ['en','payments.filter_approval','Approval status'], ['uz','payments.filter_approval','Tasdiqlash holati'],
+            ['en','payments.filter_all_status','All statuses'], ['uz','payments.filter_all_status','Barcha holatlar'],
+        ];
+        foreach ($approvalKeys as [$lang, $key, $value]) {
+            $stmt->execute([$lang, $key, $value]);
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────
@@ -1135,6 +1254,7 @@ function isNotificationEnabled(string $type): bool
         'student_enrolled' => 'notification_enrollment',
         'student_removed' => 'notification_enrollment',
         'schedule_change' => 'notification_schedule',
+        'payment_approval' => 'notification_payment_approval',
     ];
     $settingKey = $settingMap[$type] ?? null;
     if (!$settingKey) return true; // unknown types default to enabled

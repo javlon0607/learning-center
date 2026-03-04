@@ -72,7 +72,8 @@
       "Bash(__NEW_LINE_36ad2a5f329955ab__ echo \"=== Group partial update test ===\")",
       "Bash(__NEW_LINE_36ad2a5f329955ab__ echo \"=== Cleanup test data ===\")",
       "Bash(docker cp:*)",
-      "Bash(docker restart:*)"
+      "Bash(docker restart:*)",
+      "Bash(cat:*)"
     ]
   }
 }

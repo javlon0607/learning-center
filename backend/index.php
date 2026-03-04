@@ -791,10 +791,14 @@ try {
                 }
                 $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
                 $q = "
-                    SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name
+                    SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name,
+                           u_approver.name AS approved_by_name,
+                           u_creator.name AS created_by_name
                     FROM payments p
                     JOIN students s ON p.student_id = s.id
                     LEFT JOIN groups g ON p.group_id = g.id
+                    LEFT JOIN users u_approver ON p.approved_by = u_approver.id
+                    LEFT JOIN users u_creator ON p.created_by = u_creator.id
                     $whereClause
                     ORDER BY p.created_at DESC LIMIT 500
                 ";
@@ -816,6 +820,21 @@ try {
                     $p['months_covered'] = $monthsMap[$p['id']] ?? [];
                 }
                 jsonResponse($payments);
+            } elseif ($id && $method === 'POST' && ($segments[2] ?? '') === 'approve') {
+                requireFeature('payment_approve');
+                $payment = db()->prepare("SELECT id, is_approved FROM payments WHERE id = ? AND deleted_at IS NULL");
+                $payment->execute([$id]);
+                $row = $payment->fetch();
+                if (!$row) { jsonError('Payment not found', 404); break; }
+                if ($row['is_approved'] === true || $row['is_approved'] === 't') {
+                    jsonError('Payment already approved', 400); break;
+                }
+                $userId = $GLOBALS['jwt_user']['id'];
+                db()->prepare("UPDATE payments SET is_approved = TRUE, approved_by = ?, approved_at = NOW() WHERE id = ?")
+                    ->execute([$userId, $id]);
+                auditLog('approve', 'payment', (int)$id, ['is_approved' => false], ['is_approved' => true, 'approved_by' => $userId]);
+                activityLog('approve', 'payment', $id);
+                jsonResponse(['ok' => true]);
             } elseif ($method === 'POST') {
                 $studentId = (int)($input['student_id'] ?? 0);
                 $groupId = $input['group_id'] ? (int)$input['group_id'] : null;
@@ -864,17 +883,19 @@ try {
                     }
                 }
 
+                $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
                 $newPayload = [
                     'student_id' => $studentId,
                     'group_id' => $groupId,
                     'amount' => $amount,
                     'payment_date' => $paymentDate,
                     'method' => $method_pay,
-                    'notes' => $notes
+                    'notes' => $notes,
+                    'created_by' => $createdBy
                 ];
-                $stmt = db()->prepare("INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes) VALUES (?,?,?,?,?,?)");
+                $stmt = db()->prepare("INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes, created_by) VALUES (?,?,?,?,?,?,?)");
                 $stmt->execute([
-                    $newPayload['student_id'], $newPayload['group_id'], $newPayload['amount'], $newPayload['payment_date'], $newPayload['method'], $newPayload['notes']
+                    $newPayload['student_id'], $newPayload['group_id'], $newPayload['amount'], $newPayload['payment_date'], $newPayload['method'], $newPayload['notes'], $newPayload['created_by']
                 ]);
                 $pid = db()->lastInsertId();
                 $invNo = 'INV-' . date('Ymd') . '-' . str_pad($pid, 4, '0', STR_PAD_LEFT);
@@ -928,6 +949,43 @@ try {
                 $newPayload['id'] = (int)$pid;
                 auditLog('create', 'payment', (int)$pid, null, $newPayload);
                 activityLog('create', 'payment', $pid);
+
+                // Notify users with payment_approve permission
+                try {
+                    $currentUserId = $GLOBALS['jwt_user']['id'] ?? 0;
+                    // Get student name for notification message
+                    $stuStmt = db()->prepare("SELECT first_name, last_name FROM students WHERE id = ?");
+                    $stuStmt->execute([$studentId]);
+                    $stuRow = $stuStmt->fetch();
+                    $studentName = $stuRow ? trim($stuRow['first_name'] . ' ' . $stuRow['last_name']) : 'Unknown';
+                    $formattedAmount = number_format((float)$amount, 0, '.', ',');
+
+                    // Find users whose roles have payment_approve permission OR are developers
+                    $approverStmt = db()->prepare("
+                        SELECT DISTINCT u.id FROM users u
+                        WHERE u.is_active = true AND u.id != ?
+                          AND (
+                            u.role = 'developer'
+                            OR u.role IN (
+                              SELECT rp.role FROM role_permissions rp WHERE rp.feature = 'payment_approve'
+                            )
+                          )
+                    ");
+                    $approverStmt->execute([$currentUserId]);
+                    $approvers = $approverStmt->fetchAll(PDO::FETCH_COLUMN);
+                    foreach ($approvers as $approverId) {
+                        createNotification(
+                            (int)$approverId,
+                            'payment_approval',
+                            'New payment pending approval',
+                            "{$studentName} — {$formattedAmount}",
+                            '/payments'
+                        );
+                    }
+                } catch (Exception $e) {
+                    error_log("Payment approval notification failed: " . $e->getMessage());
+                }
+
                 jsonResponse(['id' => (int)$pid, 'invoice_no' => $invNo]);
             } elseif ($id && $method === 'PUT') {
                 $old = db()->prepare("SELECT id, student_id, group_id, amount, payment_date, method, notes FROM payments WHERE id = ? AND deleted_at IS NULL");
@@ -1248,12 +1306,22 @@ try {
             break;
 
         case 'attendance':
-            requireRole(['admin', 'manager', 'teacher', 'accountant']);
+            requireFeature('attendance');
             if ($method === 'GET') {
                 $date = $_GET['date'] ?? date('Y-m-d');
                 $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
                 if (!$group) { jsonError('group_id required'); break; }
-                $stmt = db()->prepare("SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name, a.id AS attendance_id, a.status AS attendance_status FROM enrollments e JOIN students s ON e.student_id = s.id LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ? WHERE e.group_id = ? ORDER BY s.last_name");
+                $stmt = db()->prepare("
+                    SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
+                           a.id AS attendance_id, a.status AS attendance_status,
+                           u.name AS marked_by_name
+                    FROM enrollments e
+                    JOIN students s ON e.student_id = s.id
+                    LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?
+                    LEFT JOIN users u ON a.marked_by = u.id
+                    WHERE e.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
+                    ORDER BY s.last_name
+                ");
                 $stmt->execute([$date, $group]);
                 jsonResponse(['date' => $date, 'group_id' => $group, 'rows' => $stmt->fetchAll()]);
             } elseif ($method === 'POST') {
@@ -1262,8 +1330,17 @@ try {
                     jsonError('Cannot save attendance for future dates');
                     break;
                 }
+                // 48h edit lock for non-admin roles
+                $roleStr = $GLOBALS['jwt_user']['role'] ?? '';
+                $userRoles = array_map('trim', explode(',', $roleStr));
+                $isAdmin = count(array_intersect($userRoles, ['admin','owner','developer'])) > 0;
+                if (!$isAdmin && strtotime($date) < strtotime('-2 days')) {
+                    jsonError('Attendance locked after 48 hours. Contact admin.', 403);
+                    break;
+                }
                 $group = (int)($input['group_id'] ?? 0);
                 $rows = $input['rows'] ?? [];
+                $markedBy = $GLOBALS['jwt_user']['id'] ?? null;
                 $fetchOld = db()->prepare("SELECT id, student_id, group_id, attendance_date, status FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
                 foreach ($rows as $r) {
                     $sid = (int)($r['student_id'] ?? 0);
@@ -1271,8 +1348,8 @@ try {
                     if (!$sid || !$group) continue;
                     $fetchOld->execute([$sid, $group, $date]);
                     $oldRow = $fetchOld->fetch();
-                    db()->prepare("INSERT INTO attendance (student_id, group_id, attendance_date, status) VALUES (?,?,?,?) ON CONFLICT (student_id, group_id, attendance_date) DO UPDATE SET status = ?")
-                        ->execute([$sid, $group, $date, $status, $status]);
+                    db()->prepare("INSERT INTO attendance (student_id, group_id, attendance_date, status, marked_by) VALUES (?,?,?,?,?) ON CONFLICT (student_id, group_id, attendance_date) DO UPDATE SET status = ?, marked_by = ?")
+                        ->execute([$sid, $group, $date, $status, $markedBy, $status, $markedBy]);
                     $oldStatus = $oldRow ? $oldRow['status'] : null;
                     if ($oldStatus !== $status) {
                         $attendanceId = $oldRow ? (int)$oldRow['id'] : 0;
@@ -1289,6 +1366,74 @@ try {
                 activityLog('attendance_save', 'attendance', null, json_encode(['date' => $date, 'group_id' => $group]));
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'attendance-history':
+            requireFeature('attendance');
+            if ($method === 'GET') {
+                $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+                if (!$group) { jsonError('group_id required'); break; }
+                // Get all attendance for active enrolled students in this group
+                $stmt = db()->prepare("
+                    SELECT a.student_id, a.attendance_date, a.status
+                    FROM attendance a
+                    JOIN enrollments e ON a.student_id = e.student_id AND a.group_id = e.group_id
+                    JOIN students s ON a.student_id = s.id
+                    WHERE a.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
+                    ORDER BY a.student_id, a.attendance_date DESC
+                ");
+                $stmt->execute([$group]);
+                $allRows = $stmt->fetchAll();
+                // Group by student, take last 10 per student
+                $byStudent = [];
+                foreach ($allRows as $r) {
+                    $sid = (int)$r['student_id'];
+                    if (!isset($byStudent[$sid])) $byStudent[$sid] = [];
+                    $byStudent[$sid][] = $r;
+                }
+                $result = [];
+                foreach ($byStudent as $sid => $records) {
+                    $last10 = array_slice($records, 0, 10);
+                    $total = count($last10);
+                    $presentCount = 0;
+                    $history = [];
+                    foreach ($last10 as $rec) {
+                        if (in_array($rec['status'], ['present', 'late'])) $presentCount++;
+                        $history[] = ['date' => $rec['attendance_date'], 'status' => $rec['status']];
+                    }
+                    $percentage = $total > 0 ? round($presentCount / $total * 100, 1) : 0;
+                    $result[] = [
+                        'student_id' => $sid,
+                        'total' => $total,
+                        'present_count' => $presentCount,
+                        'percentage' => $percentage,
+                        'history' => array_reverse($history),
+                    ];
+                }
+                jsonResponse($result);
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'attendance-unmarked':
+            requireFeature('attendance');
+            if ($method === 'GET') {
+                $today = date('Y-m-d');
+                $dayAbbr = strtolower(date('D')); // mon, tue, wed, etc.
+                $stmt = db()->prepare("
+                    SELECT g.id, g.name, t.first_name || ' ' || t.last_name AS teacher_name,
+                           g.schedule_time_start
+                    FROM groups g
+                    LEFT JOIN teachers t ON g.teacher_id = t.id
+                    WHERE g.status = 'active'
+                      AND g.schedule_days ILIKE ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM attendance a WHERE a.group_id = g.id AND a.attendance_date = ?
+                      )
+                    ORDER BY g.schedule_time_start, g.name
+                ");
+                $stmt->execute(['%' . $dayAbbr . '%', $today]);
+                jsonResponse($stmt->fetchAll());
+            } else { jsonError('Method not allowed', 405); }
             break;
 
         case 'teacher-salary-preview':
@@ -1445,7 +1590,7 @@ try {
                     $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
                     $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
                     $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
-                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $leads = 0;
                     try {
@@ -1459,7 +1604,7 @@ try {
                     $studentsTrend = $studentsLastMonth > 0 ? round(($studentsThisMonth - $studentsLastMonth) / $studentsLastMonth * 100) : ($studentsThisMonth > 0 ? 100 : 0);
                     
                     // Revenue: this month vs last month
-                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $revenueTrend = $revenueLastMonth > 0 ? round(($revenue - $revenueLastMonth) / $revenueLastMonth * 100) : ($revenue > 0 ? 100 : 0);
 
                     // Expenses: this month vs last month
@@ -1504,7 +1649,7 @@ try {
                         $monthYear = date('Y-m', strtotime($monthStart));
 
                         // Get revenue for this month
-                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL");
+                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE");
                         $revStmt->execute([$monthStart, $monthEnd]);
                         $revenue = (float)$revStmt->fetchColumn();
 
@@ -1555,7 +1700,7 @@ try {
                 $stmt->execute([$from, $to]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($report === 'income-expense') {
-                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL");
+                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE");
                 $inc->execute([$from, $to]);
                 $exp = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date BETWEEN ? AND ? AND deleted_at IS NULL");
                 $exp->execute([$from, $to]);
@@ -1639,7 +1784,7 @@ try {
                             SELECT p.student_id, SUM(pm.amount) AS paid
                             FROM payment_months pm
                             JOIN payments p ON pm.payment_id = p.id
-                            WHERE p.group_id = ? AND pm.for_month = ? AND p.student_id IN ($placeholders) AND p.deleted_at IS NULL
+                            WHERE p.group_id = ? AND pm.for_month = ? AND p.student_id IN ($placeholders) AND p.deleted_at IS NULL AND p.is_approved = TRUE
                             GROUP BY p.student_id
                         ");
                         $params = array_merge([$groupId, $monthStart], $studentIds);
@@ -2036,7 +2181,7 @@ try {
                 SELECT COALESCE(SUM(pm.amount), 0) AS paid
                 FROM payment_months pm
                 JOIN payments p ON pm.payment_id = p.id
-                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
+                WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
             ");
             $paidStmt->execute([$studentId, $groupId, $monthStart]);
             $paidAmount = (float)$paidStmt->fetchColumn();
@@ -2168,7 +2313,7 @@ try {
                         (SELECT SUM(pm.amount)
                          FROM payment_months pm
                          JOIN payments p ON pm.payment_id = p.id
-                         WHERE p.student_id = s.id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL),
+                         WHERE p.student_id = s.id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
                         0
                     ) AS paid
                 FROM enrollments e
@@ -2230,7 +2375,7 @@ try {
                                 (SELECT COALESCE(SUM(pm.amount), 0)
                                  FROM payment_months pm
                                  JOIN payments p ON pm.payment_id = p.id
-                                 WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
+                                 WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
                             ), 0) AS paid
                         FROM enrollments e
                         JOIN groups g ON e.group_id = g.id
@@ -2240,7 +2385,7 @@ try {
                                    (SELECT COALESCE(SUM(pm.amount), 0)
                                     FROM payment_months pm
                                     JOIN payments p ON pm.payment_id = p.id
-                                    WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
+                                    WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
                                ), 0) > 0
                     ) debt ON debt.student_id = s.id
                     LEFT JOIN (

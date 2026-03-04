@@ -19,6 +19,7 @@ export const FEATURES: Feature[] = [
   { key: 'attendance',       label: 'Attendance',        description: 'Track student attendance' },
   { key: 'payments',         label: 'Payments',          description: 'View and record payments' },
   { key: 'payments_delete',  label: 'Delete Payments',   description: 'Delete payment records', indent: true },
+  { key: 'payment_approve',  label: 'Approve Payments',  description: 'Approve pending payments to include in reports and totals', indent: true },
   { key: 'expenses',         label: 'Expenses',          description: 'View and record expenses' },
   { key: 'expenses_delete',  label: 'Delete Expenses',   description: 'Delete expense records', indent: true },
   { key: 'collections',      label: 'Collections',       description: 'Collection calls management' },

@@ -268,6 +268,8 @@ export const paymentsApi = {
     api.post<{ id: number; invoice_no: string }>('/payments', data),
 
   delete: (id: number) => api.delete<{ ok: boolean }>(`/payments/${id}`),
+
+  approve: (id: number) => api.post<{ ok: boolean }>(`/payments/${id}/approve`),
 }
 
 // Student Debt API
@@ -326,6 +328,12 @@ export const attendanceApi = {
 
   save: (groupId: number, date: string, rows: { student_id: number; status: string }[]) =>
     api.post<{ ok: boolean }>('/attendance', { group_id: groupId, date, rows }),
+
+  getHistory: (groupId: number) =>
+    api.get<StudentAttendanceHistory[]>('/attendance-history', { group_id: String(groupId) }),
+
+  getUnmarked: () =>
+    api.get<UnmarkedGroup[]>('/attendance-unmarked'),
 }
 
 // Salary Slips API
@@ -543,6 +551,7 @@ export interface SystemSettings {
   notification_schedule?: string
   notification_attendance?: string
   notification_birthdays?: string
+  notification_payment_approval?: string
   contact_email?: string
   contact_phone?: string
 }
@@ -698,6 +707,12 @@ export interface Payment {
   created_at: string
   months_covered?: { month: string; amount: number }[]
   deleted_at?: string
+  created_by?: number
+  created_by_name?: string
+  is_approved?: boolean
+  approved_by?: number
+  approved_by_name?: string
+  approved_at?: string
 }
 
 export interface StudentDebt {
@@ -812,6 +827,22 @@ export interface AttendanceRow {
   student_name: string
   attendance_id?: number
   attendance_status?: 'present' | 'absent' | 'late' | 'excused'
+  marked_by_name?: string
+}
+
+export interface StudentAttendanceHistory {
+  student_id: number
+  total: number
+  present_count: number
+  percentage: number
+  history: { date: string; status: string }[]
+}
+
+export interface UnmarkedGroup {
+  id: number
+  name: string
+  teacher_name: string
+  schedule_time_start?: string
 }
 
 export interface SalarySlip {

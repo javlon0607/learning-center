@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { dashboardApi } from '@/lib/api'
+import { dashboardApi, attendanceApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatsCard } from '@/components/dashboard/StatsCard'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
@@ -16,6 +16,8 @@ import {
   ArrowRight,
   Calendar,
   Sparkles,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -27,6 +29,12 @@ export function Dashboard() {
   const { hasFeature } = usePermissions()
   const { t } = useTranslation()
   const canViewFinancials = hasFeature('dashboard')
+  const canViewAttendance = hasFeature('attendance')
+  const { data: unmarkedGroups = [] } = useQuery({
+    queryKey: ['attendance-unmarked'],
+    queryFn: attendanceApi.getUnmarked,
+    enabled: canViewAttendance,
+  })
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard', 'stats'],
     queryFn: dashboardApi.getStats,
@@ -99,6 +107,43 @@ export function Dashboard() {
           iconColor="warning"
         />
       </div>
+
+      {/* Attendance Today */}
+      {canViewAttendance && (
+        <Card className="border-border/60 shadow-soft">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {t('dashboard.attendance_today', 'Attendance Today')}
+            </CardTitle>
+            <div className={`p-2 rounded-lg ${unmarkedGroups.length === 0 ? 'bg-green-100' : 'bg-amber-100'}`}>
+              {unmarkedGroups.length === 0
+                ? <CheckCircle2 className="h-4 w-4 text-green-600" />
+                : <AlertTriangle className="h-4 w-4 text-amber-600" />
+              }
+            </div>
+          </CardHeader>
+          <CardContent>
+            {unmarkedGroups.length === 0 ? (
+              <div className="text-sm text-green-600 font-medium">
+                {t('dashboard.all_groups_marked', 'All groups marked for today')}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-sm text-amber-700 font-medium">
+                  {t('dashboard.unmarked_groups', '{count} groups not yet marked').replace('{count}', String(unmarkedGroups.length))}
+                </div>
+                <Link
+                  to="/attendance"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  {t('dashboard.go_to_attendance', 'Go to Attendance')}
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Financial Summary */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
