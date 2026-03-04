@@ -243,8 +243,7 @@ function LinkedAccountsTab({
       queryClient.invalidateQueries({ queryKey: ['telegram-links'] })
       if (data.bot_link) {
         setGeneratedLink(data.bot_link)
-        navigator.clipboard.writeText(data.bot_link)
-        toast({ title: 'Link generated & copied!', description: data.bot_link })
+        toast({ title: 'Link generated!', description: data.bot_link })
       } else {
         toast({ title: 'Link code generated', description: `Code: ${data.code}` })
         setDialogOpen(false)
@@ -290,8 +289,21 @@ function LinkedAccountsTab({
   }
 
   const copyLink = (botLink: string) => {
-    navigator.clipboard.writeText(botLink)
-    toast({ title: 'Copied to clipboard' })
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(botLink)
+      toast({ title: 'Copied to clipboard' })
+    } else {
+      // Fallback for HTTP contexts
+      const textarea = document.createElement('textarea')
+      textarea.value = botLink
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      toast({ title: 'Copied to clipboard' })
+    }
   }
 
   if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
