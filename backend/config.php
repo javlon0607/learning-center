@@ -1343,16 +1343,7 @@ function generateTelegramCode(): string {
 }
 
 function getTelegramBotUsername(): string {
-    static $username = null;
-    if ($username !== null) return $username;
-    if (!TELEGRAM_BOT_TOKEN) return '';
-    $url = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/getMe';
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
-    $res = json_decode(curl_exec($ch), true);
-    curl_close($ch);
-    $username = $res['result']['username'] ?? '';
-    return $username;
+    return getenv('TELEGRAM_BOT_USERNAME') ?: 'LegacyAcademy_bot';
 }
 
 function telegramSend(int $chatId, string $text, string $triggerType = 'custom', ?int $triggerEntityId = null, ?int $sentBy = null): array {
