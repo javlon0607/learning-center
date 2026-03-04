@@ -64,14 +64,29 @@ export function Attendance() {
     queryFn: groupsApi.getAll,
   })
 
-  // Filter groups for teachers
+  // Filter groups for teachers (also by selected date's day of week)
   const activeGroups = useMemo(() => {
     let filtered = groups.filter(g => g.status === 'active')
     if (isTeacherOnly && user?.teacher_id) {
       filtered = filtered.filter(g => g.teacher_id === user.teacher_id)
+      // Also filter by selected date's day
+      const dayIndex = new Date(selectedDate).getDay()
+      const dayAbbr = DAY_ABBRS[dayIndex]
+      filtered = filtered.filter(g => {
+        if (!g.schedule_days) return false
+        const days = g.schedule_days.toLowerCase().split(',').map(d => d.trim())
+        return days.includes(dayAbbr)
+      })
     }
     return filtered
-  }, [groups, isTeacherOnly, user?.teacher_id])
+  }, [groups, isTeacherOnly, user?.teacher_id, selectedDate])
+
+  // Clear selected group if it's no longer in the filtered list (e.g. date changed)
+  useEffect(() => {
+    if (selectedGroup && activeGroups.length > 0 && !activeGroups.some(g => g.id === Number(selectedGroup))) {
+      setSelectedGroup('')
+    }
+  }, [activeGroups, selectedGroup])
 
   const { data: attendance, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendance', selectedGroup, selectedDate],
@@ -234,13 +249,17 @@ export function Attendance() {
       </div>
 
       {/* Unmarked groups banner */}
-      {unmarkedGroups.length > 0 && (
+      {(() => {
+        const filtered = isTeacherOnly && user?.teacher_id
+          ? unmarkedGroups.filter((g: any) => g.teacher_id === user.teacher_id)
+          : unmarkedGroups
+        return filtered.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
           <span className="text-amber-800 font-medium">
-            {t('attendance.unmarked_today', '{count} groups not yet marked today:').replace('{count}', String(unmarkedGroups.length))}
+            {t('attendance.unmarked_today', '{count} groups not yet marked today:').replace('{count}', String(filtered.length))}
           </span>
-          {unmarkedGroups.map((g, i) => (
+          {filtered.map((g: any, i: number) => (
             <span key={g.id}>
               <button
                 className="text-amber-700 underline hover:text-amber-900"
@@ -251,11 +270,11 @@ export function Attendance() {
               >
                 {g.name}
               </button>
-              {i < unmarkedGroups.length - 1 && ', '}
+              {i < filtered.length - 1 && ', '}
             </span>
           ))}
         </div>
-      )}
+      )})()}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div className="space-y-2 w-full sm:w-auto">

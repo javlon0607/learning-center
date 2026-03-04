@@ -1420,7 +1420,7 @@ try {
                 $today = date('Y-m-d');
                 $dayAbbr = strtolower(date('D')); // mon, tue, wed, etc.
                 $stmt = db()->prepare("
-                    SELECT g.id, g.name, t.first_name || ' ' || t.last_name AS teacher_name,
+                    SELECT g.id, g.name, g.teacher_id, t.first_name || ' ' || t.last_name AS teacher_name,
                            g.schedule_time_start
                     FROM groups g
                     LEFT JOIN teachers t ON g.teacher_id = t.id

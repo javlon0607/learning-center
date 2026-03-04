@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { groupsApi, Group } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import {
   Sheet,
@@ -54,6 +55,14 @@ function formatTimeRange(start?: string, end?: string): string {
 }
 
 export function Timetable({ open, onOpenChange }: TimetableProps) {
+  const { user } = useAuth()
+  const userRoles = useMemo(() => (user?.role || 'user').split(',').map(r => r.trim()), [user])
+  const isTeacherOnly = useMemo(
+    () => userRoles.includes('teacher') && !userRoles.some(r => ['admin', 'manager', 'owner', 'developer'].includes(r)),
+    [userRoles]
+  )
+  const teacherId = isTeacherOnly ? user?.teacher_id : null
+
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
     queryFn: groupsApi.getAll,
@@ -170,6 +179,10 @@ export function Timetable({ open, onOpenChange }: TimetableProps) {
     return { left: Math.max(0, leftOffset), width: Math.max(3, widthPercent) }
   }
 
+  function isMyGroup(group: Group): boolean {
+    return !teacherId || group.teacher_id === teacherId
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-4xl p-0" preventAutoFocus>
@@ -260,12 +273,14 @@ export function Timetable({ open, onOpenChange }: TimetableProps) {
                           {/* Class blocks for this room */}
                           {scheduleByDayAndRoom[day][room]?.map((group) => {
                             const { left, width } = getGroupHorizontalPosition(group)
+                            const mine = isMyGroup(group)
                             return (
                               <div
                                 key={`${day}-${room}-${group.id}`}
                                 className={cn(
-                                  'absolute top-1 bottom-1 rounded px-1.5 text-white text-[11px] overflow-hidden cursor-pointer hover:opacity-90 transition-opacity shadow-sm flex items-center',
-                                  groupColorMap[group.id]
+                                  'absolute top-1 bottom-1 rounded px-1.5 text-white text-[11px] overflow-hidden cursor-pointer transition-opacity shadow-sm flex items-center',
+                                  groupColorMap[group.id],
+                                  mine ? 'hover:opacity-90 ring-2 ring-white/60' : 'opacity-40 hover:opacity-50'
                                 )}
                                 style={{
                                   left: `${left}%`,
@@ -281,12 +296,14 @@ export function Timetable({ open, onOpenChange }: TimetableProps) {
                           {/* Unassigned groups only in first room row */}
                           {roomIndex === 0 && (scheduleByDayAndRoom[day]['Unassigned'] || []).map((group) => {
                             const { left, width } = getGroupHorizontalPosition(group)
+                            const mine = isMyGroup(group)
                             return (
                               <div
                                 key={`${day}-unassigned-${group.id}`}
                                 className={cn(
-                                  'absolute top-1 bottom-1 rounded px-1.5 text-white text-[11px] overflow-hidden cursor-pointer hover:opacity-90 transition-opacity shadow-sm flex items-center border border-dashed border-white/50',
-                                  groupColorMap[group.id]
+                                  'absolute top-1 bottom-1 rounded px-1.5 text-white text-[11px] overflow-hidden cursor-pointer transition-opacity shadow-sm flex items-center border border-dashed border-white/50',
+                                  groupColorMap[group.id],
+                                  mine ? 'hover:opacity-90 ring-2 ring-white/60' : 'opacity-40 hover:opacity-50'
                                 )}
                                 style={{
                                   left: `${left}%`,
@@ -352,7 +369,10 @@ export function Timetable({ open, onOpenChange }: TimetableProps) {
                         {dayGroups.map((group) => (
                           <div
                             key={group.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                            className={cn(
+                              "flex items-center gap-3 p-3 rounded-lg border bg-card transition-colors",
+                              isMyGroup(group) ? 'hover:bg-muted/50 ring-1 ring-primary/30' : 'opacity-40'
+                            )}
                           >
                             <div className={cn('w-1 h-12 rounded-full', groupColorMap[group.id])} />
                             <div className="flex-1 min-w-0">
