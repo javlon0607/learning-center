@@ -2650,8 +2650,8 @@ try {
 
         case 'telegram-webhook':
             // Public endpoint — Telegram sends updates here (no auth)
-            $body = json_decode(file_get_contents('php://input'), true) ?: [];
-            $msg = $body['message'] ?? null;
+            // $input is already parsed from php://input at the top of this file
+            $msg = $input['message'] ?? null;
             if ($msg) {
                 $chatId = (int)($msg['chat']['id'] ?? 0);
                 $text = trim($msg['text'] ?? '');
