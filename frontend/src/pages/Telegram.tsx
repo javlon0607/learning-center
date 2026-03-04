@@ -235,12 +235,20 @@ function LinkedAccountsTab({
     enabled: entityType === 'lead',
   })
 
+  const [generatedLink, setGeneratedLink] = useState('')
+
   const generateMutation = useMutation({
     mutationFn: () => telegramApi.generateCode(entityType, Number(entityId)),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['telegram-links'] })
-      toast({ title: 'Link code generated', description: `Code: ${data.code}` })
-      setDialogOpen(false)
+      if (data.bot_link) {
+        setGeneratedLink(data.bot_link)
+        navigator.clipboard.writeText(data.bot_link)
+        toast({ title: 'Link generated & copied!', description: data.bot_link })
+      } else {
+        toast({ title: 'Link code generated', description: `Code: ${data.code}` })
+        setDialogOpen(false)
+      }
       setEntityType('')
       setEntityId('')
       setGenSearch('')
@@ -281,8 +289,8 @@ function LinkedAccountsTab({
     return []
   }
 
-  const copyLink = (code: string) => {
-    navigator.clipboard.writeText(`https://t.me/LegacyAcademyCRMBot?start=${code}`)
+  const copyLink = (botLink: string) => {
+    navigator.clipboard.writeText(botLink)
     toast({ title: 'Copied to clipboard' })
   }
 
@@ -330,13 +338,24 @@ function LinkedAccountsTab({
                 </div>
               )}
               <Button
-                onClick={() => generateMutation.mutate()}
+                onClick={() => { setGeneratedLink(''); generateMutation.mutate() }}
                 disabled={!entityType || !entityId || generateMutation.isPending}
                 className="w-full"
               >
                 {generateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Generate Code
               </Button>
+              {generatedLink && (
+                <div className="space-y-2 rounded-md border p-3 bg-muted">
+                  <Label className="text-xs text-muted-foreground">Share this link with the user:</Label>
+                  <div className="flex items-center gap-2">
+                    <Input value={generatedLink} readOnly className="text-sm" />
+                    <Button variant="outline" size="sm" onClick={() => copyLink(generatedLink)}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -370,8 +389,8 @@ function LinkedAccountsTab({
                   )}
                 </TableCell>
                 <TableCell>
-                  {link.link_code ? (
-                    <Button variant="ghost" size="sm" onClick={() => copyLink(link.link_code!)}>
+                  {link.bot_link ? (
+                    <Button variant="ghost" size="sm" onClick={() => copyLink(link.bot_link)}>
                       <Copy className="mr-1 h-3 w-3" />
                       Copy Link
                     </Button>

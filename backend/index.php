@@ -2702,13 +2702,19 @@ try {
                     SELECT tl.*,
                         CASE
                             WHEN tl.entity_type = 'student' THEN (SELECT first_name || ' ' || last_name FROM students WHERE id = tl.entity_id)
-                            WHEN tl.entity_type = 'teacher' THEN (SELECT name FROM teachers WHERE id = tl.entity_id)
+                            WHEN tl.entity_type = 'teacher' THEN (SELECT first_name || ' ' || last_name FROM teachers WHERE id = tl.entity_id)
                             WHEN tl.entity_type = 'lead' THEN (SELECT first_name || ' ' || last_name FROM leads WHERE id = tl.entity_id)
                         END AS entity_name
                     FROM telegram_links tl
                     ORDER BY tl.created_at DESC
                 ");
-                jsonResponse($stmt->fetchAll());
+                $links = $stmt->fetchAll();
+                $botUsername = getTelegramBotUsername();
+                foreach ($links as &$link) {
+                    $link['bot_link'] = ($link['link_code'] && $botUsername) ? "https://t.me/{$botUsername}?start={$link['link_code']}" : '';
+                }
+                unset($link);
+                jsonResponse($links);
 
             } elseif ($method === 'POST') {
                 $action = $input['action'] ?? '';
@@ -2732,7 +2738,9 @@ try {
                         $stmt = db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, link_code) VALUES (?, ?, ?)");
                         $stmt->execute([$entityType, $entityId, $code]);
                     }
-                    jsonResponse(['code' => $code]);
+                    $botUsername = getTelegramBotUsername();
+                    $botLink = $botUsername ? "https://t.me/{$botUsername}?start={$code}" : '';
+                    jsonResponse(['code' => $code, 'bot_link' => $botLink]);
 
                 } elseif ($action === 'send') {
                     $targetType = $input['target_type'] ?? '';

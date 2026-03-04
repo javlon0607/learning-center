@@ -898,6 +898,7 @@ export interface TelegramLink {
   linked_at: string | null
   created_at: string
   entity_name: string | null
+  bot_link: string
 }
 
 export interface TelegramLogEntry {
@@ -918,7 +919,7 @@ export interface TelegramLogEntry {
 export const telegramApi = {
   getLinks: () => api.get<TelegramLink[]>('/telegram'),
   generateCode: (entity_type: string, entity_id: number) =>
-    api.post<{ code: string }>('/telegram', { action: 'generate-code', entity_type, entity_id }),
+    api.post<{ code: string; bot_link: string }>('/telegram', { action: 'generate-code', entity_type, entity_id }),
   unlink: (id: number) => api.delete(`/telegram/${id}`),
   getLog: (page = 1, limit = 50) =>
     api.get<{ data: TelegramLogEntry[]; total: number; page: number; limit: number }>(`/telegram/log?page=${page}&limit=${limit}`),
