@@ -30,6 +30,7 @@ export const FEATURES: Feature[] = [
   { key: 'users',            label: 'User Management',   description: 'Create and manage system users' },
   { key: 'permissions',      label: 'Permissions',       description: 'Configure role permissions' },
   { key: 'translations',     label: 'Translations',      description: 'Manage interface translations (EN/UZ)' },
+  { key: 'telegram_send',    label: 'Telegram',          description: 'Send Telegram notifications and manage linked accounts' },
 ]
 
 // Roles that bypass all feature checks (always have access to everything)

@@ -6,6 +6,9 @@ define('DB_NAME', getenv('DB_NAME') ?: 'learning_center_db');
 define('DB_USER', getenv('DB_USER') ?: 'learning_center_user');
 define('DB_PASS', getenv('DB_PASS') ?: 'postgres123');
 
+// Telegram Bot
+define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
+
 // JWT Configuration
 define('JWT_SECRET', getenv('JWT_SECRET') ?: 'CHANGE_ME_TO_A_RANDOM_64_CHARACTER_STRING');
 define('JWT_ACCESS_TTL', (int)(getenv('JWT_ACCESS_TTL') ?: 1800));
@@ -1034,6 +1037,44 @@ function initDB() {
             $stmt->execute([$lang, $key, $value]);
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: Telegram tables + permission
+    try {
+        $m = 'telegram_tables_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS telegram_links (
+                    id SERIAL PRIMARY KEY,
+                    entity_type VARCHAR(20) NOT NULL,
+                    entity_id INT NOT NULL,
+                    chat_id BIGINT UNIQUE,
+                    link_code VARCHAR(32) UNIQUE,
+                    linked_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            ");
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS telegram_log (
+                    id SERIAL PRIMARY KEY,
+                    chat_id BIGINT,
+                    direction VARCHAR(4) NOT NULL,
+                    message_text TEXT,
+                    trigger_type VARCHAR(50),
+                    trigger_entity_id INT,
+                    sent_by INT REFERENCES users(id),
+                    telegram_message_id BIGINT,
+                    status VARCHAR(20),
+                    error_text TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            ");
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            $stmt->execute(['owner', 'telegram_send']);
+            $stmt->execute(['admin', 'telegram_send']);
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────
@@ -1293,4 +1334,92 @@ function getTeacherUserId(int $groupId): ?int
         error_log("getTeacherUserId failed: " . $e->getMessage());
         return null;
     }
+}
+
+// ── Telegram helpers ─────────────────────────────────────────────────────
+
+function generateTelegramCode(): string {
+    return bin2hex(random_bytes(8)); // 16-char hex string
+}
+
+function telegramSend(int $chatId, string $text, string $triggerType = 'custom', ?int $triggerEntityId = null, ?int $sentBy = null): array {
+    if (!TELEGRAM_BOT_TOKEN) {
+        return ['ok' => false, 'error' => 'Bot token not configured'];
+    }
+
+    $url = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendMessage';
+    $postData = json_encode(['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML']);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postData,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    $ok = false;
+    $error = '';
+    $telegramMessageId = null;
+
+    if ($curlError) {
+        $error = 'cURL error: ' . $curlError;
+    } else {
+        $result = json_decode($response, true);
+        if ($result && !empty($result['ok'])) {
+            $ok = true;
+            $telegramMessageId = $result['result']['message_id'] ?? null;
+        } else {
+            $error = $result['description'] ?? 'Unknown Telegram error';
+        }
+    }
+
+    // Log to telegram_log
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, trigger_entity_id, sent_by, telegram_message_id, status, error_text) VALUES (?,?,?,?,?,?,?,?,?)");
+        $stmt->execute([
+            $chatId, 'out', $text, $triggerType, $triggerEntityId, $sentBy,
+            $telegramMessageId, $ok ? 'sent' : 'failed', $error ?: null
+        ]);
+    } catch (PDOException $e) {
+        error_log("telegramSend log failed: " . $e->getMessage());
+    }
+
+    return ['ok' => $ok, 'error' => $error];
+}
+
+function telegramNotifyStudent(int $studentId, string $text, string $triggerType = 'custom', ?int $triggerEntityId = null): array {
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT chat_id FROM telegram_links WHERE entity_type = 'student' AND entity_id = ? AND linked_at IS NOT NULL");
+        $stmt->execute([$studentId]);
+        $row = $stmt->fetch();
+        if ($row && $row['chat_id']) {
+            return telegramSend((int)$row['chat_id'], $text, $triggerType, $triggerEntityId);
+        }
+    } catch (PDOException $e) {
+        error_log("telegramNotifyStudent failed: " . $e->getMessage());
+    }
+    return ['ok' => false, 'error' => 'No linked Telegram account'];
+}
+
+function telegramNotifyTeacher(int $teacherId, string $text, string $triggerType = 'custom', ?int $triggerEntityId = null): array {
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("SELECT chat_id FROM telegram_links WHERE entity_type = 'teacher' AND entity_id = ? AND linked_at IS NOT NULL");
+        $stmt->execute([$teacherId]);
+        $row = $stmt->fetch();
+        if ($row && $row['chat_id']) {
+            return telegramSend((int)$row['chat_id'], $text, $triggerType, $triggerEntityId);
+        }
+    } catch (PDOException $e) {
+        error_log("telegramNotifyTeacher failed: " . $e->getMessage());
+    }
+    return ['ok' => false, 'error' => 'No linked Telegram account'];
 }

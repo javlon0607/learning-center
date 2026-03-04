@@ -887,6 +887,45 @@ export interface DashboardStats {
   }
 }
 
+// ── Telegram ─────────────────────────────────────────────────────────────
+
+export interface TelegramLink {
+  id: number
+  entity_type: string
+  entity_id: number
+  chat_id: number | null
+  link_code: string | null
+  linked_at: string | null
+  created_at: string
+  entity_name: string | null
+}
+
+export interface TelegramLogEntry {
+  id: number
+  chat_id: number
+  direction: 'in' | 'out'
+  message_text: string
+  trigger_type: string
+  trigger_entity_id: number | null
+  sent_by: number | null
+  sent_by_name: string | null
+  telegram_message_id: number | null
+  status: string
+  error_text: string | null
+  created_at: string
+}
+
+export const telegramApi = {
+  getLinks: () => api.get<TelegramLink[]>('/telegram'),
+  generateCode: (entity_type: string, entity_id: number) =>
+    api.post<{ code: string }>('/telegram', { action: 'generate-code', entity_type, entity_id }),
+  unlink: (id: number) => api.delete(`/telegram/${id}`),
+  getLog: (page = 1, limit = 50) =>
+    api.get<{ data: TelegramLogEntry[]; total: number; page: number; limit: number }>(`/telegram/log?page=${page}&limit=${limit}`),
+  send: (target_type: string, target_id: number, message: string) =>
+    api.post<{ sent: number; failed: number; errors: string[] }>('/telegram', { action: 'send', target_type, target_id, message }),
+}
+
 /** Unified audit log: tracks all entity changes and actions with before/after values and timestamp. */
 export interface AuditLogEntry {
   id: number

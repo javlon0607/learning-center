@@ -18,6 +18,7 @@ import {
   PhoneCall,
   ShieldCheck,
   Languages,
+  Send,
 } from 'lucide-react'
 
 const navigation = [
@@ -35,6 +36,7 @@ const navigation = [
   { key: 'nav.settings',     href: '/settings',     icon: Settings,        feature: 'settings' },
   { key: 'nav.permissions',  href: '/permissions',  icon: ShieldCheck,     feature: 'permissions' },
   { key: 'nav.translations', href: '/translations', icon: Languages,       feature: 'translations' },
+  { key: 'nav.telegram',     href: '/telegram',     icon: Send,            feature: 'telegram_send' },
 ]
 
 interface SidebarProps {

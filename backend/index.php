@@ -498,6 +498,32 @@ try {
                     $input['schedule_time_end'] ?? $oldRow['schedule_time_end'], $input['room'] ?? $oldRow['room'], $id
                 ]);
                 auditLog('update', 'group', $id, $oldRow ?: null, $newValues);
+
+                // Telegram: notify if schedule changed
+                $newScheduleDays = $input['schedule_days'] ?? $oldRow['schedule_days'];
+                $newTimeStart = $input['schedule_time_start'] ?? $oldRow['schedule_time_start'];
+                $newTimeEnd = $input['schedule_time_end'] ?? $oldRow['schedule_time_end'];
+                $scheduleChanged = ($newScheduleDays !== $oldRow['schedule_days'])
+                    || ($newTimeStart !== $oldRow['schedule_time_start'])
+                    || ($newTimeEnd !== $oldRow['schedule_time_end']);
+                if ($scheduleChanged) {
+                    try {
+                        $groupName = $newValues['name'];
+                        $scheduleMsg = "Schedule changed for <b>{$groupName}</b>: {$newScheduleDays} {$newTimeStart}–{$newTimeEnd}";
+                        // Notify enrolled students
+                        $enrolledStmt = db()->prepare("SELECT e.student_id FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL");
+                        $enrolledStmt->execute([$id]);
+                        foreach ($enrolledStmt->fetchAll() as $eRow) {
+                            telegramNotifyStudent((int)$eRow['student_id'], $scheduleMsg, 'schedule_change', $id);
+                        }
+                        // Notify teacher
+                        $teacherId = $newValues['teacher_id'] ?? $oldRow['teacher_id'];
+                        if ($teacherId) {
+                            telegramNotifyTeacher((int)$teacherId, $scheduleMsg, 'schedule_change', $id);
+                        }
+                    } catch (Exception $e) { /* ignore telegram errors */ }
+                }
+
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 requireRole(['admin']);
@@ -1361,6 +1387,19 @@ try {
                         $oldValues = $oldRow ? ['student_id' => (int)$oldRow['student_id'], 'group_id' => (int)$oldRow['group_id'], 'attendance_date' => $oldRow['attendance_date'], 'status' => $oldRow['status']] : null;
                         $newValues = ['student_id' => $sid, 'group_id' => $group, 'attendance_date' => $date, 'status' => $status];
                         auditLog($oldStatus === null ? 'create' : 'update', 'attendance', $attendanceId, $oldValues, $newValues);
+
+                        // Telegram: notify parent if marked absent or late
+                        if (in_array($status, ['absent', 'late'])) {
+                            try {
+                                $nameStmt = db()->prepare("SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?");
+                                $nameStmt->execute([$sid]);
+                                $studentName = $nameStmt->fetchColumn() ?: 'Student';
+                                $groupStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
+                                $groupStmt->execute([$group]);
+                                $groupName = $groupStmt->fetchColumn() ?: 'Group';
+                                telegramNotifyStudent($sid, "Your child {$studentName} was marked <b>{$status}</b> in {$groupName} on {$date}.", 'attendance', $attendanceId);
+                            } catch (Exception $e) { /* ignore telegram errors */ }
+                        }
                     }
                 }
                 activityLog('attendance_save', 'attendance', null, json_encode(['date' => $date, 'group_id' => $group]));
@@ -2514,6 +2553,11 @@ try {
                             $created++;
                         }
                     }
+                    // Telegram: notify student about unpaid balance
+                    try {
+                        $remaining = round($us['expected'] - $us['paid']);
+                        telegramNotifyStudent((int)$us['student_id'], "Payment reminder: {$us['student_name']} has an outstanding balance of {$remaining} for {$us['group_name']} this month.", 'payment_reminder', (int)$us['student_id']);
+                    } catch (Exception $e) { /* ignore telegram errors */ }
                 }
             }
             } // end if payment reminders enabled
@@ -2602,6 +2646,148 @@ try {
                 db()->commit();
                 jsonResponse(['ok' => true]);
             } else { jsonError('Method not allowed', 405); }
+            break;
+
+        case 'telegram-webhook':
+            // Public endpoint — Telegram sends updates here (no auth)
+            $body = json_decode(file_get_contents('php://input'), true) ?: [];
+            $msg = $body['message'] ?? null;
+            if ($msg) {
+                $chatId = (int)($msg['chat']['id'] ?? 0);
+                $text = trim($msg['text'] ?? '');
+
+                if (preg_match('#^/start\s+(.+)$#', $text, $m)) {
+                    $code = $m[1];
+                    $stmt = db()->prepare("SELECT id, entity_type, entity_id FROM telegram_links WHERE link_code = ? AND linked_at IS NULL");
+                    $stmt->execute([$code]);
+                    $link = $stmt->fetch();
+                    if ($link) {
+                        $upd = db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?");
+                        $upd->execute([$chatId, $link['id']]);
+                        // Reply
+                        telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.", 'custom');
+                    } else {
+                        telegramSend($chatId, "❌ Invalid or expired link code.", 'custom');
+                    }
+                } else {
+                    // Log incoming message
+                    try {
+                        $stmt = db()->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, telegram_message_id, status) VALUES (?,?,?,?,?,?)");
+                        $stmt->execute([$chatId, 'in', $text, 'reply', $msg['message_id'] ?? null, 'received']);
+                    } catch (PDOException $e) { /* ignore */ }
+                }
+            }
+            jsonResponse(['ok' => true]);
+            break;
+
+        case 'telegram':
+            requireFeature('telegram_send');
+
+            if ($method === 'GET' && $sub === 'log') {
+                // GET /telegram/log — message log with pagination
+                $page = max(1, (int)($_GET['page'] ?? 1));
+                $limit = min(100, max(10, (int)($_GET['limit'] ?? 50)));
+                $offset = ($page - 1) * $limit;
+
+                $countStmt = db()->query("SELECT COUNT(*) FROM telegram_log");
+                $total = (int)$countStmt->fetchColumn();
+
+                $stmt = db()->prepare("SELECT tl.*, u.name AS sent_by_name FROM telegram_log tl LEFT JOIN users u ON tl.sent_by = u.id ORDER BY tl.created_at DESC LIMIT ? OFFSET ?");
+                $stmt->execute([$limit, $offset]);
+                jsonResponse(['data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+
+            } elseif ($method === 'GET') {
+                // GET /telegram — list all links with entity names
+                $stmt = db()->query("
+                    SELECT tl.*,
+                        CASE
+                            WHEN tl.entity_type = 'student' THEN (SELECT first_name || ' ' || last_name FROM students WHERE id = tl.entity_id)
+                            WHEN tl.entity_type = 'teacher' THEN (SELECT name FROM teachers WHERE id = tl.entity_id)
+                            WHEN tl.entity_type = 'lead' THEN (SELECT first_name || ' ' || last_name FROM leads WHERE id = tl.entity_id)
+                        END AS entity_name
+                    FROM telegram_links tl
+                    ORDER BY tl.created_at DESC
+                ");
+                jsonResponse($stmt->fetchAll());
+
+            } elseif ($method === 'POST') {
+                $action = $input['action'] ?? '';
+
+                if ($action === 'generate-code') {
+                    $entityType = $input['entity_type'] ?? '';
+                    $entityId = (int)($input['entity_id'] ?? 0);
+                    if (!in_array($entityType, ['student', 'teacher', 'lead']) || !$entityId) {
+                        jsonError('Invalid entity_type or entity_id');
+                        break;
+                    }
+                    $code = generateTelegramCode();
+                    // Upsert: if link exists for this entity, update code; otherwise insert
+                    $existing = db()->prepare("SELECT id FROM telegram_links WHERE entity_type = ? AND entity_id = ?");
+                    $existing->execute([$entityType, $entityId]);
+                    $row = $existing->fetch();
+                    if ($row) {
+                        $stmt = db()->prepare("UPDATE telegram_links SET link_code = ?, linked_at = NULL, chat_id = NULL WHERE id = ?");
+                        $stmt->execute([$code, $row['id']]);
+                    } else {
+                        $stmt = db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, link_code) VALUES (?, ?, ?)");
+                        $stmt->execute([$entityType, $entityId, $code]);
+                    }
+                    jsonResponse(['code' => $code]);
+
+                } elseif ($action === 'send') {
+                    $targetType = $input['target_type'] ?? '';
+                    $targetId = (int)($input['target_id'] ?? 0);
+                    $messageText = trim($input['message'] ?? '');
+                    if (!$messageText) { jsonError('Message is required'); break; }
+
+                    $sentBy = $GLOBALS['jwt_user']['id'] ?? null;
+                    $results = ['sent' => 0, 'failed' => 0, 'errors' => []];
+
+                    if ($targetType === 'student') {
+                        $r = telegramNotifyStudent($targetId, $messageText, 'custom', null);
+                        if ($r['ok']) $results['sent']++; else { $results['failed']++; $results['errors'][] = $r['error']; }
+
+                    } elseif ($targetType === 'teacher') {
+                        $r = telegramNotifyTeacher($targetId, $messageText, 'custom', null);
+                        if ($r['ok']) $results['sent']++; else { $results['failed']++; $results['errors'][] = $r['error']; }
+
+                    } elseif ($targetType === 'lead') {
+                        $stmt = db()->prepare("SELECT chat_id FROM telegram_links WHERE entity_type = 'lead' AND entity_id = ? AND linked_at IS NOT NULL");
+                        $stmt->execute([$targetId]);
+                        $row = $stmt->fetch();
+                        if ($row && $row['chat_id']) {
+                            $r = telegramSend((int)$row['chat_id'], $messageText, 'custom', null, $sentBy);
+                            if ($r['ok']) $results['sent']++; else { $results['failed']++; $results['errors'][] = $r['error']; }
+                        } else {
+                            $results['failed']++;
+                            $results['errors'][] = 'No linked Telegram account';
+                        }
+
+                    } elseif ($targetType === 'group') {
+                        // Send to all enrolled students in the group
+                        $stmt = db()->prepare("SELECT e.student_id FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL");
+                        $stmt->execute([$targetId]);
+                        foreach ($stmt->fetchAll() as $row) {
+                            $r = telegramNotifyStudent((int)$row['student_id'], $messageText, 'custom', null);
+                            if ($r['ok']) $results['sent']++; else $results['failed']++;
+                        }
+                    } else {
+                        jsonError('Invalid target_type');
+                        break;
+                    }
+                    jsonResponse($results);
+                } else {
+                    jsonError('Invalid action');
+                }
+
+            } elseif ($method === 'DELETE' && $id) {
+                $stmt = db()->prepare("DELETE FROM telegram_links WHERE id = ?");
+                $stmt->execute([$id]);
+                jsonResponse(['ok' => true]);
+
+            } else {
+                jsonError('Method not allowed', 405);
+            }
             break;
 
         default:
