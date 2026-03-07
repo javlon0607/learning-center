@@ -809,13 +809,13 @@ try {
             requireRole(['admin', 'manager', 'accountant']);
             if ($method === 'GET') {
                 // Include months_covered for each payment
-                $where = [];
+                $where = ['p.deleted_at IS NULL'];
                 $params = [];
                 if (!empty($_GET['student_id'])) {
                     $where[] = "p.student_id = ?";
                     $params[] = (int)$_GET['student_id'];
                 }
-                $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+                $whereClause = 'WHERE ' . implode(' AND ', $where);
                 $q = "
                     SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name,
                            u_approver.name AS approved_by_name,
@@ -1809,7 +1809,12 @@ try {
                     $studentIds = [];
                     foreach ($enrollments as $e) {
                         $discount = (float)$e['discount_percentage'];
-                        $monthlyDebt = $groupPrice * (1 - $discount / 100);
+                        $afterEnrollmentDiscount = $groupPrice * (1 - $discount / 100);
+                        // Subtract monthly discount
+                        $mdStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM monthly_discounts WHERE student_id = ? AND group_id = ? AND for_month = ? AND deleted_at IS NULL");
+                        $mdStmt->execute([(int)$e['student_id'], $groupId, $monthStart]);
+                        $mdAmount = (float)$mdStmt->fetchColumn();
+                        $monthlyDebt = max(0, $afterEnrollmentDiscount - $mdAmount);
                         $expectedAmount += $monthlyDebt;
                         $studentIds[] = (int)$e['student_id'];
                     }
@@ -2223,10 +2228,19 @@ try {
             }
             $groupPrice = (float)$enrollment['group_price'];
             $discountPct = (float)$enrollment['discount_percentage'];
-            $monthlyDebt = $groupPrice * (1 - $discountPct / 100);
+            $afterEnrollmentDiscount = $groupPrice * (1 - $discountPct / 100);
+
+            // Get monthly discount for this student+group+month
+            $monthStart = $month . '-01';
+            $mdStmt = db()->prepare("
+                SELECT COALESCE(SUM(amount), 0) FROM monthly_discounts
+                WHERE student_id = ? AND group_id = ? AND for_month = ? AND deleted_at IS NULL
+            ");
+            $mdStmt->execute([$studentId, $groupId, $monthStart]);
+            $monthlyDiscountAmount = (float)$mdStmt->fetchColumn();
+            $monthlyDebt = max(0, $afterEnrollmentDiscount - $monthlyDiscountAmount);
 
             // Get paid amount for this month
-            $monthStart = $month . '-01';
             $paidStmt = db()->prepare("
                 SELECT COALESCE(SUM(pm.amount), 0) AS paid
                 FROM payment_months pm
@@ -2243,6 +2257,7 @@ try {
                 'month' => $month,
                 'group_price' => $groupPrice,
                 'discount_percentage' => $discountPct,
+                'monthly_discount' => round($monthlyDiscountAmount, 2),
                 'monthly_debt' => round($monthlyDebt, 2),
                 'paid_amount' => round($paidAmount, 2),
                 'remaining_debt' => round($remainingDebt, 2)
@@ -2358,25 +2373,31 @@ try {
                     s.phone,
                     g.price AS group_price,
                     e.discount_percentage,
-                    g.price * (1 - COALESCE(e.discount_percentage, 0) / 100) AS expected,
+                    g.price * (1 - COALESCE(e.discount_percentage, 0) / 100) AS expected_before_md,
                     COALESCE(
                         (SELECT SUM(pm.amount)
                          FROM payment_months pm
                          JOIN payments p ON pm.payment_id = p.id
                          WHERE p.student_id = s.id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
                         0
-                    ) AS paid
+                    ) AS paid,
+                    COALESCE(
+                        (SELECT SUM(md.amount)
+                         FROM monthly_discounts md
+                         WHERE md.student_id = s.id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL),
+                        0
+                    ) AS monthly_discount
                 FROM enrollments e
                 JOIN students s ON e.student_id = s.id
                 JOIN groups g ON e.group_id = g.id
                 WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
                 ORDER BY s.first_name, s.last_name
             ");
-            $stmt->execute([$monthStart, $groupId]);
+            $stmt->execute([$monthStart, $monthStart, $groupId]);
             $rows = $stmt->fetchAll();
             $result = [];
             foreach ($rows as $row) {
-                $expected = round((float)$row['expected'], 2);
+                $expected = round(max(0, (float)$row['expected_before_md'] - (float)$row['monthly_discount']), 2);
                 $paid = round((float)$row['paid'], 2);
                 $debt = round(max(0, $expected - $paid), 2);
                 $result[] = [
@@ -2420,7 +2441,9 @@ try {
                     INNER JOIN (
                         SELECT
                             e.student_id,
-                            SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
+                            SUM(GREATEST(0, g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                                - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
+                            )) AS expected,
                             COALESCE(SUM(
                                 (SELECT COALESCE(SUM(pm.amount), 0)
                                  FROM payment_months pm
@@ -2430,7 +2453,9 @@ try {
                         FROM enrollments e
                         JOIN groups g ON e.group_id = g.id
                         GROUP BY e.student_id
-                        HAVING SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) -
+                        HAVING SUM(GREATEST(0, g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                                - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
+                            )) -
                                COALESCE(SUM(
                                    (SELECT COALESCE(SUM(pm.amount), 0)
                                     FROM payment_months pm
@@ -2450,7 +2475,7 @@ try {
                     WHERE s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY debt.expected - debt.paid DESC
                 ");
-                $stmt->execute([$currentMonth, $currentMonth]);
+                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth]);
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
@@ -2807,6 +2832,71 @@ try {
             } else {
                 jsonError('Method not allowed', 405);
             }
+            break;
+
+        case 'monthly-discounts':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method === 'GET') {
+                $where = ['md.deleted_at IS NULL'];
+                $params = [];
+                if (!empty($_GET['student_id'])) {
+                    $where[] = 'md.student_id = ?';
+                    $params[] = (int)$_GET['student_id'];
+                }
+                if (!empty($_GET['group_id'])) {
+                    $where[] = 'md.group_id = ?';
+                    $params[] = (int)$_GET['group_id'];
+                }
+                if (!empty($_GET['month'])) {
+                    $where[] = 'md.for_month = ?';
+                    $params[] = $_GET['month'] . '-01';
+                }
+                $whereClause = implode(' AND ', $where);
+                $stmt = db()->prepare("
+                    SELECT md.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name,
+                           u.name AS created_by_name
+                    FROM monthly_discounts md
+                    JOIN students s ON md.student_id = s.id
+                    JOIN groups g ON md.group_id = g.id
+                    LEFT JOIN users u ON md.created_by = u.id
+                    WHERE $whereClause
+                    ORDER BY md.for_month DESC, md.created_at DESC
+                ");
+                $stmt->execute($params);
+                jsonResponse($stmt->fetchAll());
+            } elseif ($method === 'POST') {
+                $studentId = (int)($input['student_id'] ?? 0);
+                $groupId = (int)($input['group_id'] ?? 0);
+                $forMonth = $input['for_month'] ?? '';
+                $amount = (float)($input['amount'] ?? 0);
+                $reason = trim($input['reason'] ?? '');
+                if (!$studentId || !$groupId || !$forMonth || $amount <= 0) {
+                    jsonError('student_id, group_id, for_month, and positive amount required');
+                    break;
+                }
+                // Ensure for_month is first day of month
+                $forMonth = date('Y-m-01', strtotime($forMonth));
+                $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO monthly_discounts (student_id, group_id, for_month, amount, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt->execute([$studentId, $groupId, $forMonth, $amount, $reason ?: null, $createdBy]);
+                $newId = (int)db()->lastInsertId();
+                auditLog('create', 'monthly_discount', $newId, null, [
+                    'student_id' => $studentId, 'group_id' => $groupId,
+                    'for_month' => $forMonth, 'amount' => $amount, 'reason' => $reason
+                ]);
+                jsonResponse(['id' => $newId]);
+            } elseif ($id && $method === 'DELETE') {
+                $old = db()->prepare("SELECT * FROM monthly_discounts WHERE id = ? AND deleted_at IS NULL");
+                $old->execute([$id]);
+                $oldRow = $old->fetch();
+                if (!$oldRow) { jsonError('Monthly discount not found', 404); break; }
+                db()->prepare("UPDATE monthly_discounts SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                auditLog('delete', 'monthly_discount', $id, [
+                    'student_id' => (int)$oldRow['student_id'], 'group_id' => (int)$oldRow['group_id'],
+                    'for_month' => $oldRow['for_month'], 'amount' => (float)$oldRow['amount'], 'reason' => $oldRow['reason']
+                ], null);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
             break;
 
         default:

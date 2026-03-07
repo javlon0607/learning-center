@@ -83,6 +83,7 @@ export function Payments() {
   const [debtInfo, setDebtInfo] = useState<{
     groupPrice: number
     discountPercentage: number
+    monthlyDiscount: number
     monthlyDebt: number
     monthDebts: { month: string; debt: number; paid: number; remaining: number }[]
     totalRemaining: number
@@ -186,12 +187,14 @@ export function Payments() {
         let totalRemaining = 0
         let groupPrice = 0
         let discountPercentage = 0
+        let monthlyDiscount = 0
         let monthlyDebt = 0
 
         for (const month of selectedMonths) {
           const debt = await studentDebtApi.get(Number(selectedStudentId), Number(selectedGroupId), month)
           groupPrice = debt.group_price
           discountPercentage = debt.discount_percentage
+          monthlyDiscount = debt.monthly_discount || 0
           monthlyDebt = debt.monthly_debt
           monthDebts.push({
             month,
@@ -202,7 +205,7 @@ export function Payments() {
           totalRemaining += debt.remaining_debt
         }
 
-        setDebtInfo({ groupPrice, discountPercentage, monthlyDebt, monthDebts, totalRemaining })
+        setDebtInfo({ groupPrice, discountPercentage, monthlyDiscount, monthlyDebt, monthDebts, totalRemaining })
       } catch (err) {
         console.error('Failed to fetch debt info:', err)
         setDebtInfo(null)
@@ -730,6 +733,12 @@ export function Payments() {
                     <div className="flex justify-between text-sm text-green-600">
                       <span>{t('payments.debt_discount', 'Discount')}:</span>
                       <span className="font-medium">{debtInfo.discountPercentage}%</span>
+                    </div>
+                  )}
+                  {debtInfo.monthlyDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-orange-600">
+                      <span>{t('payments.debt_monthly_discount', 'Monthly Discount')}:</span>
+                      <span className="font-medium">-{formatCurrency(debtInfo.monthlyDiscount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">

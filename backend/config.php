@@ -438,6 +438,122 @@ function initDB() {
             ['en','students.empty_heading','No students found'], ['uz','students.empty_heading',"O'quvchilar topilmadi"],
             ['en','students.filter_graduated','Graduated'], ['uz','students.filter_graduated','Bitirgan'],
             ['en','students.filter_suspended','Suspended'], ['uz','students.filter_suspended',"To'xtatilgan"],
+            // Student Detail page (sd.*)
+            ['en','sd.not_found','Student not found'], ['uz','sd.not_found',"O'quvchi topilmadi"],
+            ['en','sd.back_to_students','Back to Students'], ['uz','sd.back_to_students',"O'quvchilarga qaytish"],
+            ['en','sd.years_old','years old'], ['uz','sd.years_old','yosh'],
+            ['en','sd.yo','y/o'], ['uz','sd.yo','yosh'],
+            ['en','sd.id','ID'], ['uz','sd.id','ID'],
+            ['en','sd.record_payment','Record Payment'], ['uz','sd.record_payment',"To'lovni qayd etish"],
+            ['en','sd.add_to_group','Add to Group'], ['uz','sd.add_to_group',"Guruhga qo'shish"],
+            ['en','sd.card_contact','Contact'], ['uz','sd.card_contact',"Aloqa"],
+            ['en','sd.no_contact','No contact info'], ['uz','sd.no_contact',"Aloqa ma'lumoti yo'q"],
+            ['en','sd.card_parent','Parent/Guardian'], ['uz','sd.card_parent',"Ota-ona/Vasiy"],
+            ['en','sd.not_specified','Not specified'], ['uz','sd.not_specified',"Ko'rsatilmagan"],
+            ['en','sd.card_summary','Summary'], ['uz','sd.card_summary',"Xulosa"],
+            ['en','sd.enrollments','Enrollment(s)'], ['uz','sd.enrollments',"Ro'yxat(lar)"],
+            ['en','sd.joined','Joined'], ['uz','sd.joined',"Qo'shilgan"],
+            ['en','sd.debt','Debt'], ['uz','sd.debt','Qarzdorlik'],
+            ['en','sd.paid_this_month','Paid for this month'], ['uz','sd.paid_this_month',"Bu oy uchun to'langan"],
+            ['en','sd.card_source','Source'], ['uz','sd.card_source','Manba'],
+            ['en','sd.walk_in','Walk-in'], ['uz','sd.walk_in','Kelgan'],
+            ['en','sd.referred_by','Referred by'], ['uz','sd.referred_by','Tavsiya qilgan'],
+            ['en','sd.created_by','Created by'], ['uz','sd.created_by','Yaratgan'],
+            // Student Detail tabs
+            ['en','sd.tab_enrollments','Enrollments'], ['uz','sd.tab_enrollments',"Ro'yxatlar"],
+            ['en','sd.tab_payments','Payments'], ['uz','sd.tab_payments',"To'lovlar"],
+            ['en','sd.tab_attendance','Attendance'], ['uz','sd.tab_attendance','Davomat'],
+            ['en','sd.tab_notes','Notes'], ['uz','sd.tab_notes','Izohlar'],
+            // Student Detail enrollment columns
+            ['en','sd.col_group','Group'], ['uz','sd.col_group','Guruh'],
+            ['en','sd.col_price','Price'], ['uz','sd.col_price','Narx'],
+            ['en','sd.col_discount','Discount'], ['uz','sd.col_discount','Chegirma'],
+            ['en','sd.col_monthly_cost','Monthly Cost'], ['uz','sd.col_monthly_cost',"Oylik to'lov"],
+            ['en','sd.col_enrolled','Enrolled'], ['uz','sd.col_enrolled',"Ro'yxatdan o'tgan"],
+            ['en','sd.col_date','Date'], ['uz','sd.col_date','Sana'],
+            ['en','sd.col_amount','Amount'], ['uz','sd.col_amount','Miqdor'],
+            ['en','sd.col_months','Month(s)'], ['uz','sd.col_months','Oy(lar)'],
+            ['en','sd.col_method','Method'], ['uz','sd.col_method','Usul'],
+            ['en','sd.col_status','Status'], ['uz','sd.col_status','Holati'],
+            ['en','sd.not_enrolled','Not enrolled in any group'], ['uz','sd.not_enrolled',"Hech qaysi guruhga yozilmagan"],
+            ['en','sd.add_monthly_discount','Add Monthly Discount'], ['uz','sd.add_monthly_discount','Oylik chegirma qo\'shish'],
+            ['en','sd.remove_discount','Remove discount'], ['uz','sd.remove_discount',"Chegirmani o'chirish"],
+            // Student Detail payments
+            ['en','sd.no_payments','No payments recorded'], ['uz','sd.no_payments',"To'lovlar qayd etilmagan"],
+            ['en','sd.approved','Approved'], ['uz','sd.approved','Tasdiqlangan'],
+            ['en','sd.pending','Pending'], ['uz','sd.pending','Kutilmoqda'],
+            ['en','sd.total_paid','Total paid'], ['uz','sd.total_paid',"Jami to'langan"],
+            ['en','sd.payments_count','payment(s)'], ['uz','sd.payments_count',"to'lov(lar)"],
+            ['en','sd.page','Page'], ['uz','sd.page','Sahifa'],
+            ['en','sd.of','of'], ['uz','sd.of','dan'],
+            // Student Detail attendance
+            ['en','sd.att_present','Present'], ['uz','sd.att_present','Kelgan'],
+            ['en','sd.att_absent','Absent'], ['uz','sd.att_absent','Kelmagan'],
+            ['en','sd.att_late','Late'], ['uz','sd.att_late','Kech kelgan'],
+            ['en','sd.att_rate','Attendance Rate'], ['uz','sd.att_rate','Davomat darajasi'],
+            ['en','sd.no_attendance','No attendance records'], ['uz','sd.no_attendance',"Davomat yozuvlari yo'q"],
+            // Student Detail notes
+            ['en','sd.add_note','Add Note'], ['uz','sd.add_note',"Izoh qo'shish"],
+            ['en','sd.note_placeholder','Write a note...'], ['uz','sd.note_placeholder','Izoh yozing...'],
+            ['en','sd.no_notes','No notes yet'], ['uz','sd.no_notes',"Hali izohlar yo'q"],
+            ['en','sd.by','by'], ['uz','sd.by','tomonidan'],
+            ['en','sd.confirm_delete_note','Delete this note?'], ['uz','sd.confirm_delete_note',"Bu izohni o'chirasizmi?"],
+            ['en','sd.notes_count','note(s)'], ['uz','sd.notes_count','izoh(lar)'],
+            ['en','sd.notes_placeholder','Any additional notes...'], ['uz','sd.notes_placeholder',"Qo'shimcha izohlar..."],
+            // Student Detail payment dialog
+            ['en','sd.select_group','Select group'], ['uz','sd.select_group','Guruhni tanlang'],
+            ['en','sd.mo','mo'], ['uz','sd.mo','oy'],
+            ['en','sd.months_to_pay','Months to Pay'], ['uz','sd.months_to_pay',"To'lanadigan oylar"],
+            ['en','sd.loading_months','Loading months...'], ['uz','sd.loading_months','Oylar yuklanmoqda...'],
+            ['en','sd.loading_debt','Loading debt info...'], ['uz','sd.loading_debt',"Qarz ma'lumoti yuklanmoqda..."],
+            ['en','sd.group_price','Group Price'], ['uz','sd.group_price','Guruh narxi'],
+            ['en','sd.monthly_discount','Monthly Discount'], ['uz','sd.monthly_discount','Oylik chegirma'],
+            ['en','sd.monthly_rate','Monthly Rate'], ['uz','sd.monthly_rate',"Oylik to'lov"],
+            ['en','sd.paid','Paid'], ['uz','sd.paid',"To'langan"],
+            ['en','sd.remaining','Remaining'], ['uz','sd.remaining','Qoldiq'],
+            ['en','sd.total_remaining','Total Remaining'], ['uz','sd.total_remaining','Jami qoldiq'],
+            ['en','sd.pay_full','Pay full remaining'], ['uz','sd.pay_full',"To'liq qoldiqni to'lash"],
+            ['en','sd.payment_method','Payment Method'], ['uz','sd.payment_method',"To'lov usuli"],
+            ['en','sd.method_cash','Cash'], ['uz','sd.method_cash','Naqd'],
+            ['en','sd.method_card','Card'], ['uz','sd.method_card','Karta'],
+            ['en','sd.method_transfer','Bank Transfer'], ['uz','sd.method_transfer',"Bank o'tkazmasi"],
+            ['en','sd.method_other','Other'], ['uz','sd.method_other','Boshqa'],
+            // Student Detail enroll dialog
+            ['en','sd.select_a_group','Select a group'], ['uz','sd.select_a_group','Guruh tanlang'],
+            ['en','sd.after_discount','After discount'], ['uz','sd.after_discount','Chegirmadan keyin'],
+            ['en','sd.enroll','Enroll'], ['uz','sd.enroll','Yozish'],
+            // Student Detail delete/remove dialogs
+            ['en','sd.delete_student','Delete Student'], ['uz','sd.delete_student',"O'quvchini o'chirish"],
+            ['en','sd.confirm_delete_student','Are you sure you want to delete this student? This action cannot be undone.'], ['uz','sd.confirm_delete_student',"Ushbu o'quvchini o'chirishga ishonchingiz kommi? Bu amalni ortga qaytarib bo'lmaydi."],
+            ['en','sd.remove_enrollment','Remove Enrollment'], ['uz','sd.remove_enrollment',"Ro'yxatni olib tashlash"],
+            ['en','sd.confirm_remove_enrollment','Are you sure you want to remove this student from the group? This will not delete payment history.'], ['uz','sd.confirm_remove_enrollment',"O'quvchini guruhdan olib tashlashga ishonchingiz kommi? To'lov tarixi o'chirilmaydi."],
+            ['en','sd.remove','Remove'], ['uz','sd.remove','Olib tashlash'],
+            // Student Detail monthly discount dialog
+            ['en','sd.month','Month'], ['uz','sd.month','Oy'],
+            ['en','sd.amount_placeholder','e.g. 100000'], ['uz','sd.amount_placeholder','masalan, 100000'],
+            ['en','sd.reason_optional','Reason (optional)'], ['uz','sd.reason_optional','Sabab (ixtiyoriy)'],
+            ['en','sd.reason_placeholder','e.g. Financial hardship'], ['uz','sd.reason_placeholder','masalan, Moliyaviy qiyinchilik'],
+            ['en','sd.add_discount','Add Discount'], ['uz','sd.add_discount',"Chegirma qo'shish"],
+            // Student Detail toasts
+            ['en','sd.toast_student_deleted','Student deleted'], ['uz','sd.toast_student_deleted',"O'quvchi o'chirildi"],
+            ['en','sd.toast_cannot_delete','Cannot delete student'], ['uz','sd.toast_cannot_delete',"O'quvchini o'chirib bo'lmadi"],
+            ['en','sd.toast_student_updated','Student updated'], ['uz','sd.toast_student_updated',"O'quvchi yangilandi"],
+            ['en','sd.toast_status_updated','Status updated'], ['uz','sd.toast_status_updated','Holat yangilandi'],
+            ['en','sd.toast_note_added','Note added'], ['uz','sd.toast_note_added',"Izoh qo'shildi"],
+            ['en','sd.toast_note_deleted','Note deleted'], ['uz','sd.toast_note_deleted',"Izoh o'chirildi"],
+            ['en','sd.toast_cannot_delete_note','Cannot delete note'], ['uz','sd.toast_cannot_delete_note',"Izohni o'chirib bo'lmadi"],
+            ['en','sd.toast_enrollment_removed','Enrollment removed'], ['uz','sd.toast_enrollment_removed',"Ro'yxat olib tashlandi"],
+            ['en','sd.toast_cannot_remove_enrollment','Cannot remove enrollment'], ['uz','sd.toast_cannot_remove_enrollment',"Ro'yxatni olib tashlab bo'lmadi"],
+            ['en','sd.toast_student_enrolled','Student enrolled in group'], ['uz','sd.toast_student_enrolled',"O'quvchi guruhga yozildi"],
+            ['en','sd.toast_md_added','Monthly discount added'], ['uz','sd.toast_md_added',"Oylik chegirma qo'shildi"],
+            ['en','sd.toast_cannot_add_md','Cannot add discount'], ['uz','sd.toast_cannot_add_md',"Chegirma qo'shib bo'lmadi"],
+            ['en','sd.toast_md_removed','Monthly discount removed'], ['uz','sd.toast_md_removed','Oylik chegirma olib tashlandi'],
+            ['en','sd.toast_cannot_remove_md','Cannot remove discount'], ['uz','sd.toast_cannot_remove_md',"Chegirmani olib tashlab bo'lmadi"],
+            ['en','sd.toast_payment_recorded','Payment recorded'], ['uz','sd.toast_payment_recorded',"To'lov qayd etildi"],
+            ['en','sd.invoice','Invoice'], ['uz','sd.invoice','Hisob-faktura'],
+            ['en','sd.toast_enter_valid_amount','Enter a valid amount'], ['uz','sd.toast_enter_valid_amount',"To'g'ri miqdor kiriting"],
+            ['en','sd.toast_exceeds_debt','Amount exceeds remaining debt'], ['uz','sd.toast_exceeds_debt',"Miqdor qoldiq qarzdan oshib ketdi"],
+            ['en','sd.maximum','Maximum'], ['uz','sd.maximum','Maksimal'],
             // Teachers
             ['en','teachers.search_placeholder','Search teachers...'], ['uz','teachers.search_placeholder',"O'qituvchilarni qidirish..."],
             ['en','teachers.empty_msg','No teachers found'], ['uz','teachers.empty_msg',"O'qituvchilar topilmadi"],
@@ -717,6 +833,7 @@ function initDB() {
             ['en','payments.loading_debt','Loading debt info...'], ['uz','payments.loading_debt',"Qarz ma'lumotlari yuklanmoqda..."],
             ['en','payments.debt_group_price','Group Price'], ['uz','payments.debt_group_price','Guruh narxi'],
             ['en','payments.debt_discount','Discount'], ['uz','payments.debt_discount','Chegirma'],
+            ['en','payments.debt_monthly_discount','Monthly Discount'], ['uz','payments.debt_monthly_discount','Oylik chegirma'],
             ['en','payments.debt_monthly_rate','Monthly Rate'], ['uz','payments.debt_monthly_rate',"Oylik to'lov"],
             ['en','payments.debt_remaining','Remaining'], ['uz','payments.debt_remaining','Qoldiq'],
             ['en','payments.debt_total_remaining','Total Remaining'], ['uz','payments.debt_total_remaining','Jami qoldiq'],
@@ -1072,6 +1189,28 @@ function initDB() {
             $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
             $stmt->execute(['owner', 'telegram_send']);
             $stmt->execute(['admin', 'telegram_send']);
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: create monthly_discounts table
+    try {
+        $m = 'monthly_discounts_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS monthly_discounts (
+                    id SERIAL PRIMARY KEY,
+                    student_id INT REFERENCES students(id),
+                    group_id INT REFERENCES groups(id),
+                    for_month DATE NOT NULL,
+                    amount DECIMAL(10,2) NOT NULL,
+                    reason TEXT,
+                    created_by INT REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    deleted_at TIMESTAMP
+                )
+            ");
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }

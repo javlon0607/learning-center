@@ -278,6 +278,17 @@ export const studentDebtApi = {
     api.get<StudentDebt>('/student-debt', { student_id: String(studentId), group_id: String(groupId), month }),
 }
 
+// Monthly Discounts API
+export const monthlyDiscountsApi = {
+  getAll: (params?: { student_id?: string; group_id?: string; month?: string }) =>
+    api.get<MonthlyDiscount[]>('/monthly-discounts', params),
+
+  create: (data: { student_id: number; group_id: number; for_month: string; amount: number; reason?: string }) =>
+    api.post<{ id: number }>('/monthly-discounts', data),
+
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/monthly-discounts/${id}`),
+}
+
 // Expenses API
 export const expensesApi = {
   getAll: () => api.get<Expense[]>('/expenses'),
@@ -721,9 +732,25 @@ export interface StudentDebt {
   month: string
   group_price: number
   discount_percentage: number
+  monthly_discount: number
   monthly_debt: number
   paid_amount: number
   remaining_debt: number
+}
+
+export interface MonthlyDiscount {
+  id: number
+  student_id: number
+  group_id: number
+  for_month: string
+  amount: number
+  reason?: string
+  created_by?: number
+  created_by_name?: string
+  student_name?: string
+  group_name?: string
+  created_at: string
+  deleted_at?: string
 }
 
 export interface MonthlyReportGroup {
