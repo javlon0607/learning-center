@@ -33,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Loader2, TrendingUp, TrendingDown, Calendar, Users, Building2, Clock, ShieldCheck } from 'lucide-react'
+import { Loader2, TrendingUp, TrendingDown, Calendar, Clock, ShieldCheck } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 
@@ -323,30 +323,34 @@ export function Reports() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{t('reports.teacher_portions', 'Teacher Portions')}</CardTitle>
-                    <Users className="h-4 w-4 text-blue-600" />
+                    <CardTitle className="text-sm font-medium">{t('reports.card_expenses', 'Expenses')}</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-red-600" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-blue-600">
-                      {formatCurrency(monthlyReport.totals.teacher_portion)}
+                    <div className="text-2xl font-bold text-red-600">
+                      {formatCurrency(monthlyReport.totals.monthly_expenses ?? 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {t('reports.teacher_portions_desc', 'For per-student salary teachers')}
+                      {t('reports.monthly_expenses_desc', 'Total expenses this month')}
                     </p>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">{t('reports.center_portion', 'Center Portion')}</CardTitle>
-                    <Building2 className="h-4 w-4 text-purple-600" />
+                    <CardTitle className="text-sm font-medium">{t('reports.card_profit', 'Net Profit')}</CardTitle>
+                    {(monthlyReport.totals.net_profit ?? 0) >= 0 ? (
+                      <TrendingUp className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <TrendingDown className="h-4 w-4 text-red-600" />
+                    )}
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-purple-600">
-                      {formatCurrency(monthlyReport.totals.center_portion)}
+                    <div className={`text-2xl font-bold ${(monthlyReport.totals.net_profit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(monthlyReport.totals.net_profit ?? 0)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {t('reports.remaining', 'Remaining')}: {formatCurrency(monthlyReport.totals.remaining_debt)}
+                      {t('reports.net_profit_desc', 'Collected minus expenses')}
                     </p>
                   </CardContent>
                 </Card>

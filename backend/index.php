@@ -1887,6 +1887,17 @@ try {
                     ? round(($totals['collected_amount'] / $totals['expected_amount']) * 100, 1)
                     : 0;
 
+                // Get total expenses for this month
+                $expStmt = db()->prepare("
+                    SELECT COALESCE(SUM(amount), 0) AS total
+                    FROM expenses
+                    WHERE expense_date >= ? AND expense_date <= ? AND deleted_at IS NULL
+                ");
+                $expStmt->execute([$monthStart, $monthEnd]);
+                $monthlyExpenses = round((float)$expStmt->fetchColumn(), 2);
+                $totals['monthly_expenses'] = $monthlyExpenses;
+                $totals['net_profit'] = round($totals['collected_amount'] - $monthlyExpenses, 2);
+
                 jsonResponse([
                     'month' => $month,
                     'groups' => $reportGroups,

@@ -754,6 +754,8 @@ export interface MonthlyReport {
     payment_percentage: number
     teacher_portion: number
     center_portion: number
+    monthly_expenses: number
+    net_profit: number
   }
 }
 
