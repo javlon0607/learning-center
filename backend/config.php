@@ -1101,6 +1101,35 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Collections page improvement translation keys
+    try {
+        $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT DO NOTHING");
+        $colKeys = [
+            ['en','col.calls_today','Calls Today'], ['uz','col.calls_today',"Bugungi qo'ng'iroqlar"],
+            ['en','col.calls_this_month','Calls This Month'], ['uz','col.calls_this_month',"Bu oydagi qo'ng'iroqlar"],
+            ['en','col.tab_students','Students'], ['uz','col.tab_students',"O'quvchilar"],
+            ['en','col.tab_by_group','By Group'], ['uz','col.tab_by_group',"Guruh bo'yicha"],
+            ['en','col.select_month','Select month'], ['uz','col.select_month','Oyni tanlang'],
+            ['en','col.monthly_discount','Monthly Discount'], ['uz','col.monthly_discount','Oylik chegirma'],
+            ['en','col.payment_history','Payment History'], ['uz','col.payment_history',"To'lov tarixi"],
+            ['en','col.no_payments','No payments this month'], ['uz','col.no_payments',"Bu oyda to'lovlar yo'q"],
+            ['en','col.debtor_count','Debtors'], ['uz','col.debtor_count','Qarzdorlar'],
+            ['en','col.total_debt','Total Debt'], ['uz','col.total_debt','Jami qarzdorlik'],
+            ['en','col.last_call','Last Call'], ['uz','col.last_call',"Oxirgi qo'ng'iroq"],
+            ['en','col.no_calls','No calls'], ['uz','col.no_calls',"Qo'ng'iroqlar yo'q"],
+            ['en','col.group_name','Group'], ['uz','col.group_name','Guruh'],
+            ['en','col.view_debtors','View Debtors'], ['uz','col.view_debtors',"Qarzdorlarni ko'rish"],
+            ['en','col.back_to_groups','Back to groups'], ['uz','col.back_to_groups','Guruhlarga qaytish'],
+            ['en','col.for_month','for'], ['uz','col.for_month','uchun'],
+            ['en','col.method','Method'], ['uz','col.method','Usul'],
+            ['en','col.amount','Amount'], ['uz','col.amount','Miqdor'],
+            ['en','col.date','Date'], ['uz','col.date','Sana'],
+        ];
+        foreach ($colKeys as [$lang, $key, $value]) {
+            $stmt->execute([$lang, $key, $value]);
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: Add created_by to payments
     try {
         $m = 'add_payment_created_by';

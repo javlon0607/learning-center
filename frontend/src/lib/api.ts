@@ -472,8 +472,9 @@ export interface CollectionDebtor {
   first_name: string
   last_name: string
   phone?: string
+  parent_name?: string
   parent_phone?: string
-  enrollments: { group_id: number; group_name: string; price: number; discount: number }[]
+  enrollments: { group_id: number; group_name: string; price: number; discount: number; monthly_discount: number }[]
   expected: number
   paid: number
   debt: number
@@ -491,12 +492,59 @@ export interface CollectionCall {
   created_at: string
 }
 
+export interface CollectionStats {
+  calls_today: number
+  calls_this_month: number
+}
+
+export interface CollectionStudentPayment {
+  id: number
+  amount: number
+  month_amount: number
+  payment_date: string
+  method: string
+  notes?: string
+  group_name?: string
+  created_at: string
+}
+
+export interface CollectionGroup {
+  id: number
+  name: string
+  debtor_count: number
+  total_students: number
+  total_debt: number
+}
+
+export interface CollectionGroupDebtor {
+  id: number
+  first_name: string
+  last_name: string
+  phone?: string
+  parent_name?: string
+  parent_phone?: string
+  enrollments: { group_id: number; group_name: string }[]
+  expected: number
+  paid: number
+  debt: number
+  monthly_discount: number
+  last_call_date?: string
+  last_call_notes?: string
+  call_count: number
+}
+
 export const collectionsApi = {
-  getDebtors: () => api.get<CollectionDebtor[]>('/collections'),
+  getDebtors: (month?: string) => api.get<CollectionDebtor[]>('/collections', month ? { month } : undefined),
   getCallHistory: (studentId: number) =>
     api.get<CollectionCall[]>('/collection-calls', { student_id: String(studentId) }),
   addCall: (studentId: number, notes: string) =>
     api.post<{ id: number }>('/collection-calls', { student_id: studentId, notes }),
+  getStats: () => api.get<CollectionStats>('/collection-stats'),
+  getStudentHistory: (studentId: number, month: string) =>
+    api.get<CollectionStudentPayment[]>('/collection-student-history', { student_id: String(studentId), month }),
+  getGroups: (month?: string) => api.get<CollectionGroup[]>('/collection-groups', month ? { month } : undefined),
+  getGroupDebtors: (groupId: number, month?: string) =>
+    api.get<CollectionGroupDebtor[]>('/group-debtors', { group_id: String(groupId), ...(month ? { month } : {}) }),
 }
 
 // Student Notes API

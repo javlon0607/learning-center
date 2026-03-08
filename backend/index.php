@@ -2371,9 +2371,18 @@ try {
                     s.first_name,
                     s.last_name,
                     s.phone,
+                    s.parent_name,
+                    s.parent_phone,
                     g.price AS group_price,
                     e.discount_percentage,
                     g.price * (1 - COALESCE(e.discount_percentage, 0) / 100) AS expected_before_md,
+                    COALESCE(
+                        (SELECT json_agg(json_build_object('group_id', g2.id, 'group_name', g2.name))
+                         FROM enrollments e2
+                         JOIN groups g2 ON e2.group_id = g2.id
+                         WHERE e2.student_id = s.id),
+                        '[]'
+                    ) AS enrollments_json,
                     COALESCE(
                         (SELECT SUM(pm.amount)
                          FROM payment_months pm
@@ -2386,10 +2395,22 @@ try {
                          FROM monthly_discounts md
                          WHERE md.student_id = s.id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL),
                         0
-                    ) AS monthly_discount
+                    ) AS monthly_discount,
+                    cc_agg.last_call_date,
+                    cc_agg.last_call_notes,
+                    cc_agg.call_count
                 FROM enrollments e
                 JOIN students s ON e.student_id = s.id
                 JOIN groups g ON e.group_id = g.id
+                LEFT JOIN (
+                    SELECT
+                        cc.student_id,
+                        MAX(cc.created_at) AS last_call_date,
+                        (SELECT cc2.notes FROM collection_calls cc2 WHERE cc2.student_id = cc.student_id ORDER BY cc2.created_at DESC LIMIT 1) AS last_call_notes,
+                        COUNT(*) AS call_count
+                    FROM collection_calls cc
+                    GROUP BY cc.student_id
+                ) cc_agg ON cc_agg.student_id = s.id
                 WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
                 ORDER BY s.first_name, s.last_name
             ");
@@ -2405,9 +2426,16 @@ try {
                     'first_name' => $row['first_name'],
                     'last_name' => $row['last_name'],
                     'phone' => $row['phone'],
+                    'parent_name' => $row['parent_name'],
+                    'parent_phone' => $row['parent_phone'],
+                    'enrollments' => json_decode($row['enrollments_json'], true) ?: [],
                     'expected' => $expected,
                     'paid' => $paid,
                     'debt' => $debt,
+                    'monthly_discount' => round((float)$row['monthly_discount'], 2),
+                    'last_call_date' => $row['last_call_date'],
+                    'last_call_notes' => $row['last_call_notes'],
+                    'call_count' => (int)($row['call_count'] ?? 0),
                 ];
             }
             jsonResponse($result);
@@ -2416,16 +2444,21 @@ try {
         case 'collections':
             requireRole(['admin', 'manager', 'accountant']);
             if ($method === 'GET') {
-                $currentMonth = date('Y-m-01');
+                $monthParam = $_GET['month'] ?? date('Y-m');
+                $currentMonth = $monthParam . '-01';
                 $stmt = db()->prepare("
                     SELECT
                         s.id,
                         s.first_name,
                         s.last_name,
                         s.phone,
+                        s.parent_name,
                         s.parent_phone,
                         COALESCE(
-                            (SELECT json_agg(json_build_object('group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage))
+                            (SELECT json_agg(json_build_object(
+                                'group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage,
+                                'monthly_discount', COALESCE((SELECT SUM(md2.amount) FROM monthly_discounts md2 WHERE md2.student_id = e.student_id AND md2.group_id = e.group_id AND md2.for_month = ? AND md2.deleted_at IS NULL), 0)
+                             ))
                              FROM enrollments e
                              JOIN groups g ON e.group_id = g.id
                              WHERE e.student_id = s.id),
@@ -2475,7 +2508,7 @@ try {
                     WHERE s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY debt.expected - debt.paid DESC
                 ");
-                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth]);
+                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth]);
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
@@ -2514,6 +2547,111 @@ try {
                 $callId = db()->lastInsertId();
                 jsonResponse(['id' => (int)$callId]);
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'collection-stats':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $today = date('Y-m-d');
+            $monthStart = date('Y-m-01');
+            $callsToday = (int)db()->prepare("SELECT COUNT(*) FROM collection_calls WHERE created_at::date = ?")->execute([$today]) ? 0 : 0;
+            $stmtToday = db()->prepare("SELECT COUNT(*) FROM collection_calls WHERE created_at::date = ?");
+            $stmtToday->execute([$today]);
+            $callsToday = (int)$stmtToday->fetchColumn();
+            $stmtMonth = db()->prepare("SELECT COUNT(*) FROM collection_calls WHERE created_at >= ?");
+            $stmtMonth->execute([$monthStart]);
+            $callsThisMonth = (int)$stmtMonth->fetchColumn();
+            jsonResponse(['calls_today' => $callsToday, 'calls_this_month' => $callsThisMonth]);
+            break;
+
+        case 'collection-student-history':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+            $monthParam = $_GET['month'] ?? date('Y-m');
+            if (!$studentId) { jsonError('student_id required'); break; }
+            $monthStart = $monthParam . '-01';
+            $stmt = db()->prepare("
+                SELECT p.id, p.amount, p.payment_date, p.method, p.notes, p.created_at,
+                       g.name AS group_name,
+                       COALESCE(pm.month_amount, p.amount) AS month_amount
+                FROM payments p
+                LEFT JOIN groups g ON p.group_id = g.id
+                LEFT JOIN (
+                    SELECT payment_id, SUM(amount) AS month_amount
+                    FROM payment_months WHERE for_month = ?
+                    GROUP BY payment_id
+                ) pm ON pm.payment_id = p.id
+                WHERE p.student_id = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                  AND (pm.payment_id IS NOT NULL OR p.payment_date >= ? AND p.payment_date < (?::date + INTERVAL '1 month'))
+                ORDER BY p.payment_date DESC
+            ");
+            $stmt->execute([$monthStart, $studentId, $monthStart, $monthStart]);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as &$row) {
+                $row['amount'] = round((float)$row['amount'], 2);
+                $row['month_amount'] = round((float)$row['month_amount'], 2);
+            }
+            jsonResponse($rows);
+            break;
+
+        case 'collection-groups':
+            requireRole(['admin', 'manager', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $monthParam = $_GET['month'] ?? date('Y-m');
+            $monthStart = $monthParam . '-01';
+            $stmt = db()->prepare("
+                SELECT
+                    g.id,
+                    g.name,
+                    COUNT(DISTINCT CASE WHEN
+                        GREATEST(0,
+                            g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                            - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
+                        )
+                        - COALESCE(
+                            (SELECT COALESCE(SUM(pm.amount), 0) FROM payment_months pm JOIN payments p ON pm.payment_id = p.id WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
+                            0
+                        ) > 0 THEN e.student_id END
+                    ) AS debtor_count,
+                    COUNT(DISTINCT e.student_id) AS total_students,
+                    SUM(
+                        GREATEST(0,
+                            GREATEST(0,
+                                g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                                - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
+                            )
+                            - COALESCE(
+                                (SELECT COALESCE(SUM(pm.amount), 0) FROM payment_months pm JOIN payments p ON pm.payment_id = p.id WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
+                                0
+                            )
+                        )
+                    ) AS total_debt
+                FROM enrollments e
+                JOIN groups g ON e.group_id = g.id
+                JOIN students s ON e.student_id = s.id
+                WHERE s.status = 'active' AND s.deleted_at IS NULL
+                GROUP BY g.id, g.name
+                HAVING COUNT(DISTINCT CASE WHEN
+                    GREATEST(0,
+                        g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                        - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
+                    )
+                    - COALESCE(
+                        (SELECT COALESCE(SUM(pm.amount), 0) FROM payment_months pm JOIN payments p ON pm.payment_id = p.id WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
+                        0
+                    ) > 0 THEN e.student_id END) > 0
+                ORDER BY total_debt DESC
+            ");
+            $stmt->execute([$monthStart, $monthStart, $monthStart, $monthStart, $monthStart, $monthStart]);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as &$row) {
+                $row['id'] = (int)$row['id'];
+                $row['debtor_count'] = (int)$row['debtor_count'];
+                $row['total_students'] = (int)$row['total_students'];
+                $row['total_debt'] = round((float)$row['total_debt'], 2);
+            }
+            jsonResponse($rows);
             break;
 
         case 'birthdays':
