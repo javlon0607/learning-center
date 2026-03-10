@@ -902,6 +902,8 @@ export interface LeadStats {
 export interface AttendanceRow {
   student_id: number
   student_name: string
+  phone?: string
+  parent_phone?: string
   attendance_id?: number
   attendance_status?: 'present' | 'absent' | 'late' | 'excused'
   marked_by_name?: string
@@ -918,6 +920,7 @@ export interface StudentAttendanceHistory {
 export interface UnmarkedGroup {
   id: number
   name: string
+  teacher_id?: number
   teacher_name: string
   schedule_time_start?: string
 }

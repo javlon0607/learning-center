@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { attendanceApi, groupsApi } from '@/lib/api'
-import type { StudentAttendanceHistory } from '@/lib/api'
+import type { StudentAttendanceHistory, UnmarkedGroup } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { DateInput } from '@/components/ui/date-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle } from 'lucide-react'
+import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -36,6 +36,9 @@ const statusDotColor: Record<string, string> = {
   excused: 'bg-blue-500',
 }
 
+type SortKey = 'name' | 'percentage'
+type SortDir = 'asc' | 'desc'
+
 const today = () => new Date().toISOString().split('T')[0]
 
 export function Attendance() {
@@ -47,8 +50,9 @@ export function Attendance() {
   const [selectedDate, setSelectedDate] = useState(today())
   const [attendanceData, setAttendanceData] = useState<Record<number, string>>({})
   const [initialData, setInitialData] = useState<Record<number, string>>({})
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  // Determine user role flags
   const userRoles = useMemo(() => (user?.role || 'user').split(',').map(r => r.trim()), [user])
   const isTeacherOnly = useMemo(
     () => userRoles.includes('teacher') && !userRoles.some(r => ['admin', 'manager', 'owner', 'developer'].includes(r)),
@@ -64,29 +68,26 @@ export function Attendance() {
     queryFn: groupsApi.getAll,
   })
 
-  // Filter groups for teachers (also by selected date's day of week)
   const activeGroups = useMemo(() => {
     let filtered = groups.filter(g => g.status === 'active')
     if (isTeacherOnly && user?.teacher_id) {
       filtered = filtered.filter(g => g.teacher_id === user.teacher_id)
-      // Also filter by selected date's day
       const dayIndex = new Date(selectedDate).getDay()
       const dayAbbr = DAY_ABBRS[dayIndex]
       filtered = filtered.filter(g => {
         if (!g.schedule_days) return false
-        const days = g.schedule_days.toLowerCase().split(',').map(d => d.trim())
-        return days.includes(dayAbbr)
+        return g.schedule_days.toLowerCase().split(',').map(d => d.trim()).includes(dayAbbr)
       })
     }
     return filtered
   }, [groups, isTeacherOnly, user?.teacher_id, selectedDate])
 
-  // Clear selected group if it's no longer in the filtered list (e.g. date changed)
+  // Clear selected group only when date changes and the group is no longer valid
   useEffect(() => {
     if (selectedGroup && activeGroups.length > 0 && !activeGroups.some(g => g.id === Number(selectedGroup))) {
       setSelectedGroup('')
     }
-  }, [activeGroups, selectedGroup])
+  }, [selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: attendance, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendance', selectedGroup, selectedDate],
@@ -94,52 +95,82 @@ export function Attendance() {
     enabled: !!selectedGroup && !!selectedDate,
   })
 
-  // Fetch attendance history for the selected group
   const { data: historyData } = useQuery({
     queryKey: ['attendance-history', selectedGroup],
     queryFn: () => attendanceApi.getHistory(Number(selectedGroup)),
     enabled: !!selectedGroup,
   })
 
-  // Fetch unmarked groups for today
   const { data: unmarkedGroups = [] } = useQuery({
     queryKey: ['attendance-unmarked'],
     queryFn: attendanceApi.getUnmarked,
   })
 
-  // Build history lookup
+  // Banner: filter unmarked groups by teacher if teacher-only
+  // PHP returns teacher_id as string, so use == (loose) comparison
+  const filteredUnmarked: UnmarkedGroup[] = useMemo(() => {
+    if (isTeacherOnly && user?.teacher_id) {
+      // eslint-disable-next-line eqeqeq
+      return unmarkedGroups.filter(g => g.teacher_id == user.teacher_id)
+    }
+    return unmarkedGroups
+  }, [unmarkedGroups, isTeacherOnly, user?.teacher_id])
+
   const historyMap = useMemo(() => {
     const map: Record<number, StudentAttendanceHistory> = {}
     if (historyData) {
-      for (const h of historyData) {
-        map[h.student_id] = h
-      }
+      for (const h of historyData) map[h.student_id] = h
     }
     return map
   }, [historyData])
 
-  // Schedule day check
   const selectedGroupObj = useMemo(
     () => groups.find(g => g.id === Number(selectedGroup)),
     [groups, selectedGroup]
   )
+
   const isNonClassDay = useMemo(() => {
     if (!selectedGroupObj?.schedule_days || !selectedDate) return false
-    const dayIndex = new Date(selectedDate).getDay()
-    const dayAbbr = DAY_ABBRS[dayIndex]
-    const scheduleDays = selectedGroupObj.schedule_days.toLowerCase().split(',').map(d => d.trim())
-    return !scheduleDays.includes(dayAbbr)
+    const dayAbbr = DAY_ABBRS[new Date(selectedDate).getDay()]
+    return !selectedGroupObj.schedule_days.toLowerCase().split(',').map(d => d.trim()).includes(dayAbbr)
   }, [selectedGroupObj, selectedDate])
 
-  // 48h edit lock
   const isLocked = useMemo(() => {
     if (isAdminRole) return false
     const twoDaysAgo = new Date()
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
     twoDaysAgo.setHours(0, 0, 0, 0)
-    const selDate = new Date(selectedDate)
-    return selDate < twoDaysAgo
+    return new Date(selectedDate) < twoDaysAgo
   }, [selectedDate, isAdminRole])
+
+  const sortedRows = useMemo(() => {
+    if (!attendance?.rows) return []
+    return [...attendance.rows].sort((a, b) => {
+      let cmp = 0
+      if (sortKey === 'name') {
+        cmp = a.student_name.localeCompare(b.student_name)
+      } else {
+        const pa = historyMap[a.student_id]?.percentage ?? -1
+        const pb = historyMap[b.student_id]?.percentage ?? -1
+        cmp = pa - pb
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [attendance?.rows, sortKey, sortDir, historyMap])
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  function SortIcon({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 opacity-40" />
+    return sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+  }
 
   const saveAttendance = useMutation({
     mutationFn: () => {
@@ -165,7 +196,6 @@ export function Attendance() {
     },
   })
 
-  // Initialize attendance data when fetched data changes
   useEffect(() => {
     if (attendance?.rows) {
       const data: Record<number, string> = {}
@@ -187,7 +217,6 @@ export function Attendance() {
 
   const isFutureDate = selectedDate > today()
 
-  // Get "marked by" name from first row that has it
   const markedByName = useMemo(() => {
     if (!attendance?.rows) return null
     for (const row of attendance.rows) {
@@ -196,7 +225,6 @@ export function Attendance() {
     return null
   }, [attendance])
 
-  // Summary stats
   const stats = useMemo(() => {
     if (!attendance?.rows?.length) return null
     const counts = { present: 0, absent: 0, late: 0, excused: 0, unmarked: 0 }
@@ -220,25 +248,21 @@ export function Attendance() {
 
   function handleStatusChange(studentId: number, status: string) {
     if (isLocked || isFutureDate) return
-    setAttendanceData(prev => ({
-      ...prev,
-      [studentId]: status,
-    }))
+    setAttendanceData(prev => ({ ...prev, [studentId]: status }))
   }
 
   function handleSelectAll(status: string) {
     if (isLocked || isFutureDate) return
     if (attendance?.rows) {
       const newData: Record<number, string> = {}
-      attendance.rows.forEach(row => {
-        newData[row.student_id] = status
-      })
+      attendance.rows.forEach(row => { newData[row.student_id] = status })
       setAttendanceData(newData)
     }
   }
 
-  function handleDateChange(value: string) {
-    setSelectedDate(value)
+  function handleBannerGroupClick(groupId: number) {
+    setSelectedGroup(String(groupId))
+    setSelectedDate(today())
   }
 
   return (
@@ -249,32 +273,26 @@ export function Attendance() {
       </div>
 
       {/* Unmarked groups banner */}
-      {(() => {
-        const filtered = isTeacherOnly && user?.teacher_id
-          ? unmarkedGroups.filter((g: any) => g.teacher_id === user.teacher_id)
-          : unmarkedGroups
-        return filtered.length > 0 && (
+      {filteredUnmarked.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
           <span className="text-amber-800 font-medium">
-            {t('attendance.unmarked_today', '{count} groups not yet marked today:').replace('{count}', String(filtered.length))}
+            {t('attendance.unmarked_today', '{count} groups not yet marked today:').replace('{count}', String(filteredUnmarked.length))}
           </span>
-          {filtered.map((g: any, i: number) => (
+          {filteredUnmarked.map((g, i) => (
             <span key={g.id}>
               <button
-                className="text-amber-700 underline hover:text-amber-900"
-                onClick={() => {
-                  setSelectedGroup(String(g.id))
-                  setSelectedDate(today())
-                }}
+                type="button"
+                className="text-amber-700 underline underline-offset-2 hover:text-amber-900 font-medium"
+                onClick={() => handleBannerGroupClick(g.id)}
               >
                 {g.name}
               </button>
-              {i < filtered.length - 1 && ', '}
+              {i < filteredUnmarked.length - 1 && <span className="text-amber-600">,</span>}
             </span>
           ))}
         </div>
-      )})()}
+      )}
 
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div className="space-y-2 w-full sm:w-auto">
@@ -296,7 +314,7 @@ export function Attendance() {
           <Label>{t('attendance.form_date', 'Date')}</Label>
           <DateInput
             value={selectedDate}
-            onChange={handleDateChange}
+            onChange={setSelectedDate}
             className={cn("w-[140px]", isFutureDate && "border-red-300 focus-visible:ring-red-500")}
           />
           {isFutureDate && (
@@ -305,7 +323,6 @@ export function Attendance() {
         </div>
       </div>
 
-      {/* Schedule warning */}
       {selectedGroup && isNonClassDay && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
@@ -313,7 +330,6 @@ export function Attendance() {
         </div>
       )}
 
-      {/* Edit lock warning */}
       {selectedGroup && isLocked && (
         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <Lock className="h-4 w-4 text-red-600 shrink-0" />
@@ -365,29 +381,64 @@ export function Attendance() {
                     className="h-8"
                     disabled={isFutureDate}
                   >
-                    <option.icon className={cn("h-4 w-4 mr-1", option.value === 'present' ? 'text-green-600' : option.value === 'absent' ? 'text-red-600' : option.value === 'late' ? 'text-yellow-600' : 'text-blue-600')} />
+                    <option.icon className={cn("h-4 w-4 mr-1",
+                      option.value === 'present' ? 'text-green-600' :
+                      option.value === 'absent' ? 'text-red-600' :
+                      option.value === 'late' ? 'text-yellow-600' : 'text-blue-600'
+                    )} />
                     {getStatusLabel(option.value)}
                   </Button>
                 ))}
               </div>
             )}
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {attendance.rows.map((row) => {
+
+          <CardContent className="p-0">
+            {/* Sort controls */}
+            <div className="flex items-center gap-1 border-b px-4 py-2">
+              <span className="text-xs text-muted-foreground mr-1">{t('attendance.sort_by', 'Sort by:')}</span>
+              <button
+                onClick={() => handleSort('name')}
+                className={cn(
+                  "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
+                  sortKey === 'name'
+                    ? "bg-slate-100 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t('attendance.col_student', 'Name')} <SortIcon col="name" />
+              </button>
+              <button
+                onClick={() => handleSort('percentage')}
+                className={cn(
+                  "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors",
+                  sortKey === 'percentage'
+                    ? "bg-slate-100 font-medium text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t('attendance.col_attendance', 'Attendance %')} <SortIcon col="percentage" />
+              </button>
+            </div>
+
+            {/* Student rows */}
+            <div className="divide-y">
+              {sortedRows.map((row) => {
                 const studentHistory = historyMap[row.student_id]
+                const currentStatus = attendanceData[row.student_id] || row.attendance_status
                 return (
                   <div
                     key={row.student_id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between rounded-lg border p-4 gap-3"
+                    className="grid items-center gap-3 px-4 py-3"
+                    style={{ gridTemplateColumns: '1fr 140px auto' }}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium">{row.student_name}</span>
-                        {/* Percentage badge */}
+                    {/* Col 1: name + % badge + history dots */}
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{row.student_name}</span>
                         {studentHistory && studentHistory.total > 0 && (
                           <span className={cn(
-                            "text-xs font-semibold px-2 py-0.5 rounded-full text-white",
+                            "text-xs font-semibold px-1.5 py-0.5 rounded-full text-white shrink-0",
                             studentHistory.percentage >= 85 ? 'bg-green-500' :
                             studentHistory.percentage >= 70 ? 'bg-yellow-500' : 'bg-red-500'
                           )}>
@@ -395,37 +446,59 @@ export function Attendance() {
                           </span>
                         )}
                       </div>
-                      {/* History dots */}
                       {studentHistory && studentHistory.history.length > 0 && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5">
                           {studentHistory.history.map((h, idx) => (
                             <div
                               key={idx}
                               title={`${h.date}: ${h.status}`}
-                              className={cn("h-2.5 w-2.5 rounded-full", statusDotColor[h.status] || 'bg-gray-300')}
+                              className={cn("h-2 w-2 rounded-full shrink-0", statusDotColor[h.status] || 'bg-gray-300')}
                             />
                           ))}
                         </div>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+
+                    {/* Col 2: phone numbers */}
+                    <div className="flex flex-col gap-0.5">
+                      {row.phone && (
+                        <a
+                          href={`tel:${row.phone}`}
+                          className="text-xs text-blue-600 hover:text-blue-800 hover:underline truncate"
+                        >
+                          {row.phone}
+                        </a>
+                      )}
+                      {row.parent_phone && (
+                        <a
+                          href={`tel:${row.parent_phone}`}
+                          className="text-xs text-muted-foreground hover:text-blue-600 hover:underline truncate"
+                        >
+                          {row.parent_phone}
+                        </a>
+                      )}
+                    </div>
+
+                    {/* Col 3: status buttons */}
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {statusOptions.map((option) => {
-                        const isSelected = (attendanceData[row.student_id] || row.attendance_status) === option.value
+                        const isSelected = currentStatus === option.value
                         return (
                           <button
                             key={option.value}
                             onClick={() => handleStatusChange(row.student_id, option.value)}
                             disabled={isLocked || isFutureDate}
+                            title={getStatusLabel(option.value)}
                             className={cn(
-                              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
                               isSelected
                                 ? `${option.color} text-white`
                                 : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                               (isLocked || isFutureDate) && "opacity-50 cursor-not-allowed"
                             )}
                           >
-                            <option.icon className="h-4 w-4" />
-                            {getStatusLabel(option.value)}
+                            <option.icon className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{getStatusLabel(option.value)}</span>
                           </button>
                         )
                       })}
@@ -435,7 +508,7 @@ export function Attendance() {
               })}
             </div>
 
-            <div className="mt-6 flex items-center justify-between">
+            <div className="border-t px-4 py-4 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 {markedByName && (
                   <span>{t('attendance.last_saved_by', 'Last saved by {name}').replace('{name}', markedByName)}</span>
@@ -449,9 +522,7 @@ export function Attendance() {
                   onClick={() => saveAttendance.mutate()}
                   disabled={saveAttendance.isPending || !isDirty || isFutureDate || isLocked || (stats?.unmarked ?? 0) > 0}
                 >
-                  {saveAttendance.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
+                  {saveAttendance.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isLocked && <Lock className="mr-2 h-4 w-4" />}
                   {t('attendance.save', 'Save Attendance')}
                 </Button>

@@ -1339,6 +1339,7 @@ try {
                 if (!$group) { jsonError('group_id required'); break; }
                 $stmt = db()->prepare("
                     SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
+                           s.phone, s.parent_phone,
                            a.id AS attendance_id, a.status AS attendance_status,
                            u.name AS marked_by_name
                     FROM enrollments e
@@ -1346,7 +1347,7 @@ try {
                     LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?
                     LEFT JOIN users u ON a.marked_by = u.id
                     WHERE e.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
-                    ORDER BY s.last_name
+                    ORDER BY s.last_name, s.first_name
                 ");
                 $stmt->execute([$date, $group]);
                 jsonResponse(['date' => $date, 'group_id' => $group, 'rows' => $stmt->fetchAll()]);

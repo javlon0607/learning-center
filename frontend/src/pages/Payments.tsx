@@ -36,6 +36,7 @@ import { formatCurrency, formatDateTime, parseAmountFromInput } from '@/lib/util
 import { useAmountInput } from '@/hooks/useAmountInput'
 import { usePermissions } from '@/contexts/PermissionsContext'
 import { useTranslation } from '@/contexts/I18nContext'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 // Format YYYY-MM as "Jan 2026" using local date (avoid UTC parsing shifting month)
 function formatMonthKey(ym: string): string {
@@ -608,7 +609,7 @@ export function Payments() {
             <div className="grid gap-4 py-4 px-6 overflow-y-auto flex-1 min-h-0">
               <div className="space-y-2">
                 <Label htmlFor="group_id">{t('payments.form_group', 'Group')} *</Label>
-                <Select
+                <SearchableSelect
                   value={selectedGroupId}
                   onValueChange={(val) => {
                     setSelectedGroupId(val)
@@ -616,48 +617,32 @@ export function Payments() {
                     setSelectedMonths([])
                     setDebtInfo(null)
                   }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('payments.form_select_group', 'Select group')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups.filter(g => g.status === 'active').map((group) => (
-                      <SelectItem key={group.id} value={group.id.toString()}>
-                        {group.name} - {formatCurrency(group.price)}/month
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={groups
+                    .filter(g => g.status === 'active')
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map(g => ({ value: g.id.toString(), label: `${g.name} – ${formatCurrency(g.price)}/month` }))}
+                  placeholder={t('payments.form_select_group', 'Select group')}
+                  searchPlaceholder={t('common.search', 'Search...')}
+                />
               </div>
 
               {selectedGroupId && (
                 <div className="space-y-2">
                   <Label htmlFor="student_id">{t('payments.form_student', 'Student')} *</Label>
-                  <Select
+                  <SearchableSelect
                     value={selectedStudentId}
                     onValueChange={(val) => {
                       setSelectedStudentId(val)
                       setSelectedMonths([])
                       setDebtInfo(null)
                     }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('payments.form_select_student', 'Select student in this group')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupEnrollments.length > 0 ? (
-                        groupEnrollments.map((e) => (
-                          <SelectItem key={e.student_id} value={e.student_id.toString()}>
-                            {e.student_name ?? `Student ${e.student_id}`}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="_none" disabled>
-                          {t('payments.no_students_group', 'No students in this group')}
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                    options={[...groupEnrollments]
+                      .sort((a, b) => (a.student_name ?? '').localeCompare(b.student_name ?? ''))
+                      .map(e => ({ value: e.student_id.toString(), label: e.student_name ?? `Student ${e.student_id}` }))}
+                    placeholder={t('payments.form_select_student', 'Select student in this group')}
+                    searchPlaceholder={t('common.search', 'Search...')}
+                    disabled={groupEnrollments.length === 0}
+                  />
                   {groupEnrollments.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                       {t('payments.no_students_enrolled', 'No students enrolled in this group')}
