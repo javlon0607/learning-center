@@ -381,15 +381,28 @@ try {
                     $firstName = $parts[0] ?? $fullName;
                     $lastName = $parts[1] ?? '';
                     $subjects = $input['subjects'] ?? '';
+                    $birthday = isset($input['birthday']) && $input['birthday'] ? $input['birthday'] : null;
                     $salaryType = $input['salary_type'] ?? 'fixed';
                     $salaryAmount = (float)($input['salary_amount'] ?? 0);
                     $status = $input['status'] ?? 'active';
-                    $stmt = db()->prepare("INSERT INTO teachers (first_name, last_name, phone, email, subjects, salary_type, salary_amount, status) VALUES (?,?,?,?,?,?,?,?)");
-                    $stmt->execute([$firstName, $lastName, '', '', $subjects, $salaryType, $salaryAmount, $status]);
+                    $stmt = db()->prepare("INSERT INTO teachers (first_name, last_name, phone, email, subjects, birthday, salary_type, salary_amount, status) VALUES (?,?,?,?,?,?,?,?,?)");
+                    $stmt->execute([$firstName, $lastName, '', '', $subjects, $birthday, $salaryType, $salaryAmount, $status]);
                     $teacherId = (int)db()->lastInsertId();
                     try {
                         db()->prepare("UPDATE users SET teacher_id = ? WHERE id = ?")->execute([$teacherId, $userId]);
                     } catch (PDOException $e) { /* ignore if column missing */ }
+                    // Auto-create employee record for this teacher
+                    try {
+                        $empFullName = trim($firstName . ' ' . $lastName);
+                        $empBaseSalary = ($salaryType === 'fixed') ? $salaryAmount : 0;
+                        $empStatus = ($status === 'active') ? 'active' : 'inactive';
+                        $empSubjects = strtolower((string)($subjects ?? ''));
+                        if (strpos($empSubjects, 'ielts') !== false) $empPos = 'IELTS Instructor';
+                        elseif (strpos($empSubjects, 'senior') !== false) $empPos = 'Senior Teacher';
+                        else $empPos = 'English Teacher';
+                        db()->prepare("INSERT INTO employees (full_name, department, position, base_salary, birthday, teacher_id, status) VALUES (?, 'academic', ?, ?, ?, ?, ?) ON CONFLICT (teacher_id) DO NOTHING")
+                            ->execute([$empFullName, $empPos, $empBaseSalary, $birthday, $teacherId, $empStatus]);
+                    } catch (PDOException $e) { /* ignore */ }
                     auditLog('create', 'teacher', $teacherId, null, [
                         'first_name' => $firstName, 'last_name' => $lastName,
                         'subjects' => $subjects, 'salary_type' => $salaryType,
@@ -400,17 +413,26 @@ try {
                     jsonError('Select a user with teacher role to add as teacher', 400);
                 }
             } elseif ($id && $method === 'PUT') {
-                $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status FROM teachers WHERE id = ?");
+                $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status, birthday FROM teachers WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
                 $newValues = [
                     'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
                     'phone' => $input['phone'] ?? $oldRow['phone'], 'email' => $input['email'] ?? $oldRow['email'],
                     'subjects' => $input['subjects'] ?? $oldRow['subjects'], 'salary_type' => $input['salary_type'] ?? $oldRow['salary_type'],
-                    'salary_amount' => $input['salary_amount'] ?? $oldRow['salary_amount'], 'status' => $input['status'] ?? $oldRow['status']
+                    'salary_amount' => $input['salary_amount'] ?? $oldRow['salary_amount'], 'status' => $input['status'] ?? $oldRow['status'],
+                    'birthday' => array_key_exists('birthday', $input) ? ($input['birthday'] ?: null) : $oldRow['birthday'],
                 ];
-                $stmt = db()->prepare("UPDATE teachers SET first_name=?, last_name=?, phone=?, email=?, subjects=?, salary_type=?, salary_amount=?, status=? WHERE id=?");
+                $stmt = db()->prepare("UPDATE teachers SET first_name=?, last_name=?, phone=?, email=?, subjects=?, salary_type=?, salary_amount=?, status=?, birthday=? WHERE id=?");
                 $stmt->execute(array_merge(array_values($newValues), [$id]));
+                // Sync employee record
+                try {
+                    $empFullName = trim($newValues['first_name'] . ' ' . $newValues['last_name']);
+                    $empBaseSalary = ($newValues['salary_type'] === 'fixed') ? (float)$newValues['salary_amount'] : 0;
+                    $empStatus = ($newValues['status'] === 'active') ? 'active' : 'inactive';
+                    db()->prepare("UPDATE employees SET full_name=?, base_salary=?, status=?, birthday=? WHERE teacher_id=? AND deleted_at IS NULL")
+                        ->execute([$empFullName, $empBaseSalary, $empStatus, $newValues['birthday'], $id]);
+                } catch (PDOException $e) { /* ignore */ }
                 auditLog('update', 'teacher', $id, $oldRow ?: null, $newValues);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
@@ -2658,17 +2680,31 @@ try {
         case 'birthdays':
             requireRole(['admin', 'manager', 'teacher', 'accountant', 'user']);
             if ($method === 'GET') {
-                // Get today's birthdays (match month and day from dob)
-                $stmt = db()->query("
-                    SELECT id, first_name, last_name, dob, phone, status
+                // Students with today's birthday
+                $students = db()->query("
+                    SELECT id, first_name, last_name, dob, phone, status,
+                           'student' AS type, NULL AS position, NULL AS department
                     FROM students
                     WHERE deleted_at IS NULL
                       AND dob IS NOT NULL
                       AND EXTRACT(MONTH FROM dob) = EXTRACT(MONTH FROM CURRENT_DATE)
                       AND EXTRACT(DAY FROM dob) = EXTRACT(DAY FROM CURRENT_DATE)
                     ORDER BY first_name, last_name
-                ");
-                jsonResponse($stmt->fetchAll());
+                ")->fetchAll();
+                // Employees (including teachers) with today's birthday
+                $employees = db()->query("
+                    SELECT id, full_name AS first_name, '' AS last_name,
+                           birthday AS dob, phone, status,
+                           'employee' AS type, position, department
+                    FROM employees
+                    WHERE deleted_at IS NULL
+                      AND status = 'active'
+                      AND birthday IS NOT NULL
+                      AND EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM CURRENT_DATE)
+                      AND EXTRACT(DAY FROM birthday) = EXTRACT(DAY FROM CURRENT_DATE)
+                    ORDER BY full_name
+                ")->fetchAll();
+                jsonResponse(array_merge($students, $employees));
             } else { jsonError('Not found', 404); }
             break;
 
@@ -3034,6 +3070,153 @@ try {
                     'student_id' => (int)$oldRow['student_id'], 'group_id' => (int)$oldRow['group_id'],
                     'for_month' => $oldRow['for_month'], 'amount' => (float)$oldRow['amount'], 'reason' => $oldRow['reason']
                 ], null);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'employees':
+            auth();
+            requireFeature('employees');
+            if ($method === 'GET') {
+                $where = ['e.deleted_at IS NULL'];
+                $params = [];
+                if (!empty($_GET['department'])) {
+                    $where[] = 'e.department = ?';
+                    $params[] = $_GET['department'];
+                }
+                if (!empty($_GET['status'])) {
+                    $where[] = 'e.status = ?';
+                    $params[] = $_GET['status'];
+                }
+                $whereClause = implode(' AND ', $where);
+                $stmt = db()->prepare("
+                    SELECT e.*,
+                           TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name,
+                           (SELECT COUNT(*) FROM groups g WHERE g.teacher_id = e.teacher_id AND g.status = 'active' AND g.deleted_at IS NULL) AS group_count
+                    FROM employees e
+                    LEFT JOIN teachers t ON t.id = e.teacher_id
+                    WHERE $whereClause
+                    ORDER BY e.department, e.full_name
+                ");
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$r) {
+                    $r['id'] = (int)$r['id'];
+                    $r['base_salary'] = (float)$r['base_salary'];
+                    $r['teacher_id'] = $r['teacher_id'] ? (int)$r['teacher_id'] : null;
+                    $r['group_count'] = (int)$r['group_count'];
+                }
+                jsonResponse($rows);
+            } elseif ($method === 'POST') {
+                $fullName = trim($input['full_name'] ?? '');
+                $department = trim($input['department'] ?? '');
+                $position = trim($input['position'] ?? '');
+                if (!$fullName || !$department || !$position) {
+                    jsonError('full_name, department, and position are required');
+                    break;
+                }
+                $phone = trim($input['phone'] ?? '') ?: null;
+                $hireDate = $input['hire_date'] ?? null ?: null;
+                $birthday = $input['birthday'] ?? null ?: null;
+                $baseSalary = (float)($input['base_salary'] ?? 0);
+                $teacherId = !empty($input['teacher_id']) ? (int)$input['teacher_id'] : null;
+                $status = $input['status'] ?? 'active';
+                $notes = trim($input['notes'] ?? '') ?: null;
+                $stmt = db()->prepare("INSERT INTO employees (full_name, department, position, phone, hire_date, birthday, base_salary, teacher_id, status, notes) VALUES (?,?,?,?,?,?,?,?,?,?)");
+                $stmt->execute([$fullName, $department, $position, $phone, $hireDate, $birthday, $baseSalary, $teacherId, $status, $notes]);
+                $newId = (int)db()->lastInsertId();
+                auditLog('create', 'employee', $newId, null, ['full_name' => $fullName, 'department' => $department, 'position' => $position]);
+                jsonResponse(['id' => $newId]);
+            } elseif ($id && $method === 'PUT') {
+                $old = db()->prepare("SELECT * FROM employees WHERE id = ? AND deleted_at IS NULL");
+                $old->execute([$id]);
+                if (!$old->fetch()) { jsonError('Employee not found', 404); break; }
+                $fullName = trim($input['full_name'] ?? '');
+                $department = trim($input['department'] ?? '');
+                $position = trim($input['position'] ?? '');
+                if (!$fullName || !$department || !$position) {
+                    jsonError('full_name, department, and position are required');
+                    break;
+                }
+                $phone = trim($input['phone'] ?? '') ?: null;
+                $hireDate = $input['hire_date'] ?? null ?: null;
+                $birthday = $input['birthday'] ?? null ?: null;
+                $baseSalary = (float)($input['base_salary'] ?? 0);
+                $teacherId = !empty($input['teacher_id']) ? (int)$input['teacher_id'] : null;
+                $status = $input['status'] ?? 'active';
+                $notes = trim($input['notes'] ?? '') ?: null;
+                db()->prepare("UPDATE employees SET full_name=?, department=?, position=?, phone=?, hire_date=?, birthday=?, base_salary=?, teacher_id=?, status=?, notes=? WHERE id=?")
+                    ->execute([$fullName, $department, $position, $phone, $hireDate, $birthday, $baseSalary, $teacherId, $status, $notes, $id]);
+                auditLog('update', 'employee', $id, null, ['full_name' => $fullName, 'status' => $status]);
+                jsonResponse(['ok' => true]);
+            } elseif ($id && $method === 'DELETE') {
+                db()->prepare("UPDATE employees SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL")->execute([$id]);
+                auditLog('delete', 'employee', $id, null, null);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'salary-records':
+            auth();
+            requireFeature('salaries');
+            if ($method === 'GET') {
+                $month = $_GET['month'] ?? date('Y-m');
+                $stmt = db()->prepare("
+                    SELECT sr.*, e.full_name, e.department, e.position
+                    FROM salary_records sr
+                    JOIN employees e ON e.id = sr.employee_id
+                    WHERE sr.month = ? AND e.deleted_at IS NULL
+                    ORDER BY e.department, e.full_name
+                ");
+                $stmt->execute([$month]);
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$r) {
+                    $r['id'] = (int)$r['id'];
+                    $r['employee_id'] = (int)$r['employee_id'];
+                    $r['base_amount'] = (float)$r['base_amount'];
+                    $r['bonus'] = (float)$r['bonus'];
+                    $r['deduction'] = (float)$r['deduction'];
+                    $r['net_amount'] = $r['base_amount'] + $r['bonus'] - $r['deduction'];
+                    $r['paid'] = ($r['paid'] === true || $r['paid'] === 't' || $r['paid'] === '1');
+                }
+                jsonResponse($rows);
+            } elseif ($method === 'POST' && $sub === 'generate') {
+                // Generate salary records for all active employees for a given month
+                $month = $input['month'] ?? date('Y-m');
+                $stmt = db()->prepare("SELECT id, base_salary FROM employees WHERE status = 'active' AND deleted_at IS NULL");
+                $stmt->execute();
+                $employees = $stmt->fetchAll();
+                $ins = db()->prepare("INSERT INTO salary_records (employee_id, month, base_amount) VALUES (?,?,?) ON CONFLICT (employee_id, month) DO NOTHING");
+                $count = 0;
+                foreach ($employees as $emp) {
+                    $ins->execute([(int)$emp['id'], $month, (float)$emp['base_salary']]);
+                    $count += $ins->rowCount();
+                }
+                jsonResponse(['generated' => $count, 'month' => $month]);
+            } elseif ($id && $method === 'PUT') {
+                if ($sub === 'pay') {
+                    // Mark as paid
+                    $paidBy = $GLOBALS['jwt_user']['id'] ?? null;
+                    db()->prepare("UPDATE salary_records SET paid = TRUE, paid_at = NOW(), paid_by = ? WHERE id = ?")
+                        ->execute([$paidBy, $id]);
+                    jsonResponse(['ok' => true]);
+                } else {
+                    // Update bonus / deduction / notes
+                    $bonus = (float)($input['bonus'] ?? 0);
+                    $deduction = (float)($input['deduction'] ?? 0);
+                    $bonusNote = trim($input['bonus_note'] ?? '') ?: null;
+                    $deductionNote = trim($input['deduction_note'] ?? '') ?: null;
+                    $notes = trim($input['notes'] ?? '') ?: null;
+                    db()->prepare("UPDATE salary_records SET bonus=?, deduction=?, bonus_note=?, deduction_note=?, notes=? WHERE id=?")
+                        ->execute([$bonus, $deduction, $bonusNote, $deductionNote, $notes, $id]);
+                    jsonResponse(['ok' => true]);
+                }
+            } elseif ($method === 'POST' && $sub === 'pay-all') {
+                // Mark all unpaid for a month as paid
+                $month = $input['month'] ?? date('Y-m');
+                $paidBy = $GLOBALS['jwt_user']['id'] ?? null;
+                db()->prepare("UPDATE salary_records SET paid = TRUE, paid_at = NOW(), paid_by = ? WHERE month = ? AND paid = FALSE")
+                    ->execute([$paidBy, $month]);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;

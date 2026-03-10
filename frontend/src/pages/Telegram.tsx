@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDateTime } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   telegramApi,
@@ -484,7 +485,7 @@ function MessageLogTab() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {new Date(entry.created_at).toLocaleString()}
+                  {formatDateTime(entry.created_at)}
                 </TableCell>
               </TableRow>
             ))

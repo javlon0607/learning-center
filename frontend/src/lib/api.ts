@@ -573,6 +573,9 @@ export interface BirthdayStudent {
   dob: string
   phone?: string
   status: string
+  type?: 'student' | 'employee'
+  position?: string
+  department?: string
 }
 
 export const birthdaysApi = {
@@ -698,6 +701,7 @@ export interface Teacher {
   phone?: string
   email?: string
   subjects?: string
+  birthday?: string
   salary_type: 'fixed' | 'per_student'
   salary_amount: number
   status: 'active' | 'inactive'
@@ -1020,4 +1024,63 @@ export interface AuditLogEntry {
   created_at: string
   changed_by_name: string | null
   changed_by_username: string | null
+}
+
+// ── Employees ─────────────────────────────────────────────────────────────
+
+export interface Employee {
+  id: number
+  full_name: string
+  department: string
+  position: string
+  phone?: string
+  hire_date?: string
+  birthday?: string
+  base_salary: number
+  teacher_id?: number | null
+  teacher_name?: string
+  status: 'active' | 'inactive' | 'fired'
+  notes?: string
+  group_count?: number
+  created_at: string
+}
+
+export interface SalaryRecord {
+  id: number
+  employee_id: number
+  full_name: string
+  department: string
+  position: string
+  month: string
+  base_amount: number
+  bonus: number
+  deduction: number
+  net_amount: number
+  bonus_note?: string
+  deduction_note?: string
+  paid: boolean
+  paid_at?: string
+  notes?: string
+}
+
+export const employeesApi = {
+  getAll: (params?: { department?: string; status?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.department) q.set('department', params.department)
+    if (params?.status) q.set('status', params.status)
+    const qs = q.toString()
+    return api.get<Employee[]>(`/employees${qs ? '?' + qs : ''}`)
+  },
+  create: (data: Partial<Employee>) => api.post<{ id: number }>('/employees', data),
+  update: (id: number, data: Partial<Employee>) => api.put<{ ok: boolean }>(`/employees/${id}`, data),
+  delete: (id: number) => api.delete(`/employees/${id}`),
+}
+
+export const salaryRecordsApi = {
+  getByMonth: (month: string) => api.get<SalaryRecord[]>(`/salary-records?month=${month}`),
+  generate: (month: string) => api.post<{ generated: number; month: string }>('/salary-records/generate', { month }),
+  update: (id: number, data: { bonus?: number; deduction?: number; bonus_note?: string; deduction_note?: string; notes?: string }) =>
+    api.put<{ ok: boolean }>(`/salary-records/${id}`, data),
+  markPaid: (id: number) => api.put<{ ok: boolean }>(`/salary-records/${id}/pay`, {}),
+  markAllPaid: (month: string) => api.post<{ ok: boolean }>('/salary-records/pay-all', { month }),
 }

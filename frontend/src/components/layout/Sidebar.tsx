@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Languages,
   Send,
+  Briefcase,
 } from 'lucide-react'
 
 const navigation = [
@@ -31,6 +32,7 @@ const navigation = [
   { key: 'nav.payments',     href: '/payments',     icon: CreditCard,      feature: 'payments' },
   { key: 'nav.expenses',     href: '/expenses',     icon: Receipt,         feature: 'expenses' },
   { key: 'nav.collections',  href: '/collections',  icon: PhoneCall,       feature: 'collections' },
+  { key: 'nav.employees',   href: '/employees',    icon: Briefcase,       feature: 'employees' },
   { key: 'nav.reports',      href: '/reports',      icon: BarChart3,       feature: 'reports' },
   { key: 'nav.logs',         href: '/logs',         icon: ScrollText,      feature: 'logs' },
   { key: 'nav.settings',     href: '/settings',     icon: Settings,        feature: 'settings' },

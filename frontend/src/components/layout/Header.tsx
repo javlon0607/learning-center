@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTranslation } from '@/contexts/I18nContext'
 import { birthdaysApi, settingsApi, notificationsApi, BirthdayStudent, Notification } from '@/lib/api'
+import { formatDate } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,7 +44,7 @@ function timeAgo(dateStr: string): string {
   if (diffHr < 24) return `${diffHr}h ago`
   const diffDays = Math.floor(diffHr / 24)
   if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString()
+  return formatDate(date)
 }
 
 function getNotificationIcon(type: string) {
@@ -221,22 +222,25 @@ export function Header({ onMenuClick }: HeaderProps) {
                       {t('header.birthdays_section', "Today's Birthdays")} ({birthdays.length})
                     </span>
                   </div>
-                  {birthdays.map((student: BirthdayStudent) => (
+                  {birthdays.map((person: BirthdayStudent) => (
                     <button
-                      key={`bday-${student.id}`}
-                      onClick={() => navigate(`/students/${student.id}`)}
+                      key={`bday-${person.type ?? 'student'}-${person.id}`}
+                      onClick={() => navigate(person.type === 'employee' ? '/employees' : `/students/${person.id}`)}
                       className="w-full flex items-center gap-3 px-2 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
                     >
-                      <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                        <Cake className="h-4 w-4 text-amber-600" />
+                      <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${person.type === 'employee' ? 'bg-purple-100' : 'bg-amber-100'}`}>
+                        <Cake className={`h-4 w-4 ${person.type === 'employee' ? 'text-purple-600' : 'text-amber-600'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
-                          {student.first_name} {student.last_name}
+                          {person.first_name} {person.last_name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {t('header.turns', 'Turns')} {student.dob ? calculateAge(student.dob) : '?'} {t('header.today_bday', 'today')}
-                          {student.phone ? ` \u00B7 ${student.phone}` : ''}
+                          {person.type === 'employee'
+                            ? `${person.position ?? ''}${person.dob ? ` · ${calculateAge(person.dob)}` : ''}`
+                            : `${t('header.turns', 'Turns')} ${person.dob ? calculateAge(person.dob) : '?'} ${t('header.today_bday', 'today')}`
+                          }
+                          {person.phone ? ` \u00B7 ${person.phone}` : ''}
                         </p>
                       </div>
                     </button>

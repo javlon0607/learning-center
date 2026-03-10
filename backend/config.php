@@ -108,11 +108,15 @@ function initDB() {
                 ['admin', 'users'],
                 ['admin', 'permissions'],
                 ['admin', 'translations'],
+                ['admin', 'employees'], ['admin', 'salaries'],
                 // owner gets all features by default (configurable via permissions page)
                 ['owner', 'dashboard'], ['owner', 'students'], ['owner', 'teachers'], ['owner', 'groups'],
                 ['owner', 'leads'], ['owner', 'attendance'], ['owner', 'payments'], ['owner', 'payments_delete'], ['owner', 'expenses'], ['owner', 'expenses_delete'],
                 ['owner', 'collections'], ['owner', 'salary_slips'], ['owner', 'reports'], ['owner', 'logs'],
                 ['owner', 'settings'], ['owner', 'users'], ['owner', 'permissions'], ['owner', 'translations'],
+                ['owner', 'employees'], ['owner', 'salaries'],
+                ['manager', 'employees'],
+                ['accountant', 'employees'], ['accountant', 'salaries'],
                 // developer bypasses all checks but seed permissions anyway
                 ['developer', 'permissions'], ['developer', 'translations'],
             ];
@@ -1240,6 +1244,205 @@ function initDB() {
                     deleted_at TIMESTAMP
                 )
             ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: create employees table
+    try {
+        $m = 'create_employees_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS employees (
+                    id SERIAL PRIMARY KEY,
+                    full_name VARCHAR(255) NOT NULL,
+                    department VARCHAR(100) NOT NULL,
+                    position VARCHAR(100) NOT NULL,
+                    phone VARCHAR(50),
+                    hire_date DATE,
+                    base_salary NUMERIC(15,2) NOT NULL DEFAULT 0,
+                    teacher_id INT REFERENCES teachers(id),
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    deleted_at TIMESTAMPTZ
+                )
+            ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: create salary_records table
+    try {
+        $m = 'create_salary_records_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS salary_records (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INT NOT NULL REFERENCES employees(id),
+                    month VARCHAR(7) NOT NULL,
+                    base_amount NUMERIC(15,2) NOT NULL DEFAULT 0,
+                    bonus NUMERIC(15,2) NOT NULL DEFAULT 0,
+                    deduction NUMERIC(15,2) NOT NULL DEFAULT 0,
+                    bonus_note TEXT,
+                    deduction_note TEXT,
+                    paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    paid_at TIMESTAMPTZ,
+                    paid_by INT REFERENCES users(id),
+                    notes TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(employee_id, month)
+                )
+            ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add birthday column to employees
+    try {
+        $m = 'employees_birthday_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS birthday DATE");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add unique constraint on employees.teacher_id
+    try {
+        $m = 'employees_teacher_id_unique_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE employees ADD CONSTRAINT employees_teacher_id_unique UNIQUE (teacher_id)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore if already exists */ }
+
+    // Migration: import existing teachers into employees table
+    try {
+        $m = 'import_teachers_to_employees_202603b';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $teachers = getDB()->query("
+                SELECT t.id, t.first_name, t.last_name, t.phone, t.subjects, t.salary_type, t.salary_amount, t.status
+                FROM teachers t
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM employees e WHERE e.teacher_id = t.id
+                )
+            ")->fetchAll();
+            $ins = getDB()->prepare("
+                INSERT INTO employees (full_name, department, position, phone, base_salary, teacher_id, status)
+                VALUES (?, 'academic', ?, ?, ?, ?, ?)
+            ");
+            foreach ($teachers as $t) {
+                $fullName = trim($t['first_name'] . ' ' . $t['last_name']);
+                $baseSalary = ($t['salary_type'] === 'fixed') ? (float)$t['salary_amount'] : 0;
+                $empStatus = ($t['status'] === 'active') ? 'active' : 'inactive';
+                $subjects = strtolower((string)($t['subjects'] ?? ''));
+                if (strpos($subjects, 'ielts') !== false) {
+                    $position = 'IELTS Instructor';
+                } elseif (strpos($subjects, 'senior') !== false) {
+                    $position = 'Senior Teacher';
+                } else {
+                    $position = 'English Teacher';
+                }
+                try {
+                    $ins->execute([$fullName, $position, $t['phone'], $baseSalary, (int)$t['id'], $empStatus]);
+                } catch (PDOException $e2) { /* skip duplicates */ }
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add employees/salaries permissions for existing installs
+    try {
+        $m = 'employees_permissions_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            foreach ([
+                ['admin','employees'], ['admin','salaries'],
+                ['owner','employees'], ['owner','salaries'],
+                ['manager','employees'],
+                ['accountant','employees'], ['accountant','salaries'],
+            ] as [$role, $feature]) {
+                $stmt->execute([$role, $feature]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add employees/salaries translation keys
+    try {
+        $m = 'employees_translations_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO NOTHING");
+            foreach ([
+                ['en','nav.employees','Employees'], ['uz','nav.employees','Hodimlar'],
+                ['en','nav.salaries','Salaries'], ['uz','nav.salaries','Oyliklar'],
+                ['en','employees.title','Employees'], ['uz','employees.title','Hodimlar'],
+                ['en','employees.description','Manage staff and their salaries'], ['uz','employees.description',"Xodimlar va ularning oyliklarini boshqaring"],
+                ['en','employees.add','Add Employee'], ['uz','employees.add',"Hodim qo'shish"],
+                ['en','employees.edit','Edit Employee'], ['uz','employees.edit','Hodimni tahrirlash'],
+                ['en','employees.department','Department'], ['uz','employees.department',"Bo'lim"],
+                ['en','employees.position','Position'], ['uz','employees.position','Lavozim'],
+                ['en','employees.hire_date','Hire Date'], ['uz','employees.hire_date','Ishga kirgan sana'],
+                ['en','employees.base_salary','Base Salary'], ['uz','employees.base_salary','Asosiy oylik'],
+                ['en','employees.linked_teacher','Linked Teacher'], ['uz','employees.linked_teacher',"Bog'liq o'qituvchi"],
+                ['en','employees.filter_all','All Departments'], ['uz','employees.filter_all',"Barcha bo'limlar"],
+                ['en','employees.dept_management','Management'], ['uz','employees.dept_management','Boshqaruv'],
+                ['en','employees.dept_academic','Academic Staff'], ['uz','employees.dept_academic','Akademik xodimlar'],
+                ['en','employees.dept_student_support','Student Support'], ['uz','employees.dept_student_support',"O'quvchilar yordami"],
+                ['en','employees.dept_operations','Operations & Finance'], ['uz','employees.dept_operations','Operatsiya va moliya'],
+                ['en','employees.dept_marketing','Marketing & Media'], ['uz','employees.dept_marketing','Marketing va media'],
+                ['en','employees.dept_technical','Technical & Support'], ['uz','employees.dept_technical','Texnik va yordamchi'],
+                ['en','employees.status_active','Active'], ['uz','employees.status_active','Faol'],
+                ['en','employees.status_inactive','Inactive'], ['uz','employees.status_inactive','Faol emas'],
+                ['en','employees.status_fired','Fired'], ['uz','employees.status_fired','Ishdan ketgan'],
+                ['en','employees.groups_count','{n} groups'], ['uz','employees.groups_count','{n} ta guruh'],
+                ['en','salaries.title','Salaries'], ['uz','salaries.title','Oyliklar'],
+                ['en','salaries.description','Monthly salary calculation and payment tracking'], ['uz','salaries.description',"Oylik maosh hisoblash va to'lovlarni kuzatish"],
+                ['en','salaries.select_month','Select month'], ['uz','salaries.select_month','Oyni tanlang'],
+                ['en','salaries.generate','Generate for this month'], ['uz','salaries.generate','Bu oy uchun yaratish'],
+                ['en','salaries.generating','Generating...'], ['uz','salaries.generating','Yaratilmoqda...'],
+                ['en','salaries.generated','Salary records generated'], ['uz','salaries.generated','Oylik yozuvlari yaratildi'],
+                ['en','salaries.col_employee','Employee'], ['uz','salaries.col_employee','Hodim'],
+                ['en','salaries.col_position','Position'], ['uz','salaries.col_position','Lavozim'],
+                ['en','salaries.col_base','Base Salary'], ['uz','salaries.col_base','Asosiy oylik'],
+                ['en','salaries.col_bonus','Bonus'], ['uz','salaries.col_bonus','Bonus'],
+                ['en','salaries.col_deduction','Deduction'], ['uz','salaries.col_deduction','Ushlamalar'],
+                ['en','salaries.col_net','Net Salary'], ['uz','salaries.col_net','Sof oylik'],
+                ['en','salaries.paid','Paid'], ['uz','salaries.paid',"To'landi"],
+                ['en','salaries.unpaid','Unpaid'], ['uz','salaries.unpaid',"To'lanmagan"],
+                ['en','salaries.mark_paid','Mark as Paid'], ['uz','salaries.mark_paid',"To'landi deb belgilash"],
+                ['en','salaries.mark_all_paid','Mark All as Paid'], ['uz','salaries.mark_all_paid',"Barchasini to'landi deb belgilash"],
+                ['en','salaries.total_net','Total Net'], ['uz','salaries.total_net','Jami sof'],
+                ['en','salaries.total_unpaid','Total Unpaid'], ['uz','salaries.total_unpaid',"Jami to'lanmagan"],
+                ['en','salaries.no_records','No salary records. Click Generate to create them.'], ['uz','salaries.no_records',"Oylik yozuvlari yo'q. Yaratish uchun bosing."],
+                ['en','salaries.bonus_note','Bonus note'], ['uz','salaries.bonus_note','Bonus izohi'],
+                ['en','salaries.deduction_note','Deduction note'], ['uz','salaries.deduction_note','Ushlamalar izohi'],
+                ['en','salaries.paid_at','Paid at'], ['uz','salaries.paid_at',"To'langan sana"],
+                ['en','salaries.save_changes','Save Changes'], ['uz','salaries.save_changes',"O'zgarishlarni saqlash"],
+                ['en','dashboard.unpaid_salaries','Unpaid Salaries'], ['uz','dashboard.unpaid_salaries',"To'lanmagan oyliklar"],
+                ['en','dashboard.employees_unpaid','{count} employees unpaid this month'], ['uz','dashboard.employees_unpaid','{count} ta xodim bu oy to\'lovi yo\'q'],
+                ['en','dashboard.all_salaries_paid','All salaries paid this month'], ['uz','dashboard.all_salaries_paid',"Bu oy barcha oyliklar to'langan"],
+                ['en','dashboard.go_to_salaries','Go to Salaries'], ['uz','dashboard.go_to_salaries','Oyliqlarga o\'tish'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add birthday column to teachers
+    try {
+        $m = 'teachers_birthday_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE teachers ADD COLUMN IF NOT EXISTS birthday DATE");
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { expensesApi, salarySlipsApi, teachersApi, Expense, TeacherSalaryPreview } from '@/lib/api'
+import { expensesApi, salarySlipsApi, teachersApi, employeesApi, Expense, TeacherSalaryPreview } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
@@ -83,7 +83,9 @@ export function Expenses() {
 
   // Salary-specific state
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [salaryPersonType, setSalaryPersonType] = useState<'teacher' | 'employee'>('teacher')
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('')
   const [salaryMonth, setSalaryMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [salaryPreview, setSalaryPreview] = useState<TeacherSalaryPreview | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
@@ -102,6 +104,13 @@ export function Expenses() {
     queryKey: ['teachers'],
     queryFn: teachersApi.getAll,
   })
+
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => employeesApi.getAll({ status: 'active' }),
+  })
+  // Non-teacher employees only (teachers are handled via their own flow)
+  const nonTeacherEmployees = allEmployees.filter(e => !e.teacher_id)
 
   const createExpense = useMutation({
     mutationFn: (data: Omit<Expense, 'id' | 'created_at'>) =>
@@ -191,13 +200,26 @@ export function Expenses() {
       .finally(() => setLoadingPreview(false))
   }, [selectedTeacherId, salaryMonth, teachers, isSalaryCategory])
 
+  // Pre-fill base amount when a non-teacher employee is selected
+  useEffect(() => {
+    if (!isSalaryCategory || salaryPersonType !== 'employee' || !selectedEmployeeId) {
+      return
+    }
+    const emp = nonTeacherEmployees.find(e => e.id === Number(selectedEmployeeId))
+    if (emp && emp.base_salary > 0) {
+      baseAmount.setFromNumber(emp.base_salary)
+    }
+  }, [selectedEmployeeId, salaryPersonType, isSalaryCategory]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Reset salary state when dialog closes
   function handleDialogChange(open: boolean) {
     setFormOpen(open)
     if (!open) {
       amount.reset()
       setSelectedCategory('')
+      setSalaryPersonType('teacher')
       setSelectedTeacherId('')
+      setSelectedEmployeeId('')
       setSalaryMonth(new Date().toISOString().slice(0, 7))
       setSalaryPreview(null)
       baseAmount.reset()
@@ -243,8 +265,40 @@ export function Expenses() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
 
+    if (isSalaryCategory && salaryPersonType === 'employee') {
+      // Non-teacher employee salary: just create expense
+      const total = baseAmount.numericValue() + bonus.numericValue() - deduction.numericValue()
+      if (total <= 0) {
+        toast({ title: t('expenses.toast_salary_zero', 'Salary total must be greater than zero'), variant: 'destructive' })
+        return
+      }
+      const emp = nonTeacherEmployees.find(e => e.id === Number(selectedEmployeeId))
+      if (!emp) {
+        toast({ title: 'Please select an employee', variant: 'destructive' })
+        return
+      }
+      setSubmittingSalary(true)
+      try {
+        await expensesApi.create({
+          category: 'salaries',
+          amount: total,
+          description: `Oylik: ${emp.full_name} — ${salaryMonth}`,
+          expense_date: new Date().toISOString().split('T')[0],
+        })
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        toast({ title: t('expenses.toast_salary_recorded', 'Salary expense recorded successfully') })
+        handleDialogChange(false)
+      } catch (err: any) {
+        toast({ title: 'Failed to record salary', description: err.message, variant: 'destructive' })
+      } finally {
+        setSubmittingSalary(false)
+      }
+      return
+    }
+
     if (isSalaryCategory) {
-      // Salary submission: create salary slip + expense
+      // Teacher salary: create salary slip + expense
       const total = baseAmount.numericValue() + bonus.numericValue() - deduction.numericValue()
       if (total <= 0) {
         toast({ title: t('expenses.toast_salary_zero', 'Salary total must be greater than zero'), variant: 'destructive' })
@@ -549,12 +603,30 @@ export function Expenses() {
 
               {isSalaryCategory ? (
                 <>
+                  {/* Teacher / Employee toggle */}
+                  <div className="flex rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => { setSalaryPersonType('teacher'); setSelectedEmployeeId(''); baseAmount.reset(); bonus.reset(); deduction.reset() }}
+                      className={`flex-1 py-1.5 text-sm font-medium transition-colors ${salaryPersonType === 'teacher' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+                    >
+                      {t('expenses.form_teacher', 'Teacher')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setSalaryPersonType('employee'); setSelectedTeacherId(''); setSalaryPreview(null); baseAmount.reset(); bonus.reset(); deduction.reset() }}
+                      className={`flex-1 py-1.5 text-sm font-medium transition-colors ${salaryPersonType === 'employee' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
+                    >
+                      Employee
+                    </button>
+                  </div>
+
                   {/* Salary-specific fields */}
+                  {salaryPersonType === 'teacher' ? (
                   <div className="space-y-2">
                     <Label htmlFor="teacher_id">{t('expenses.form_teacher', 'Teacher')} *</Label>
                     <Select
                       name="teacher_id"
-                      required
                       value={selectedTeacherId}
                       onValueChange={setSelectedTeacherId}
                     >
@@ -570,6 +642,23 @@ export function Expenses() {
                       </SelectContent>
                     </Select>
                   </div>
+                  ) : (
+                  <div className="space-y-2">
+                    <Label>Employee *</Label>
+                    <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select employee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {nonTeacherEmployees.map(emp => (
+                          <SelectItem key={emp.id} value={emp.id.toString()}>
+                            {emp.full_name} — {emp.position} ({formatCurrency(emp.base_salary)})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="salary_month">{t('expenses.form_month', 'Month')} *</Label>
                     <Input

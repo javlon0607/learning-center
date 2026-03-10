@@ -22,6 +22,7 @@ import { Collections } from '@/pages/Collections'
 import { Permissions } from '@/pages/Permissions'
 import { Translations } from '@/pages/Translations'
 import { Telegram } from '@/pages/Telegram'
+import { Employees } from '@/pages/Employees'
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
           <Route path="permissions" element={<Permissions />} />
           <Route path="translations" element={<Translations />} />
           <Route path="telegram" element={<Telegram />} />
+          <Route path="employees" element={<Employees />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

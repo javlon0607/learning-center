@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teachersApi, usersApi, Teacher } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DateInput } from '@/components/ui/date-input'
 import { PhoneInput } from '@/components/ui/phone-input'
 import { Badge } from '@/components/ui/badge'
 import { TeachersTableSkeleton } from '@/components/skeletons'
@@ -65,6 +66,7 @@ export function Teachers() {
   const [addSalaryType, setAddSalaryType] = useState<Teacher['salary_type']>('fixed')
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
   const [formPhone, setFormPhone] = useState('')
+  const [formBirthday, setFormBirthday] = useState('')
 
   const { data: teachers = [], isLoading } = useQuery({
     queryKey: ['teachers'],
@@ -83,7 +85,7 @@ export function Teachers() {
   })
 
   const createTeacher = useMutation({
-    mutationFn: (data: { user_id: number; subjects?: string; salary_type?: Teacher['salary_type']; salary_amount?: number; status?: Teacher['status'] }) =>
+    mutationFn: (data: { user_id: number; subjects?: string; birthday?: string; salary_type?: Teacher['salary_type']; salary_amount?: number; status?: Teacher['status'] }) =>
       teachersApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teachers'] })
@@ -128,6 +130,7 @@ export function Teachers() {
     if (formOpen) {
       setSalaryType(selectedTeacher?.salary_type || 'fixed')
       setFormPhone(selectedTeacher?.phone || '')
+      setFormBirthday(selectedTeacher?.birthday || '')
       if (!selectedTeacher) setSelectedUserId(null)
     }
   }, [formOpen, selectedTeacher])
@@ -142,6 +145,7 @@ export function Teachers() {
         phone: formPhone,
         email: formData.get('email') as string,
         subjects: formData.get('subjects') as string,
+        birthday: formBirthday || undefined,
         salary_type: (formData.get('salary_type') as Teacher['salary_type']) || 'fixed',
         salary_amount: Number(formData.get('salary_amount')) || 0,
         status: (formData.get('status') as Teacher['status']) || 'active',
@@ -156,6 +160,7 @@ export function Teachers() {
     createTeacher.mutate({
       user_id: selectedUserId,
       subjects: (formData.get('subjects') as string) || '',
+      birthday: formBirthday || undefined,
       salary_type: (formData.get('salary_type') as Teacher['salary_type']) || 'fixed',
       salary_amount: Number(formData.get('salary_amount')) || 0,
       status: (formData.get('status') as Teacher['status']) || 'active',
@@ -318,13 +323,23 @@ export function Teachers() {
                       </p>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
-                    <Input
-                      id="subjects"
-                      name="subjects"
-                      placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
+                      <Input
+                        id="subjects"
+                        name="subjects"
+                        placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="birthday_add">{t('teachers.form_birthday', 'Birthday')}</Label>
+                      <DateInput
+                        id="birthday_add"
+                        value={formBirthday}
+                        onChange={v => setFormBirthday(v)}
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
@@ -414,14 +429,24 @@ export function Teachers() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
-                    <Input
-                      id="subjects"
-                      name="subjects"
-                      placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
-                      defaultValue={selectedTeacher?.subjects}
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="subjects">{t('teachers.form_subjects', 'Subjects')}</Label>
+                      <Input
+                        id="subjects"
+                        name="subjects"
+                        placeholder={t('teachers.form_subjects_placeholder', 'e.g., Math, English, Science')}
+                        defaultValue={selectedTeacher?.subjects}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="birthday">{t('teachers.form_birthday', 'Birthday')}</Label>
+                      <DateInput
+                        id="birthday"
+                        value={formBirthday}
+                        onChange={v => setFormBirthday(v)}
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
