@@ -498,9 +498,9 @@ export function Leads() {
           </div>
 
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {lead.source && (
+            {lead.created_at && (
               <Badge variant="outline" className="text-xs h-5">
-                {sourceOptions.find(s => s.value === lead.source)?.label || lead.source}
+                {formatDate(lead.created_at)}
               </Badge>
             )}
             {lead.follow_up_date && (
