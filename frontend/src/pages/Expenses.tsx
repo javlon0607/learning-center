@@ -274,7 +274,7 @@ export function Expenses() {
       }
       const emp = nonTeacherEmployees.find(e => e.id === Number(selectedEmployeeId))
       if (!emp) {
-        toast({ title: 'Please select an employee', variant: 'destructive' })
+        toast({ title: t('expenses.toast_select_employee', 'Please select an employee'), variant: 'destructive' })
         return
       }
       setSubmittingSalary(true)
@@ -282,7 +282,7 @@ export function Expenses() {
         await expensesApi.create({
           category: 'salaries',
           amount: total,
-          description: `Oylik: ${emp.full_name} — ${salaryMonth}`,
+          description: t('expenses.salary_description', 'Salary: {name} — {month}').replace('{name}', emp.full_name).replace('{month}', salaryMonth),
           expense_date: new Date().toISOString().split('T')[0],
         })
         queryClient.invalidateQueries({ queryKey: ['expenses'] })
@@ -290,7 +290,7 @@ export function Expenses() {
         toast({ title: t('expenses.toast_salary_recorded', 'Salary expense recorded successfully') })
         handleDialogChange(false)
       } catch (err: any) {
-        toast({ title: 'Failed to record salary', description: err.message, variant: 'destructive' })
+        toast({ title: t('expenses.toast_salary_fail', 'Failed to record salary'), description: err.message, variant: 'destructive' })
       } finally {
         setSubmittingSalary(false)
       }
@@ -617,7 +617,7 @@ export function Expenses() {
                       onClick={() => { setSalaryPersonType('employee'); setSelectedTeacherId(''); setSalaryPreview(null); baseAmount.reset(); bonus.reset(); deduction.reset() }}
                       className={`flex-1 py-1.5 text-sm font-medium transition-colors ${salaryPersonType === 'employee' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}
                     >
-                      Employee
+                      {t('expenses.form_employee', 'Employee')}
                     </button>
                   </div>
 
@@ -644,10 +644,10 @@ export function Expenses() {
                   </div>
                   ) : (
                   <div className="space-y-2">
-                    <Label>Employee *</Label>
+                    <Label>{t('expenses.form_employee', 'Employee')} *</Label>
                     <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select employee" />
+                        <SelectValue placeholder={t('expenses.form_select_employee', 'Select employee')} />
                       </SelectTrigger>
                       <SelectContent>
                         {nonTeacherEmployees.map(emp => (

@@ -28,7 +28,7 @@ const DEPARTMENTS = [
   { value: 'technical', positions: ['IT Specialist', 'Cleaner', 'Janitor', 'Security Guard'] },
 ]
 
-const DEPT_LABEL: Record<string, string> = {
+const DEPT_LABEL_FALLBACK: Record<string, string> = {
   management: 'Management',
   academic: 'Academic Staff',
   student_support: 'Student Support',
@@ -57,6 +57,8 @@ export function Employees() {
   const { toast } = useToast()
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+
+  const deptLabel = (val: string) => t(`employees.dept_${val}`, DEPT_LABEL_FALLBACK[val] ?? val)
 
   const [search, setSearch] = useState('')
   const [deptFilter, setDeptFilter] = useState('all')
@@ -107,7 +109,7 @@ export function Employees() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setDialogOpen(false)
-      toast({ title: editing ? 'Employee updated' : 'Employee added' })
+      toast({ title: editing ? t('employees.toast_updated', 'Employee updated') : t('employees.toast_added', 'Employee added') })
     },
     onError: (e: Error) => toast({ title: e.message, variant: 'destructive' }),
   })
@@ -117,7 +119,7 @@ export function Employees() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setDeleteId(null)
-      toast({ title: 'Employee deleted' })
+      toast({ title: t('employees.toast_deleted', 'Employee deleted') })
     },
     onError: (e: Error) => toast({ title: e.message, variant: 'destructive' }),
   })
@@ -150,9 +152,9 @@ export function Employees() {
   }
 
   const statusBadge = (s: string) => {
-    if (s === 'active') return <Badge className="bg-green-100 text-green-800 border-0">Active</Badge>
-    if (s === 'fired') return <Badge className="bg-red-100 text-red-800 border-0">Fired</Badge>
-    return <Badge variant="secondary">Inactive</Badge>
+    if (s === 'active') return <Badge className="bg-green-100 text-green-800 border-0">{t('employees.status_active', 'Active')}</Badge>
+    if (s === 'fired') return <Badge className="bg-red-100 text-red-800 border-0">{t('employees.status_fired', 'Fired')}</Badge>
+    return <Badge variant="secondary">{t('employees.status_inactive', 'Inactive')}</Badge>
   }
 
   return (
@@ -188,7 +190,7 @@ export function Employees() {
           <SelectContent>
             <SelectItem value="all">{t('employees.filter_all', 'All Departments')}</SelectItem>
             {DEPARTMENTS.map(d => (
-              <SelectItem key={d.value} value={d.value}>{DEPT_LABEL[d.value]}</SelectItem>
+              <SelectItem key={d.value} value={d.value}>{deptLabel(d.value)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -196,23 +198,23 @@ export function Employees() {
 
       {/* Stats */}
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <span><strong className="text-foreground">{employees.filter(e => e.status === 'active').length}</strong> active</span>
-        <span><strong className="text-foreground">{employees.length}</strong> total</span>
+        <span><strong className="text-foreground">{employees.filter(e => e.status === 'active').length}</strong> {t('employees.stats_active', 'active')}</span>
+        <span><strong className="text-foreground">{employees.length}</strong> {t('employees.stats_total', 'total')}</span>
         <span>
           <strong className="text-foreground">
             {formatCurrency(employees.filter(e => e.status === 'active').reduce((s, e) => s + e.base_salary, 0))}
-          </strong> monthly payroll
+          </strong> {t('employees.stats_payroll', 'monthly payroll')}
         </span>
       </div>
 
       {/* Employee list by department */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading...
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t('common.loading', 'Loading...')}
         </div>
       ) : Object.keys(grouped).length === 0 ? (
         <div className="rounded-lg border border-dashed py-16 text-center text-muted-foreground">
-          {search || deptFilter !== 'all' ? 'No employees match the filter.' : 'No employees yet. Add the first one!'}
+          {search || deptFilter !== 'all' ? t('employees.empty_filter', 'No employees match the filter.') : t('employees.empty', 'No employees yet. Add the first one!')}
         </div>
       ) : (
         <div className="space-y-6">
@@ -220,19 +222,19 @@ export function Employees() {
             <div key={dept.value}>
               <div className="flex items-center gap-2 mb-3">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${DEPT_COLOR[dept.value]}`}>
-                  {DEPT_LABEL[dept.value]}
+                  {deptLabel(dept.value)}
                 </span>
-                <span className="text-xs text-muted-foreground">{grouped[dept.value].length} employees</span>
+                <span className="text-xs text-muted-foreground">{t('employees.count', '{n} employees').replace('{n}', String(grouped[dept.value].length))}</span>
               </div>
               <div className="rounded-lg border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 border-b">
                     <tr>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Name</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">Position</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden md:table-cell">Phone</th>
-                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">Base Salary</th>
-                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">Status</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">{t('employees.col_name', 'Name')}</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">{t('employees.col_position', 'Position')}</th>
+                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground hidden md:table-cell">{t('employees.col_phone', 'Phone')}</th>
+                      <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">{t('employees.col_base_salary', 'Base Salary')}</th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">{t('employees.col_status', 'Status')}</th>
                       <th className="px-4 py-2.5 w-20" />
                     </tr>
                   </thead>
@@ -268,7 +270,7 @@ export function Employees() {
                         </td>
                         <td className="px-4 py-3">
                           {emp.teacher_id ? (
-                            <div className="flex items-center justify-end pr-1" title="Managed in Teachers page">
+                            <div className="flex items-center justify-end pr-1" title={t('employees.tooltip_teacher', 'Managed in Teachers page')}>
                               <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />
                             </div>
                           ) : (
@@ -300,22 +302,22 @@ export function Employees() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1.5">
-              <Label>Full Name *</Label>
-              <Input value={form.full_name ?? ''} onChange={e => setField('full_name', e.target.value)} placeholder="Full name" />
+              <Label>{t('employees.form_full_name', 'Full Name')} *</Label>
+              <Input value={form.full_name ?? ''} onChange={e => setField('full_name', e.target.value)} placeholder={t('employees.form_full_name_placeholder', 'Full name')} />
             </div>
             <div className="space-y-1.5">
               <Label>{t('employees.department', 'Department')} *</Label>
               <Select value={form.department ?? ''} onValueChange={v => { setField('department', v); setField('position', '') }}>
-                <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('employees.form_select_dept', 'Select department')} /></SelectTrigger>
                 <SelectContent>
-                  {DEPARTMENTS.map(d => <SelectItem key={d.value} value={d.value}>{DEPT_LABEL[d.value]}</SelectItem>)}
+                  {DEPARTMENTS.map(d => <SelectItem key={d.value} value={d.value}>{deptLabel(d.value)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>{t('employees.position', 'Position')} *</Label>
               <Select value={form.position ?? ''} onValueChange={v => setField('position', v)} disabled={!form.department}>
-                <SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('employees.form_select_pos', 'Select position')} /></SelectTrigger>
                 <SelectContent>
                   {availablePositions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
@@ -326,7 +328,7 @@ export function Employees() {
               <PhoneInput value={form.phone ?? ''} onChange={v => setField('phone', v)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Birthday</Label>
+              <Label>{t('employees.form_birthday', 'Birthday')}</Label>
               <DateInput value={form.birthday ?? ''} onChange={v => setField('birthday', v)} />
             </div>
             <div className="space-y-1.5">
@@ -349,13 +351,13 @@ export function Employees() {
               <Select value={form.status ?? 'active'} onValueChange={v => setField('status', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STATUSES.map(s => <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>)}
+                  {STATUSES.map(s => <SelectItem key={s} value={s}>{t(`employees.status_${s}`, s.charAt(0).toUpperCase() + s.slice(1))}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label>{t('common.notes', 'Notes')}</Label>
-              <Input value={form.notes ?? ''} onChange={e => setField('notes', e.target.value)} placeholder="Optional notes" />
+              <Input value={form.notes ?? ''} onChange={e => setField('notes', e.target.value)} placeholder={t('employees.form_notes_placeholder', 'Optional notes')} />
             </div>
           </div>
           <DialogFooter>
@@ -375,9 +377,9 @@ export function Employees() {
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Employee?</DialogTitle>
+            <DialogTitle>{t('employees.delete_title', 'Delete Employee?')}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">{t('employees.delete_confirm', 'This action cannot be undone.')}</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>{t('common.cancel', 'Cancel')}</Button>
             <Button

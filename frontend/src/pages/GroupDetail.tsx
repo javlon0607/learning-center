@@ -33,7 +33,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/use-toast'
-import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent, Search, ArrowRightLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Users, DollarSign, User, Plus, Trash2, Percent, Search, ArrowRightLeft, Loader2, Printer } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -67,6 +67,244 @@ export function GroupDetail() {
   const [targetGroupId, setTargetGroupId] = useState<string>('')
   const [transferReason, setTransferReason] = useState('')
   const [transferDiscount, setTransferDiscount] = useState('0')
+
+  function printAttendanceSheet() {
+    if (!group) return
+    const now = new Date()
+    const monthYear = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+    const logoUrl = `${window.location.origin}/logo-full.jpg`
+
+    const studentRows = enrollments.map((e, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${e.student_name ?? ''}</td>
+        <td>${e.student_phone ?? ''}</td>
+        ${Array(14).fill('<td></td>').join('')}
+      </tr>`).join('')
+
+    const emptyRows = Array(3).fill(`
+      <tr>
+        <td></td><td></td><td></td>
+        ${Array(14).fill('<td></td>').join('')}
+      </tr>`).join('')
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Attendance — ${group.name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 11px;
+      color: #111;
+      background: #fff;
+      padding: 14mm 12mm 10mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Watermark ── */
+    .watermark {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 72pt;
+      font-weight: 900;
+      color: rgba(0, 0, 0, 0.04);
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: -1;
+      letter-spacing: 6px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 2.5px solid #111;
+      margin-bottom: 10px;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left img { height: 52px; width: auto; border-radius: 6px; }
+    .header-left .title { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.1; }
+    .header-left .subtitle {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 2.5px;
+      color: #555;
+      margin-top: 3px;
+    }
+    .header-right { text-align: right; }
+    .header-right .month-label {
+      font-size: 13px;
+      font-weight: 700;
+      border: 2px solid #111;
+      border-radius: 6px;
+      padding: 4px 14px;
+      display: inline-block;
+    }
+    .header-right .doc-type {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #777;
+      margin-top: 4px;
+    }
+
+    /* ── Meta info ── */
+    .meta {
+      display: flex;
+      gap: 0;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .meta-item {
+      flex: 1;
+      padding: 6px 12px;
+      border-right: 1px solid #ccc;
+    }
+    .meta-item:last-child { border-right: none; }
+    .meta-item .lbl { font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 2px; }
+    .meta-item .val { font-size: 11px; font-weight: 700; color: #111; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    col.col-num  { width: 7mm; }
+    col.col-name { width: 48mm; }
+    col.col-phone{ width: 28mm; }
+    col.col-date { width: 8mm; }
+
+    thead tr { height: 52px; }
+    th {
+      background: #e8e8e8;
+      color: #111;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 0 4px;
+      text-align: center;
+      vertical-align: middle;
+      border: 1px solid #999;
+    }
+    th:nth-child(2) { text-align: left; padding-left: 8px; }
+
+    tbody tr { height: 26px; }
+    td {
+      border: 1px solid #bbb;
+      padding: 0 4px;
+      text-align: center;
+      vertical-align: middle;
+      overflow: hidden;
+    }
+    td:nth-child(1) { color: #777; font-size: 10px; }
+    td:nth-child(2) { text-align: left; padding-left: 8px; font-weight: 500; }
+    td:nth-child(3) { font-size: 10px; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      font-size: 9px;
+      color: #777;
+      padding-top: 8px;
+    }
+    .footer .copy { font-size: 9px; color: #999; }
+    .footer .sig { display: flex; gap: 48px; }
+    .footer .sig-item { text-align: center; }
+    .footer .sig-item .line { border-top: 1px solid #555; width: 90px; margin-bottom: 4px; }
+    .footer .sig-item .name { font-size: 9px; color: #555; }
+
+    @media print {
+      body { padding: 10mm 10mm 8mm; }
+      @page { margin: 0; size: A4 portrait; }
+    }
+  </style>
+</head>
+<body>
+  <div class="watermark">LEGACY ACADEMY</div>
+
+  <div class="header">
+    <div class="header-left">
+      <img src="${logoUrl}" alt="Legacy Academy" onerror="this.style.display='none'"/>
+      <div>
+        <div class="title">Legacy Academy</div>
+        <div class="subtitle">Education Center</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="month-label">${monthYear}</div>
+      <div class="doc-type">Attendance Sheet</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div class="meta-item">
+      <div class="lbl">Group</div>
+      <div class="val">${group.name}</div>
+    </div>
+    <div class="meta-item">
+      <div class="lbl">Teacher</div>
+      <div class="val">${group.teacher_name ?? '—'}</div>
+    </div>
+    <div class="meta-item">
+      <div class="lbl">Total Students</div>
+      <div class="val">${enrollments.length}</div>
+    </div>
+    <div class="meta-item">
+      <div class="lbl">Academic Year</div>
+      <div class="val">${now.getFullYear()}</div>
+    </div>
+  </div>
+
+  <table>
+    <colgroup>
+      <col class="col-num"/>
+      <col class="col-name"/>
+      <col class="col-phone"/>
+      ${Array(14).fill('<col class="col-date"/>').join('')}
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th style="text-align:left;padding-left:8px">Full Name</th>
+        <th>Phone</th>
+        ${Array(14).fill('<th></th>').join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${studentRows}
+      ${emptyRows}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div class="copy">Legacy Academy &copy; ${now.getFullYear()}</div>
+    <div class="sig">
+      <div class="sig-item"><div class="line"></div><div class="name">Administrator</div></div>
+      <div class="sig-item"><div class="line"></div><div class="name">Director</div></div>
+    </div>
+  </div>
+</body>
+</html>`
+
+    const win = window.open('', '_blank', 'width=1100,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print(); win.close() }, 400)
+  }
 
   const { data: groups = [] } = useQuery({
     queryKey: ['groups'],
@@ -191,6 +429,10 @@ export function GroupDetail() {
         <Badge variant={statusColors[group.status]} className="ml-auto">
           {group.status}
         </Badge>
+        <Button variant="outline" size="sm" onClick={printAttendanceSheet}>
+          <Printer className="h-4 w-4 mr-2" />
+          Davomat varaqasi
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

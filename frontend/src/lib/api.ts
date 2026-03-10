@@ -734,6 +734,7 @@ export interface Enrollment {
   student_id: number
   group_id: number
   student_name?: string
+  student_phone?: string
   group_name?: string
   group_price?: number
   enrolled_at: string

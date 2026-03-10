@@ -1437,6 +1437,50 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Migration: employees & expenses additional translation keys
+    try {
+        $m = 'employees_translations_202603b';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO NOTHING");
+            foreach ([
+                // Employees page
+                ['en','employees.toast_added','Employee added'],          ['uz','employees.toast_added',"Hodim qo'shildi"],
+                ['en','employees.toast_updated','Employee updated'],       ['uz','employees.toast_updated','Hodim yangilandi'],
+                ['en','employees.toast_deleted','Employee deleted'],       ['uz','employees.toast_deleted',"Hodim o'chirildi"],
+                ['en','employees.stats_active','active'],                  ['uz','employees.stats_active','faol'],
+                ['en','employees.stats_total','total'],                    ['uz','employees.stats_total','jami'],
+                ['en','employees.stats_payroll','monthly payroll'],        ['uz','employees.stats_payroll','oylik fond'],
+                ['en','employees.empty_filter','No employees match the filter.'], ['uz','employees.empty_filter','Filtrga mos hodim topilmadi.'],
+                ['en','employees.empty','No employees yet. Add the first one!'],  ['uz','employees.empty','Hozircha hodimlar yo\'q. Birinchisini qo\'shing!'],
+                ['en','employees.count','{n} employees'],                  ['uz','employees.count','{n} ta hodim'],
+                ['en','employees.col_name','Name'],                        ['uz','employees.col_name','Ism'],
+                ['en','employees.col_position','Position'],                ['uz','employees.col_position','Lavozim'],
+                ['en','employees.col_phone','Phone'],                      ['uz','employees.col_phone','Telefon'],
+                ['en','employees.col_base_salary','Base Salary'],          ['uz','employees.col_base_salary','Asosiy oylik'],
+                ['en','employees.col_status','Status'],                    ['uz','employees.col_status','Holat'],
+                ['en','employees.tooltip_teacher','Managed in Teachers page'], ['uz','employees.tooltip_teacher',"O'qituvchilar sahifasida boshqariladi"],
+                ['en','employees.form_full_name','Full Name'],             ['uz','employees.form_full_name',"To'liq ism"],
+                ['en','employees.form_full_name_placeholder','Full name'], ['uz','employees.form_full_name_placeholder',"To'liq ism"],
+                ['en','employees.form_birthday','Birthday'],               ['uz','employees.form_birthday',"Tug'ilgan kun"],
+                ['en','employees.form_select_dept','Select department'],   ['uz','employees.form_select_dept',"Bo'lim tanlang"],
+                ['en','employees.form_select_pos','Select position'],      ['uz','employees.form_select_pos','Lavozim tanlang'],
+                ['en','employees.form_notes_placeholder','Optional notes'],['uz','employees.form_notes_placeholder','Ixtiyoriy izoh'],
+                ['en','employees.delete_title','Delete Employee?'],        ['uz','employees.delete_title',"Hodimni o'chirish?"],
+                ['en','employees.delete_confirm','This action cannot be undone.'], ['uz','employees.delete_confirm',"Bu amalni qaytarib bo'lmaydi."],
+                // Expenses: employee salary fields
+                ['en','expenses.form_employee','Employee'],                ['uz','expenses.form_employee','Hodim'],
+                ['en','expenses.form_select_employee','Select employee'],  ['uz','expenses.form_select_employee','Hodim tanlang'],
+                ['en','expenses.toast_select_employee','Please select an employee'], ['uz','expenses.toast_select_employee','Hodimni tanlang'],
+                ['en','expenses.toast_salary_fail','Failed to record salary'], ['uz','expenses.toast_salary_fail',"Oylikni saqlashda xato yuz berdi"],
+                ['en','expenses.salary_description','Salary: {name} — {month}'], ['uz','expenses.salary_description','Oylik: {name} — {month}'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: add birthday column to teachers
     try {
         $m = 'teachers_birthday_202603';

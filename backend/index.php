@@ -568,7 +568,7 @@ try {
                 $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
                 $student = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
                 if ($group) {
-                    $stmt = db()->prepare("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ?");
+                    $stmt = db()->prepare("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name, s.phone AS student_phone FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ?");
                     $stmt->execute([$group]);
                 } elseif ($student) {
                     $stmt = db()->prepare("SELECT e.*, g.name AS group_name, g.price AS group_price FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?");
