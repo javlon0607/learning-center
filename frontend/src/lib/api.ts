@@ -1089,6 +1089,8 @@ export const telegramApi = {
     api.get<{ data: TelegramLogEntry[]; total: number; page: number; limit: number }>(`/telegram/log?page=${page}&limit=${limit}`),
   send: (target_type: string, target_id: number, message: string) =>
     api.post<{ sent: number; failed: number; errors: string[] }>('/telegram', { action: 'send', target_type, target_id, message }),
+  clearQueue: () =>
+    api.post<{ ok: boolean; message: string }>('/telegram', { action: 'clear-queue' }),
 }
 
 /** Unified audit log: tracks all entity changes and actions with before/after values and timestamp. */

@@ -39,15 +39,38 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus } from 'lucide-react'
+import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus, Trash2 } from 'lucide-react'
 
 export function Telegram() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
+  const clearQueueMutation = useMutation({
+    mutationFn: () => telegramApi.clearQueue(),
+    onSuccess: (data) => {
+      toast({ title: 'Queue cleared', description: data.message })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+    },
+  })
+
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-bold">Telegram</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Telegram</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => clearQueueMutation.mutate()}
+          disabled={clearQueueMutation.isPending}
+        >
+          {clearQueueMutation.isPending
+            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            : <Trash2 className="mr-2 h-4 w-4" />}
+          Clear Queue
+        </Button>
+      </div>
       <Tabs defaultValue="send">
         <TabsList>
           <TabsTrigger value="send">Send Message</TabsTrigger>

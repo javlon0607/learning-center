@@ -2977,7 +2977,7 @@ try {
                                 GREATEST(0, g.price * (1 - e.discount_percentage/100.0) - COALESCE(md.amount, 0) - COALESCE(SUM(pm.amount), 0)) AS debt
                             FROM enrollments e
                             JOIN groups g ON e.group_id = g.id AND g.status = 'active' AND g.deleted_at IS NULL
-                            LEFT JOIN monthly_discounts md ON md.student_id = e.student_id AND md.group_id = e.group_id AND DATE_TRUNC('month', md.month) = DATE_TRUNC('month', CURRENT_DATE)
+                            LEFT JOIN monthly_discounts md ON md.student_id = e.student_id AND md.group_id = e.group_id AND DATE_TRUNC('month', md.for_month) = DATE_TRUNC('month', CURRENT_DATE) AND md.deleted_at IS NULL
                             LEFT JOIN payments p ON p.student_id = e.student_id AND p.group_id = e.group_id AND p.deleted_at IS NULL
                             LEFT JOIN payment_months pm ON pm.payment_id = p.id AND DATE_TRUNC('month', pm.for_month) = DATE_TRUNC('month', CURRENT_DATE)
                             WHERE e.student_id = ?
@@ -3162,6 +3162,32 @@ try {
                         break;
                     }
                     jsonResponse($results);
+                } elseif ($action === 'clear-queue') {
+                    if (!TELEGRAM_BOT_TOKEN) { jsonError('Bot token not configured'); break; }
+                    $apiBase = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN;
+                    // Get current webhook URL
+                    $ch = curl_init($apiBase . '/getWebhookInfo');
+                    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+                    $info = json_decode(curl_exec($ch), true);
+                    curl_close($ch);
+                    $currentUrl = $info['result']['url'] ?? '';
+                    if (!$currentUrl) { jsonError('No webhook URL set'); break; }
+                    // Re-set same webhook with drop_pending_updates=true
+                    $ch = curl_init($apiBase . '/setWebhook');
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => json_encode(['url' => $currentUrl, 'drop_pending_updates' => true]),
+                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT => 10,
+                    ]);
+                    $result = json_decode(curl_exec($ch), true);
+                    curl_close($ch);
+                    if (!empty($result['ok'])) {
+                        jsonResponse(['ok' => true, 'message' => 'Pending updates cleared']);
+                    } else {
+                        jsonError($result['description'] ?? 'Failed to clear queue');
+                    }
                 } else {
                     jsonError('Invalid action');
                 }
