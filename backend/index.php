@@ -2866,6 +2866,15 @@ try {
                 $chatId = (int)($msg['chat']['id'] ?? 0);
                 $text = trim($msg['text'] ?? '');
                 $contact = $msg['contact'] ?? null;
+                // Normalize command: strip @botname suffix, lowercase (/Balance@Bot → /balance)
+                $command = '';
+                if (str_starts_with($text, '/')) {
+                    $command = strtolower(explode('@', explode(' ', $text, 2)[0], 2)[0]);
+                }
+                $studentKeyboard = ['keyboard' => [
+                    [['text' => '💰 Balance'], ['text' => '📅 Schedule']],
+                    [['text' => '❓ Help']],
+                ], 'resize_keyboard' => true];
 
                 if ($contact) {
                     // Phone-based auto-linking
@@ -2909,32 +2918,39 @@ try {
                         } else {
                             db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES (?, ?, ?, NOW())")->execute([$found['type'], $found['id'], $chatId]);
                         }
-                        $helpText = "\n\nAvailable commands:\n/balance — monthly fee & debt\n/schedule — class schedule\n/help — show commands";
-                        telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!{$helpText}", ['remove_keyboard' => true]);
+                        if ($found['type'] === 'student') {
+                            telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!\n\nUse the buttons below:", $studentKeyboard);
+                        } else {
+                            telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!\n\nYou will now receive notifications.", ['remove_keyboard' => true]);
+                        }
                     } else {
                         telegramSendWithReplyMarkup($chatId, "❌ Phone number not found in our system. Please contact the admin.", ['remove_keyboard' => true]);
                     }
 
-                } elseif (preg_match('#^/start\s+(.+)$#', $text, $m)) {
-                    // Code-based linking (existing flow)
+                } elseif (preg_match('#^/start\s+(\S+)$#', $text, $m)) {
+                    // Code-based linking
                     $code = $m[1];
                     $stmt = db()->prepare("SELECT id, entity_type, entity_id FROM telegram_links WHERE link_code = ? AND linked_at IS NULL");
                     $stmt->execute([$code]);
                     $link = $stmt->fetch();
                     if ($link) {
                         db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$chatId, $link['id']]);
-                        telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.\n\nCommands: /balance | /schedule | /help", 'custom');
+                        if ($link['entity_type'] === 'student') {
+                            telegramSendWithReplyMarkup($chatId, "✅ Linked! You will now receive notifications.\n\nUse the buttons below:", $studentKeyboard);
+                        } else {
+                            telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.", 'custom');
+                        }
                     } else {
                         telegramSend($chatId, "❌ Invalid or expired link code.", 'custom');
                     }
 
-                } elseif ($text === '/start') {
-                    // Check if already linked
+                } elseif ($command === '/start') {
                     $alreadyLinked = db()->prepare("SELECT entity_type FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $alreadyLinked->execute([$chatId]);
                     $linkedRow = $alreadyLinked->fetch();
                     if ($linkedRow) {
-                        telegramSend($chatId, "👋 Welcome back! Your account is already linked.\n\nCommands: /balance | /schedule | /help", 'custom');
+                        $markup = $linkedRow['entity_type'] === 'student' ? $studentKeyboard : ['remove_keyboard' => true];
+                        telegramSendWithReplyMarkup($chatId, "👋 Welcome back! Your account is already linked.", $markup);
                     } else {
                         telegramSendWithReplyMarkup($chatId, "👋 Welcome to Learning Center!\n\nTo link your account, please share your phone number:", [
                             'keyboard' => [[['text' => '📱 Share my phone number', 'request_contact' => true]]],
@@ -2943,7 +2959,7 @@ try {
                         ]);
                     }
 
-                } elseif ($text === '/balance') {
+                } elseif ($command === '/balance' || $text === '💰 Balance') {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]);
                     $link = $linkRow->fetch();
@@ -2970,7 +2986,7 @@ try {
                         $stmt->execute([$studentId]);
                         $rows = $stmt->fetchAll();
                         if (!$rows) {
-                            telegramSend($chatId, "You have no active enrollments.", 'custom');
+                            telegramSendWithReplyMarkup($chatId, "You have no active enrollments.", $studentKeyboard);
                         } else {
                             $month = date('F Y');
                             $balanceMsg = "💰 <b>Balance for {$month}</b>\n\n";
@@ -2987,11 +3003,11 @@ try {
                             }
                             $totalStr = number_format($totalDebt, 0, '.', ' ');
                             $balanceMsg .= "📊 Total debt: <b>{$totalStr}</b>";
-                            telegramSend($chatId, $balanceMsg, 'custom');
+                            telegramSendWithReplyMarkup($chatId, $balanceMsg, $studentKeyboard);
                         }
                     }
 
-                } elseif ($text === '/schedule') {
+                } elseif ($command === '/schedule' || $text === '📅 Schedule') {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]);
                     $link = $linkRow->fetch();
@@ -3011,7 +3027,7 @@ try {
                         $stmt->execute([$studentId]);
                         $rows = $stmt->fetchAll();
                         if (!$rows) {
-                            telegramSend($chatId, "You have no active enrollments.", 'custom');
+                            telegramSendWithReplyMarkup($chatId, "You have no active enrollments.", $studentKeyboard);
                         } else {
                             $schedMsg = "📅 <b>Your Schedule</b>\n\n";
                             foreach ($rows as $row) {
@@ -3024,12 +3040,12 @@ try {
                                 if ($row['teacher_name']) $schedMsg .= "  👤 {$row['teacher_name']}\n";
                                 $schedMsg .= "\n";
                             }
-                            telegramSend($chatId, $schedMsg, 'custom');
+                            telegramSendWithReplyMarkup($chatId, $schedMsg, $studentKeyboard);
                         }
                     }
 
-                } elseif ($text === '/help') {
-                    telegramSend($chatId, "📋 <b>Available commands:</b>\n\n/balance — monthly fee &amp; debt\n/schedule — class schedule\n/help — show this list", 'custom');
+                } elseif ($command === '/help' || $text === '❓ Help') {
+                    telegramSendWithReplyMarkup($chatId, "📋 <b>Available commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n❓ Help — show this list", $studentKeyboard);
 
                 } else {
                     // Log incoming message
