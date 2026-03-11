@@ -2875,20 +2875,108 @@ try {
 
         case 'telegram-webhook':
             // Public endpoint — Telegram sends updates here (no auth)
+
+            // ── Bot translation strings ─────────────────────────────────
+            $BOT_LANG = [
+                'en' => [
+                    'btn_balance'  => '💰 Balance',  'btn_schedule' => '📅 Schedule',
+                    'btn_support'  => '🎧 Support',  'btn_help'     => '❓ Help',
+                    'btn_lang'     => '🌐 Language',
+                    'share_phone_prompt' => "👋 Welcome to Learning Center!\n\nPlease share your phone number to link your account:",
+                    'share_phone_btn'    => '📱 Share my phone number',
+                    'welcome_back'       => "👋 Welcome back! Your account is already linked.",
+                    'already_linked'     => "✅ Your account is already linked.",
+                    'phone_not_found'    => "❌ Phone number not found. Please contact the admin.",
+                    'not_linked_student' => "❌ This command is only available for linked students.\nUse /start to link your account.",
+                    'welcome_linked_student' => "✅ Linked! Welcome, <b>%s</b>!\n\nChoose your language first:",
+                    'welcome_linked_other'   => "✅ Linked! Welcome, <b>%s</b>!\n\nYou will now receive notifications.",
+                    'choose_lang'  => "🌐 Choose your language / Tilni tanlang:",
+                    'lang_saved_en'=> "✅ Language set to English.",
+                    'lang_saved_uz'=> "✅ Til o'zbek tiliga o'zgartirildi.",
+                    'no_enrollments' => "You have no active enrollments.",
+                    'balance_title'  => "💰 <b>Balance — %s</b>\n\n",
+                    'balance_fee'    => 'Fee', 'balance_paid' => 'Paid', 'balance_debt' => 'Debt',
+                    'total_debt'     => "📊 Total debt: <b>%s</b>",
+                    'schedule_title' => "📅 <b>Your Schedule</b>\n\n",
+                    'room_label'     => 'Room',
+                    'support_active' => "📋 You already have an active support request:\n\n📅 %s at %s\n%s Status: %s\n\nPlease wait for your session or contact the admin to cancel.",
+                    'support_title'  => "🎧 <b>Book a Support Session</b>\n\nSelect an available time slot:",
+                    'support_no_slots' => "😔 No available slots in the next 5 days. Please try again later.",
+                    'support_booked'   => "✅ <b>Support session booked!</b>\n\n📅 %s at %s\n⏳ Pending confirmation\n\nYou'll be notified once confirmed.",
+                    'support_slot_taken'  => "😔 This slot was just taken. Send /support to see updated slots.",
+                    'support_has_active'  => "❌ You already have an active support request. Please wait for your session.",
+                    'support_unavailable' => "❌ This slot is no longer available.",
+                    'help_text' => "📋 <b>Commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n🎧 Support — book a support session\n❓ Help — show this list\n🌐 Language — change language",
+                    'link_error'  => "❌ Please link your account first using /start.",
+                    'invalid_code'=> "❌ Invalid or expired link code.",
+                    'which_child'  => "👨‍👩‍👧 Which student are you the parent of?",
+                    'linked_notify'=> "✅ Linked! You will now receive notifications.",
+                ],
+                'uz' => [
+                    'btn_balance'  => '💰 Balans',   'btn_schedule' => '📅 Jadval',
+                    'btn_support'  => '🎧 So\'rov',  'btn_help'     => '❓ Yordam',
+                    'btn_lang'     => '🌐 Til',
+                    'share_phone_prompt' => "👋 O'quv markaziga xush kelibsiz!\n\nHisobingizni ulash uchun telefon raqamingizni yuboring:",
+                    'share_phone_btn'    => '📱 Telefon raqamni yuborish',
+                    'welcome_back'       => "👋 Xush kelibsiz! Hisobingiz allaqachon ulangan.",
+                    'already_linked'     => "✅ Hisobingiz allaqachon ulangan.",
+                    'phone_not_found'    => "❌ Telefon raqam topilmadi. Admin bilan bog'laning.",
+                    'not_linked_student' => "❌ Bu buyruq faqat ulangan o'quvchilar uchun.\nHisobingizni ulash uchun /start yuboring.",
+                    'welcome_linked_student' => "✅ Ulandi! Xush kelibsiz, <b>%s</b>!\n\nAvval tilni tanlang:",
+                    'welcome_linked_other'   => "✅ Ulandi! Xush kelibsiz, <b>%s</b>!\n\nEndi xabarnomalar olasiz.",
+                    'choose_lang'  => "🌐 Choose your language / Tilni tanlang:",
+                    'lang_saved_en'=> "✅ Language set to English.",
+                    'lang_saved_uz'=> "✅ Til o'zbek tiliga o'zgartirildi.",
+                    'no_enrollments' => "Sizda faol guruhlar yo'q.",
+                    'balance_title'  => "💰 <b>%s uchun balans</b>\n\n",
+                    'balance_fee'    => "To'lov", 'balance_paid' => "To'langan", 'balance_debt' => 'Qarz',
+                    'total_debt'     => "📊 Umumiy qarz: <b>%s</b>",
+                    'schedule_title' => "📅 <b>Dars jadvalingiz</b>\n\n",
+                    'room_label'     => 'Xona',
+                    'support_active' => "📋 Sizda faol so'rov mavjud:\n\n📅 %s soat %s\n%s Holat: %s\n\nSessiyangizni kuting yoki adminni chaqiring.",
+                    'support_title'  => "🎧 <b>Qo'llab-quvvatlash sessiyasiga yoziling</b>\n\nMavjud vaqtni tanlang:",
+                    'support_no_slots' => "😔 Kelasi 5 kun ichida bo'sh vaqt yo'q. Keyinroq urinib ko'ring.",
+                    'support_booked'   => "✅ <b>Sessiya band qilindi!</b>\n\n📅 %s soat %s\n⏳ Tasdiqlanmoqda\n\nTasdiqlanganda xabar olasiz.",
+                    'support_slot_taken'  => "😔 Bu vaqt band bo'ldi. Yangi vaqtlar uchun /support yuboring.",
+                    'support_has_active'  => "❌ Sizda faol so'rov mavjud. Sessiyangizni kuting.",
+                    'support_unavailable' => "❌ Bu vaqt endi mavjud emas.",
+                    'help_text' => "📋 <b>Buyruqlar:</b>\n\n💰 Balans — oylik to'lov va qarz\n📅 Jadval — dars jadvali\n🎧 So'rov — qo'llab-quvvatlash sessiyasi\n❓ Yordam — shu ro'yxat\n🌐 Til — tilni o'zgartirish",
+                    'link_error'  => "❌ Avval /start orqali hisobingizni ulang.",
+                    'invalid_code'=> "❌ Noto'g'ri yoki muddati o'tgan kod.",
+                    'which_child'  => "👨‍👩‍👧 Qaysi o'quvchining ota-onasisiz?",
+                    'linked_notify'=> "✅ Ulandi! Endi xabarnomalar olasiz.",
+                ],
+            ];
+            // Helper: build student reply keyboard
+            $mkKeyboard = function(array $T): array {
+                return ['keyboard' => [
+                    [['text' => $T['btn_balance']], ['text' => $T['btn_schedule']]],
+                    [['text' => $T['btn_support']], ['text' => $T['btn_help']]],
+                    [['text' => $T['btn_lang']]],
+                ], 'resize_keyboard' => true];
+            };
+            // Language selection inline keyboard (same for all langs)
+            $langInlineKb = ['inline_keyboard' => [[
+                ['text' => '🇬🇧 English',    'callback_data' => 'set_lang_en'],
+                ['text' => "🇺🇿 O'zbekcha", 'callback_data' => 'set_lang_uz'],
+            ]]];
+
             $msg = $input['message'] ?? null;
             if ($msg) {
                 $chatId = (int)($msg['chat']['id'] ?? 0);
                 $text = trim($msg['text'] ?? '');
                 $contact = $msg['contact'] ?? null;
-                // Normalize command: strip @botname suffix, lowercase (/Balance@Bot → /balance)
+                // Normalize command: strip @botname suffix, lowercase
                 $command = '';
                 if (str_starts_with($text, '/')) {
                     $command = strtolower(explode('@', explode(' ', $text, 2)[0], 2)[0]);
                 }
-                $studentKeyboard = ['keyboard' => [
-                    [['text' => '💰 Balance'], ['text' => '📅 Schedule']],
-                    [['text' => '🎧 Support'], ['text' => '❓ Help']],
-                ], 'resize_keyboard' => true];
+                // Fetch user language
+                $lr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ? LIMIT 1");
+                $lr->execute([$chatId]); $lr = $lr->fetch();
+                $lang = $lr ? $lr['language'] : 'en';
+                $T = $BOT_LANG[$lang];
+                $studentKeyboard = $mkKeyboard($T);
 
                 if ($contact) {
                     // Phone-based auto-linking
@@ -2928,7 +3016,7 @@ try {
                         } elseif (count($parentStudents) > 1) {
                             // Ask which student
                             $buttons = array_map(fn($st) => [['text' => $st['full_name'], 'callback_data' => 'link_student_' . $st['id']]], $parentStudents);
-                            telegramSendWithReplyMarkup($chatId, "👨‍👩‍👧 Siz qaysi o'quvchining ota-onasisiz?\nWhich student are you the parent of?", ['inline_keyboard' => $buttons]);
+                            telegramSendWithReplyMarkup($chatId, $T['which_child'], ['inline_keyboard' => $buttons]);
                             jsonResponse(['ok' => true]);
                             break;
                         }
@@ -2944,12 +3032,14 @@ try {
                             db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES (?, ?, ?, NOW())")->execute([$found['type'], $found['id'], $chatId]);
                         }
                         if ($found['type'] === 'student') {
-                            telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!\n\nUse the buttons below:", $studentKeyboard);
+                            // Ask language first
+                            telegramSendWithReplyMarkup($chatId, sprintf($T['welcome_linked_student'], htmlspecialchars($found['name'])), ['remove_keyboard' => true]);
+                            telegramSendWithReplyMarkup($chatId, $T['choose_lang'], $langInlineKb);
                         } else {
-                            telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!\n\nYou will now receive notifications.", ['remove_keyboard' => true]);
+                            telegramSendWithReplyMarkup($chatId, sprintf($T['welcome_linked_other'], htmlspecialchars($found['name'])), ['remove_keyboard' => true]);
                         }
                     } else {
-                        telegramSendWithReplyMarkup($chatId, "❌ Phone number not found in our system. Please contact the admin.", ['remove_keyboard' => true]);
+                        telegramSendWithReplyMarkup($chatId, $T['phone_not_found'], ['remove_keyboard' => true]);
                     }
 
                 } elseif (preg_match('#^/start\s+(\S+)$#', $text, $m)) {
@@ -2961,12 +3051,12 @@ try {
                     if ($link) {
                         db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$chatId, $link['id']]);
                         if ($link['entity_type'] === 'student') {
-                            telegramSendWithReplyMarkup($chatId, "✅ Linked! You will now receive notifications.\n\nUse the buttons below:", $studentKeyboard);
+                            telegramSendWithReplyMarkup($chatId, $T['choose_lang'], $langInlineKb);
                         } else {
-                            telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.", 'custom');
+                            telegramSend($chatId, $T['linked_notify'] ?? "✅ Linked! You will now receive notifications.", 'custom');
                         }
                     } else {
-                        telegramSend($chatId, "❌ Invalid or expired link code.", 'custom');
+                        telegramSend($chatId, $T['invalid_code'], 'custom');
                     }
 
                 } elseif ($command === '/start') {
@@ -2975,21 +3065,21 @@ try {
                     $linkedRow = $alreadyLinked->fetch();
                     if ($linkedRow) {
                         $markup = $linkedRow['entity_type'] === 'student' ? $studentKeyboard : ['remove_keyboard' => true];
-                        telegramSendWithReplyMarkup($chatId, "👋 Welcome back! Your account is already linked.", $markup);
+                        telegramSendWithReplyMarkup($chatId, $T['welcome_back'], $markup);
                     } else {
-                        telegramSendWithReplyMarkup($chatId, "👋 Welcome to Learning Center!\n\nTo link your account, please share your phone number:", [
-                            'keyboard' => [[['text' => '📱 Share my phone number', 'request_contact' => true]]],
+                        telegramSendWithReplyMarkup($chatId, $T['share_phone_prompt'], [
+                            'keyboard' => [[['text' => $T['share_phone_btn'], 'request_contact' => true]]],
                             'resize_keyboard' => true,
                             'one_time_keyboard' => true,
                         ]);
                     }
 
-                } elseif ($command === '/balance' || $text === '💰 Balance') {
+                } elseif ($command === '/balance' || $text === '💰 Balance' || $text === '💰 Balans') {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]);
                     $link = $linkRow->fetch();
                     if (!$link || $link['entity_type'] !== 'student') {
-                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                        telegramSend($chatId, $T['not_linked_student'], 'custom');
                     } else {
                         $studentId = (int)$link['entity_id'];
                         $stmt = db()->prepare("
@@ -3011,10 +3101,10 @@ try {
                         $stmt->execute([$studentId]);
                         $rows = $stmt->fetchAll();
                         if (!$rows) {
-                            telegramSendWithReplyMarkup($chatId, "You have no active enrollments.", $studentKeyboard);
+                            telegramSendWithReplyMarkup($chatId, $T['no_enrollments'], $studentKeyboard);
                         } else {
                             $month = date('F Y');
-                            $balanceMsg = "💰 <b>Balance for {$month}</b>\n\n";
+                            $balanceMsg = sprintf($T['balance_title'], $month);
                             $totalDebt = 0;
                             foreach ($rows as $row) {
                                 $fee = number_format((float)$row['price'] * (1 - (float)$row['discount_percentage']/100) - (float)$row['monthly_discount'], 0, '.', ' ');
@@ -3024,20 +3114,20 @@ try {
                                 $icon = $debt > 0 ? "❌" : "✅";
                                 $debtStr = number_format($debt, 0, '.', ' ');
                                 $balanceMsg .= "{$icon} <b>{$row['group_name']}</b>\n";
-                                $balanceMsg .= "  Fee: {$fee} | Paid: {$paid} | Debt: <b>{$debtStr}</b>\n\n";
+                                $balanceMsg .= "  {$T['balance_fee']}: {$fee} | {$T['balance_paid']}: {$paid} | {$T['balance_debt']}: <b>{$debtStr}</b>\n\n";
                             }
                             $totalStr = number_format($totalDebt, 0, '.', ' ');
-                            $balanceMsg .= "📊 Total debt: <b>{$totalStr}</b>";
+                            $balanceMsg .= sprintf($T['total_debt'], $totalStr);
                             telegramSendWithReplyMarkup($chatId, $balanceMsg, $studentKeyboard);
                         }
                     }
 
-                } elseif ($command === '/schedule' || $text === '📅 Schedule') {
+                } elseif ($command === '/schedule' || $text === '📅 Schedule' || $text === '📅 Jadval') {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]);
                     $link = $linkRow->fetch();
                     if (!$link || $link['entity_type'] !== 'student') {
-                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                        telegramSend($chatId, $T['not_linked_student'], 'custom');
                     } else {
                         $studentId = (int)$link['entity_id'];
                         $stmt = db()->prepare("
@@ -3052,16 +3142,16 @@ try {
                         $stmt->execute([$studentId]);
                         $rows = $stmt->fetchAll();
                         if (!$rows) {
-                            telegramSendWithReplyMarkup($chatId, "You have no active enrollments.", $studentKeyboard);
+                            telegramSendWithReplyMarkup($chatId, $T['no_enrollments'], $studentKeyboard);
                         } else {
-                            $schedMsg = "📅 <b>Your Schedule</b>\n\n";
+                            $schedMsg = $T['schedule_title'];
                             foreach ($rows as $row) {
                                 $schedMsg .= "📚 <b>{$row['name']}</b>";
                                 if ($row['subject']) $schedMsg .= " — {$row['subject']}";
                                 $schedMsg .= "\n";
                                 if ($row['schedule_days']) $schedMsg .= "  📆 {$row['schedule_days']}\n";
-                                if ($row['schedule_time_start'] && $row['schedule_time_end']) $schedMsg .= "  🕐 {$row['schedule_time_start']} – {$row['schedule_time_end']}\n";
-                                if ($row['room']) $schedMsg .= "  🚪 Room: {$row['room']}\n";
+                                if ($row['schedule_time_start'] && $row['schedule_time_end']) $schedMsg .= "  🕐 " . substr($row['schedule_time_start'],0,5) . " – " . substr($row['schedule_time_end'],0,5) . "\n";
+                                if ($row['room']) $schedMsg .= "  🚪 {$T['room_label']}: {$row['room']}\n";
                                 if ($row['teacher_name']) $schedMsg .= "  👤 {$row['teacher_name']}\n";
                                 $schedMsg .= "\n";
                             }
@@ -3069,61 +3159,70 @@ try {
                         }
                     }
 
-                } elseif ($command === '/support' || $text === '🎧 Support') {
+                } elseif ($command === '/support' || $text === '🎧 Support' || $text === "🎧 So'rov") {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]); $link = $linkRow->fetch();
                     if (!$link || $link['entity_type'] !== 'student') {
-                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                        telegramSend($chatId, $T['not_linked_student'], 'custom');
                     } else {
                         $studentId = (int)$link['entity_id'];
-                        // Check for existing active future request
                         $existing = db()->prepare("SELECT scheduled_date, scheduled_time, status FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE ORDER BY scheduled_date, scheduled_time LIMIT 1");
                         $existing->execute([$studentId]); $existingReq = $existing->fetch();
                         if ($existingReq) {
-                            $dateStr = date('D, M j', strtotime($existingReq['scheduled_date']));
+                            $dateStr = date('d/m/Y', strtotime($existingReq['scheduled_date']));
                             $statusIcon = $existingReq['status'] === 'confirmed' ? '✅' : '⏳';
-                            telegramSendWithReplyMarkup($chatId, "📋 You already have an active support request:\n\n📅 {$dateStr} at " . substr($existingReq['scheduled_time'],0,5) . "\n{$statusIcon} Status: " . ucfirst($existingReq['status']) . "\n\nPlease wait for your session or contact admin to cancel.", $studentKeyboard);
+                            $statusLabel = $lang === 'uz'
+                                ? ($existingReq['status'] === 'confirmed' ? 'Tasdiqlangan' : 'Kutilmoqda')
+                                : ucfirst($existingReq['status']);
+                            telegramSendWithReplyMarkup($chatId, sprintf($T['support_active'], $dateStr, substr($existingReq['scheduled_time'],0,5), $statusIcon, $statusLabel), $studentKeyboard);
                         } else {
-                            // Generate available slots for next 7 Mon-Sat days
                             $supportTimes = ['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
                             $days = [];
                             $cur = new DateTime('today');
-                            $endDate = new DateTime('+6 days');
+                            $endDate = new DateTime('+4 days');
                             while ($cur <= $endDate) {
                                 $dow = (int)$cur->format('N');
                                 if ($dow <= 6) $days[] = $cur->format('Y-m-d');
                                 $cur->modify('+1 day');
                             }
-                            $fromDate = $days[0]; $toDate = end($days);
-                            $bookedStmt = db()->prepare("SELECT scheduled_date::text, scheduled_time::text FROM support_requests WHERE scheduled_date BETWEEN ? AND ? AND status != 'cancelled'");
-                            $bookedStmt->execute([$fromDate, $toDate]);
-                            $booked = [];
-                            foreach ($bookedStmt->fetchAll() as $r) $booked[$r['scheduled_date'].'_'.substr($r['scheduled_time'],0,5)] = true;
-                            $dayNames = ['1'=>'Mon','2'=>'Tue','3'=>'Wed','4'=>'Thu','5'=>'Fri','6'=>'Sat'];
-                            $inlineRows = [];
-                            foreach ($days as $d) {
-                                $dow = (int)(new DateTime($d))->format('N');
-                                $label = $dayNames[$dow] . ' ' . date('M j', strtotime($d));
-                                $dayButtons = [];
-                                foreach ($supportTimes as $t) {
-                                    if (!isset($booked[$d.'_'.$t])) $dayButtons[] = ['text' => $t, 'callback_data' => 'support_'.$d.'_'.$t];
-                                }
-                                if ($dayButtons) {
-                                    $inlineRows[] = [['text' => "📅 {$label}", 'callback_data' => 'noop']];
-                                    // Split into rows of 4
-                                    foreach (array_chunk($dayButtons, 4) as $chunk) $inlineRows[] = $chunk;
-                                }
-                            }
-                            if (empty($inlineRows)) {
-                                telegramSendWithReplyMarkup($chatId, "😔 No available support slots in the next 7 days. Please try again later.", $studentKeyboard);
+                            if (empty($days)) {
+                                telegramSendWithReplyMarkup($chatId, $T['support_no_slots'], $studentKeyboard);
                             } else {
-                                telegramSendWithReplyMarkup($chatId, "🎧 <b>Book a Support Session</b>\n\nSelect an available time slot:", ['inline_keyboard' => $inlineRows]);
+                                $fromDate = $days[0]; $toDate = end($days);
+                                $bookedStmt = db()->prepare("SELECT scheduled_date::text, scheduled_time::text FROM support_requests WHERE scheduled_date BETWEEN ? AND ? AND status != 'cancelled'");
+                                $bookedStmt->execute([$fromDate, $toDate]);
+                                $booked = [];
+                                foreach ($bookedStmt->fetchAll() as $r) $booked[$r['scheduled_date'].'_'.substr($r['scheduled_time'],0,5)] = true;
+                                $dayNames = $lang === 'uz'
+                                    ? ['1'=>'Du','2'=>'Se','3'=>'Ch','4'=>'Pa','5'=>'Ju','6'=>'Sh']
+                                    : ['1'=>'Mon','2'=>'Tue','3'=>'Wed','4'=>'Thu','5'=>'Fri','6'=>'Sat'];
+                                $inlineRows = [];
+                                foreach ($days as $d) {
+                                    $dow = (int)(new DateTime($d))->format('N');
+                                    $label = $dayNames[$dow] . ' ' . date('d/m', strtotime($d));
+                                    $dayButtons = [];
+                                    foreach ($supportTimes as $t) {
+                                        if (!isset($booked[$d.'_'.$t])) $dayButtons[] = ['text' => $t, 'callback_data' => 'support_'.$d.'_'.$t];
+                                    }
+                                    if ($dayButtons) {
+                                        $inlineRows[] = [['text' => "📅 {$label}", 'callback_data' => 'noop']];
+                                        foreach (array_chunk($dayButtons, 4) as $chunk) $inlineRows[] = $chunk;
+                                    }
+                                }
+                                if (empty($inlineRows)) {
+                                    telegramSendWithReplyMarkup($chatId, $T['support_no_slots'], $studentKeyboard);
+                                } else {
+                                    telegramSendWithReplyMarkup($chatId, $T['support_title'], ['inline_keyboard' => $inlineRows]);
+                                }
                             }
                         }
                     }
 
-                } elseif ($command === '/help' || $text === '❓ Help') {
-                    telegramSendWithReplyMarkup($chatId, "📋 <b>Available commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n🎧 Support — book a support session\n❓ Help — show this list", $studentKeyboard);
+                } elseif ($command === '/help' || $text === '❓ Help' || $text === '❓ Yordam') {
+                    telegramSendWithReplyMarkup($chatId, $T['help_text'], $studentKeyboard);
+
+                } elseif ($text === '🌐 Language' || $text === '🌐 Til' || $command === '/language') {
+                    telegramSendWithReplyMarkup($chatId, $T['choose_lang'], $langInlineKb);
 
                 } else {
                     // Log incoming message
@@ -3133,7 +3232,7 @@ try {
                     } catch (PDOException $e) { /* ignore */ }
                 }
             }
-            // Handle callback_query (inline button taps — e.g. parent selecting their child)
+            // Handle callback_query (inline button taps)
             $cbq = $input['callback_query'] ?? null;
             if ($cbq) {
                 $cbChatId = (int)($cbq['message']['chat']['id'] ?? 0);
@@ -3145,37 +3244,55 @@ try {
                     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode(['callback_query_id' => $cbData]), CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
                     curl_exec($ch); curl_close($ch);
                 }
-                if ($data === 'noop') {
+                // Fetch language for this callback chat
+                $cbLr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ? LIMIT 1");
+                $cbLr->execute([$cbChatId]); $cbLr = $cbLr->fetch();
+                $cbLang = $cbLr ? $cbLr['language'] : 'en';
+                $cbT = $BOT_LANG[$cbLang];
+                $cbKb = $mkKeyboard($cbT);
+
+                if ($data === 'set_lang_en' || $data === 'set_lang_uz') {
+                    $newLang = $data === 'set_lang_en' ? 'en' : 'uz';
+                    db()->prepare("UPDATE telegram_links SET language = ? WHERE chat_id = ?")->execute([$newLang, $cbChatId]);
+                    $cbT = $BOT_LANG[$newLang];
+                    $cbKb = $mkKeyboard($cbT);
+                    $confirmMsg = $newLang === 'en' ? $cbT['lang_saved_en'] : $cbT['lang_saved_uz'];
+                    // Check if student to show keyboard
+                    $linkRow = db()->prepare("SELECT entity_type FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $linkRow->execute([$cbChatId]); $linkRow = $linkRow->fetch();
+                    if ($linkRow && $linkRow['entity_type'] === 'student') {
+                        telegramSendWithReplyMarkup($cbChatId, $confirmMsg, $cbKb);
+                    } else {
+                        telegramSend($cbChatId, $confirmMsg, 'custom');
+                    }
+                } elseif ($data === 'noop') {
                     // Day label button — ignore
                 } elseif (preg_match('/^support_(\d{4}-\d{2}-\d{2})_(\d{2}:\d{2})$/', $data, $m)) {
                     $reqDate = $m[1]; $reqTime = $m[2];
-                    // Validate date is within next 7 calendar days
-                    $todayStr = date('Y-m-d'); $maxDateStr = date('Y-m-d', strtotime('+6 days'));
+                    // Validate date is within next 5 calendar days
+                    $todayStr = date('Y-m-d'); $maxDateStr = date('Y-m-d', strtotime('+4 days'));
                     if ($reqDate < $todayStr || $reqDate > $maxDateStr) {
-                        telegramSend($cbChatId, "❌ This slot is no longer available.", 'custom');
+                        telegramSend($cbChatId, $cbT['support_unavailable'], 'custom');
                     } else {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$cbChatId]); $link = $linkRow->fetch();
                     if (!$link || $link['entity_type'] !== 'student') {
-                        telegramSend($cbChatId, "❌ Link your account first using /start.", 'custom');
+                        telegramSend($cbChatId, $cbT['link_error'], 'custom');
                     } else {
                         $studentId = (int)$link['entity_id'];
-                        // Check student has no active request
                         $existing = db()->prepare("SELECT id FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE LIMIT 1");
                         $existing->execute([$studentId]);
                         if ($existing->fetch()) {
-                            telegramSend($cbChatId, "❌ You already have an active support request. Please wait for your session.", 'custom');
+                            telegramSend($cbChatId, $cbT['support_has_active'], 'custom');
                         } else {
-                            // Check slot still available
                             $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
                             $taken->execute([$reqDate, $reqTime]);
                             if ($taken->fetch()) {
-                                telegramSend($cbChatId, "😔 This slot was just taken. Please send /support to see updated availability.", 'custom');
+                                telegramSend($cbChatId, $cbT['support_slot_taken'], 'custom');
                             } else {
                                 db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source) VALUES (?,?,?,'bot')")->execute([$studentId, $reqDate, $reqTime]);
-                                $dateStr = date('D, M j', strtotime($reqDate));
-                                $studentKeyboard = ['keyboard' => [[['text' => '💰 Balance'], ['text' => '📅 Schedule']], [['text' => '🎧 Support'], ['text' => '❓ Help']]], 'resize_keyboard' => true];
-                                telegramSendWithReplyMarkup($cbChatId, "✅ <b>Support session booked!</b>\n\n📅 {$dateStr} at {$reqTime}\n⏳ Status: Pending confirmation\n\nYou'll receive a notification once confirmed.", $studentKeyboard);
+                                $dateStr = date('d/m/Y', strtotime($reqDate));
+                                telegramSendWithReplyMarkup($cbChatId, sprintf($cbT['support_booked'], $dateStr, $reqTime), $cbKb);
                             }
                         }
                     }
@@ -3186,7 +3303,7 @@ try {
                     $already = db()->prepare("SELECT id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $already->execute([$cbChatId]);
                     if ($already->fetch()) {
-                        telegramSendWithReplyMarkup($cbChatId, "✅ Your account is already linked.", ['remove_keyboard' => true]);
+                        telegramSendWithReplyMarkup($cbChatId, $cbT['already_linked'], ['remove_keyboard' => true]);
                     } else {
                         $nameRow = db()->prepare("SELECT first_name || ' ' || last_name AS n FROM students WHERE id = ? AND deleted_at IS NULL");
                         $nameRow->execute([$studentId]); $nameRow = $nameRow->fetch();
@@ -3197,8 +3314,8 @@ try {
                         } else {
                             db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES ('student', ?, ?, NOW())")->execute([$studentId, $cbChatId]);
                         }
-                        $studentKeyboard = ['keyboard' => [[['text' => '💰 Balance'], ['text' => '📅 Schedule']], [['text' => '🎧 Support'], ['text' => '❓ Help']]], 'resize_keyboard' => true];
-                        telegramSendWithReplyMarkup($cbChatId, "✅ Linked! Welcome, <b>" . htmlspecialchars($nameRow['n'] ?? '') . "</b>!\n\nUse the buttons below:", $studentKeyboard);
+                        telegramSendWithReplyMarkup($cbChatId, sprintf($cbT['welcome_linked_student'], htmlspecialchars($nameRow['n'] ?? '')), ['remove_keyboard' => true]);
+                        telegramSendWithReplyMarkup($cbChatId, $cbT['choose_lang'], $langInlineKb);
                     }
                 }
             }
@@ -3888,7 +4005,7 @@ try {
                 $date = $input['scheduled_date'] ?? '';
                 $time = $input['scheduled_time'] ?? '';
                 if (!$studentId || !$date || !$time) { jsonError('student_id, scheduled_date and scheduled_time are required'); break; }
-                if ($date < date('Y-m-d') || $date > date('Y-m-d', strtotime('+6 days'))) { jsonError('Date must be within the next 7 days'); break; }
+                if ($date < date('Y-m-d') || $date > date('Y-m-d', strtotime('+4 days'))) { jsonError('Date must be within the next 5 days'); break; }
                 if (!in_array($time, $SUPPORT_TIMES)) { jsonError('Invalid time slot'); break; }
                 // Check slot not taken
                 $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");

@@ -1284,6 +1284,16 @@ function initDB() {
         $stmt->execute(['manager', 'support_requests']);
     } catch (Exception $e) {}
 
+    // Migration: telegram_links language column
+    try {
+        $m = 'telegram_links_language_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS language VARCHAR(5) DEFAULT 'en'");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (Exception $e) { error_log("Migration $m failed: " . $e->getMessage()); }
+
     // Migration: support_requests assigned_to → employees FK
     try {
         $m = 'support_requests_assigned_employee_202603';

@@ -212,7 +212,7 @@ export function SupportRequests() {
   )
 
   const today = formatDate(new Date())
-  const maxBookingDate = formatDate(new Date(Date.now() + 6 * 24 * 60 * 60 * 1000))
+  const maxBookingDate = formatDate(new Date(Date.now() + 4 * 24 * 60 * 60 * 1000))
 
   return (
     <div className="flex flex-col h-full p-6 space-y-4">
