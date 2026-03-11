@@ -3172,15 +3172,22 @@ try {
                     curl_close($ch);
                     $currentUrl = $info['result']['url'] ?? '';
                     if (!$currentUrl) { jsonError('No webhook URL set'); break; }
-                    // Re-set same webhook with drop_pending_updates=true
+                    // Re-set webhook with drop_pending_updates=true, include cert if available
+                    $certPath = __DIR__ . '/telegram.crt';
                     $ch = curl_init($apiBase . '/setWebhook');
-                    curl_setopt_array($ch, [
-                        CURLOPT_POST => true,
-                        CURLOPT_POSTFIELDS => json_encode(['url' => $currentUrl, 'drop_pending_updates' => true]),
-                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_TIMEOUT => 10,
-                    ]);
+                    $postFields = ['url' => $currentUrl, 'drop_pending_updates' => 'true'];
+                    if (file_exists($certPath)) {
+                        $postFields['certificate'] = new CURLFile($certPath, 'application/x-pem-file', 'telegram.crt');
+                        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $postFields, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+                    } else {
+                        curl_setopt_array($ch, [
+                            CURLOPT_POST => true,
+                            CURLOPT_POSTFIELDS => json_encode(['url' => $currentUrl, 'drop_pending_updates' => true]),
+                            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_TIMEOUT => 10,
+                        ]);
+                    }
                     $result = json_decode(curl_exec($ch), true);
                     curl_close($ch);
                     if (!empty($result['ok'])) {
