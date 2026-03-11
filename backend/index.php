@@ -2884,16 +2884,18 @@ try {
                     // Search in students, leads, teachers
                     $found = null;
                     $searches = [
-                        ['students', 'student', 'deleted_at IS NULL'],
-                        ['leads', 'lead', 'deleted_at IS NULL'],
-                        ['teachers', 'teacher', '1=1'],
+                        ['students', 'student', 'first_name', 'last_name', 'deleted_at IS NULL'],
+                        ['leads', 'lead', 'first_name', 'last_name', 'deleted_at IS NULL'],
+                        ['teachers', 'teacher', 'first_name', 'last_name', '1=1'],
+                        ['users', 'user', 'name', null, 'is_active = true'],
                     ];
-                    foreach ($searches as [$table, $type, $cond]) {
-                        $stmt = db()->prepare("SELECT id, first_name, last_name FROM {$table} WHERE RIGHT(regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g'), 9) = ? AND {$cond} LIMIT 1");
+                    foreach ($searches as [$table, $type, $nameCol, $lastNameCol, $cond]) {
+                        $nameExpr = $lastNameCol ? "{$nameCol} || ' ' || {$lastNameCol}" : $nameCol;
+                        $stmt = db()->prepare("SELECT id, ({$nameExpr}) AS full_name FROM {$table} WHERE RIGHT(regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g'), 9) = ? AND {$cond} LIMIT 1");
                         $stmt->execute([$normalizedPhone]);
                         $row = $stmt->fetch();
                         if ($row) {
-                            $found = ['type' => $type, 'id' => $row['id'], 'name' => $row['first_name'] . ' ' . $row['last_name']];
+                            $found = ['type' => $type, 'id' => $row['id'], 'name' => $row['full_name']];
                             break;
                         }
                     }
@@ -3082,7 +3084,7 @@ try {
                 if ($action === 'generate-code') {
                     $entityType = $input['entity_type'] ?? '';
                     $entityId = (int)($input['entity_id'] ?? 0);
-                    if (!in_array($entityType, ['student', 'teacher', 'lead']) || !$entityId) {
+                    if (!in_array($entityType, ['student', 'teacher', 'lead', 'user']) || !$entityId) {
                         jsonError('Invalid entity_type or entity_id');
                         break;
                     }
