@@ -2861,30 +2861,179 @@ try {
 
         case 'telegram-webhook':
             // Public endpoint — Telegram sends updates here (no auth)
-            // $input is already parsed from php://input at the top of this file
             $msg = $input['message'] ?? null;
             if ($msg) {
                 $chatId = (int)($msg['chat']['id'] ?? 0);
                 $text = trim($msg['text'] ?? '');
+                $contact = $msg['contact'] ?? null;
 
-                if (preg_match('#^/start\s+(.+)$#', $text, $m)) {
+                if ($contact) {
+                    // Phone-based auto-linking
+                    $rawPhone = $contact['phone_number'] ?? '';
+                    $normalizedPhone = substr(preg_replace('/[^0-9]/', '', $rawPhone), -9);
+
+                    // Check if already linked
+                    $alreadyLinked = db()->prepare("SELECT tl.entity_type, tl.entity_id FROM telegram_links tl WHERE tl.chat_id = ? AND tl.linked_at IS NOT NULL");
+                    $alreadyLinked->execute([$chatId]);
+                    if ($alreadyLinked->fetch()) {
+                        telegramSendWithReplyMarkup($chatId, "✅ Your account is already linked.", ['remove_keyboard' => true]);
+                        jsonResponse(['ok' => true]);
+                        break;
+                    }
+
+                    // Search in students, leads, teachers
+                    $found = null;
+                    $searches = [
+                        ['students', 'student', 'deleted_at IS NULL'],
+                        ['leads', 'lead', 'deleted_at IS NULL'],
+                        ['teachers', 'teacher', '1=1'],
+                    ];
+                    foreach ($searches as [$table, $type, $cond]) {
+                        $stmt = db()->prepare("SELECT id, first_name, last_name FROM {$table} WHERE RIGHT(regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g'), 9) = ? AND {$cond} LIMIT 1");
+                        $stmt->execute([$normalizedPhone]);
+                        $row = $stmt->fetch();
+                        if ($row) {
+                            $found = ['type' => $type, 'id' => $row['id'], 'name' => $row['first_name'] . ' ' . $row['last_name']];
+                            break;
+                        }
+                    }
+
+                    if ($found) {
+                        $existing = db()->prepare("SELECT id FROM telegram_links WHERE entity_type = ? AND entity_id = ?");
+                        $existing->execute([$found['type'], $found['id']]);
+                        $existingRow = $existing->fetch();
+                        if ($existingRow) {
+                            db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$chatId, $existingRow['id']]);
+                        } else {
+                            db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES (?, ?, ?, NOW())")->execute([$found['type'], $found['id'], $chatId]);
+                        }
+                        $helpText = "\n\nAvailable commands:\n/balance — monthly fee & debt\n/schedule — class schedule\n/help — show commands";
+                        telegramSendWithReplyMarkup($chatId, "✅ Linked! Welcome, <b>{$found['name']}</b>!{$helpText}", ['remove_keyboard' => true]);
+                    } else {
+                        telegramSendWithReplyMarkup($chatId, "❌ Phone number not found in our system. Please contact the admin.", ['remove_keyboard' => true]);
+                    }
+
+                } elseif (preg_match('#^/start\s+(.+)$#', $text, $m)) {
+                    // Code-based linking (existing flow)
                     $code = $m[1];
                     $stmt = db()->prepare("SELECT id, entity_type, entity_id FROM telegram_links WHERE link_code = ? AND linked_at IS NULL");
                     $stmt->execute([$code]);
                     $link = $stmt->fetch();
                     if ($link) {
-                        $upd = db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?");
-                        $upd->execute([$chatId, $link['id']]);
-                        // Reply
-                        telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.", 'custom');
+                        db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$chatId, $link['id']]);
+                        telegramSend($chatId, "✅ Linked successfully! You will now receive notifications.\n\nCommands: /balance | /schedule | /help", 'custom');
                     } else {
                         telegramSend($chatId, "❌ Invalid or expired link code.", 'custom');
                     }
+
+                } elseif ($text === '/start') {
+                    // Check if already linked
+                    $alreadyLinked = db()->prepare("SELECT entity_type FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $alreadyLinked->execute([$chatId]);
+                    $linkedRow = $alreadyLinked->fetch();
+                    if ($linkedRow) {
+                        telegramSend($chatId, "👋 Welcome back! Your account is already linked.\n\nCommands: /balance | /schedule | /help", 'custom');
+                    } else {
+                        telegramSendWithReplyMarkup($chatId, "👋 Welcome to Learning Center!\n\nTo link your account, please share your phone number:", [
+                            'keyboard' => [[['text' => '📱 Share my phone number', 'request_contact' => true]]],
+                            'resize_keyboard' => true,
+                            'one_time_keyboard' => true,
+                        ]);
+                    }
+
+                } elseif ($text === '/balance') {
+                    $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $linkRow->execute([$chatId]);
+                    $link = $linkRow->fetch();
+                    if (!$link || $link['entity_type'] !== 'student') {
+                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                    } else {
+                        $studentId = (int)$link['entity_id'];
+                        $stmt = db()->prepare("
+                            SELECT
+                                g.name AS group_name,
+                                g.price,
+                                e.discount_percentage,
+                                COALESCE(md.amount, 0) AS monthly_discount,
+                                COALESCE(SUM(pm.amount), 0) AS paid,
+                                GREATEST(0, g.price * (1 - e.discount_percentage/100.0) - COALESCE(md.amount, 0) - COALESCE(SUM(pm.amount), 0)) AS debt
+                            FROM enrollments e
+                            JOIN groups g ON e.group_id = g.id AND g.status = 'active' AND g.deleted_at IS NULL
+                            LEFT JOIN monthly_discounts md ON md.student_id = e.student_id AND md.group_id = e.group_id AND DATE_TRUNC('month', md.month) = DATE_TRUNC('month', CURRENT_DATE)
+                            LEFT JOIN payments p ON p.student_id = e.student_id AND p.group_id = e.group_id AND p.deleted_at IS NULL
+                            LEFT JOIN payment_months pm ON pm.payment_id = p.id AND DATE_TRUNC('month', pm.for_month) = DATE_TRUNC('month', CURRENT_DATE)
+                            WHERE e.student_id = ?
+                            GROUP BY g.name, g.price, e.discount_percentage, md.amount
+                        ");
+                        $stmt->execute([$studentId]);
+                        $rows = $stmt->fetchAll();
+                        if (!$rows) {
+                            telegramSend($chatId, "You have no active enrollments.", 'custom');
+                        } else {
+                            $month = date('F Y');
+                            $balanceMsg = "💰 <b>Balance for {$month}</b>\n\n";
+                            $totalDebt = 0;
+                            foreach ($rows as $row) {
+                                $fee = number_format((float)$row['price'] * (1 - (float)$row['discount_percentage']/100) - (float)$row['monthly_discount'], 0, '.', ' ');
+                                $paid = number_format((float)$row['paid'], 0, '.', ' ');
+                                $debt = (float)$row['debt'];
+                                $totalDebt += $debt;
+                                $icon = $debt > 0 ? "❌" : "✅";
+                                $debtStr = number_format($debt, 0, '.', ' ');
+                                $balanceMsg .= "{$icon} <b>{$row['group_name']}</b>\n";
+                                $balanceMsg .= "  Fee: {$fee} | Paid: {$paid} | Debt: <b>{$debtStr}</b>\n\n";
+                            }
+                            $totalStr = number_format($totalDebt, 0, '.', ' ');
+                            $balanceMsg .= "📊 Total debt: <b>{$totalStr}</b>";
+                            telegramSend($chatId, $balanceMsg, 'custom');
+                        }
+                    }
+
+                } elseif ($text === '/schedule') {
+                    $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $linkRow->execute([$chatId]);
+                    $link = $linkRow->fetch();
+                    if (!$link || $link['entity_type'] !== 'student') {
+                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                    } else {
+                        $studentId = (int)$link['entity_id'];
+                        $stmt = db()->prepare("
+                            SELECT g.name, g.subject, g.schedule_days, g.schedule_time_start, g.schedule_time_end, g.room,
+                                   t.first_name || ' ' || t.last_name AS teacher_name
+                            FROM enrollments e
+                            JOIN groups g ON e.group_id = g.id AND g.status = 'active' AND g.deleted_at IS NULL
+                            LEFT JOIN teachers t ON g.teacher_id = t.id
+                            WHERE e.student_id = ?
+                            ORDER BY g.schedule_time_start
+                        ");
+                        $stmt->execute([$studentId]);
+                        $rows = $stmt->fetchAll();
+                        if (!$rows) {
+                            telegramSend($chatId, "You have no active enrollments.", 'custom');
+                        } else {
+                            $schedMsg = "📅 <b>Your Schedule</b>\n\n";
+                            foreach ($rows as $row) {
+                                $schedMsg .= "📚 <b>{$row['name']}</b>";
+                                if ($row['subject']) $schedMsg .= " — {$row['subject']}";
+                                $schedMsg .= "\n";
+                                if ($row['schedule_days']) $schedMsg .= "  📆 {$row['schedule_days']}\n";
+                                if ($row['schedule_time_start'] && $row['schedule_time_end']) $schedMsg .= "  🕐 {$row['schedule_time_start']} – {$row['schedule_time_end']}\n";
+                                if ($row['room']) $schedMsg .= "  🚪 Room: {$row['room']}\n";
+                                if ($row['teacher_name']) $schedMsg .= "  👤 {$row['teacher_name']}\n";
+                                $schedMsg .= "\n";
+                            }
+                            telegramSend($chatId, $schedMsg, 'custom');
+                        }
+                    }
+
+                } elseif ($text === '/help') {
+                    telegramSend($chatId, "📋 <b>Available commands:</b>\n\n/balance — monthly fee &amp; debt\n/schedule — class schedule\n/help — show this list", 'custom');
+
                 } else {
                     // Log incoming message
                     try {
                         $stmt = db()->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, telegram_message_id, status) VALUES (?,?,?,?,?,?)");
-                        $stmt->execute([$chatId, 'in', $text, 'reply', $msg['message_id'] ?? null, 'received']);
+                        $stmt->execute([$chatId, 'in', $text ?: '[contact/media]', 'reply', $msg['message_id'] ?? null, 'received']);
                     } catch (PDOException $e) { /* ignore */ }
                 }
             }

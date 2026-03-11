@@ -2017,3 +2017,15 @@ function telegramNotifyTeacher(int $teacherId, string $text, string $triggerType
     }
     return ['ok' => false, 'error' => 'No linked Telegram account'];
 }
+
+function telegramSendWithReplyMarkup(int $chatId, string $text, array $replyMarkup): array {
+    if (!TELEGRAM_BOT_TOKEN) return ['ok' => false, 'error' => 'Bot token not configured'];
+    $url = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendMessage';
+    $postData = json_encode(['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML', 'reply_markup' => $replyMarkup]);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $postData, CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    $result = json_decode($response, true);
+    return ['ok' => !empty($result['ok']), 'error' => $result['description'] ?? ''];
+}
