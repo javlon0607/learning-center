@@ -21,6 +21,7 @@ import {
   Send,
   Briefcase,
   BookOpen,
+  LifeBuoy,
 } from 'lucide-react'
 
 const navigation = [
@@ -33,6 +34,7 @@ const navigation = [
   { key: 'nav.payments',     href: '/payments',     icon: CreditCard,      feature: 'payments' },
   { key: 'nav.expenses',     href: '/expenses',     icon: Receipt,         feature: 'expenses' },
   { key: 'nav.collections',  href: '/collections',  icon: PhoneCall,       feature: 'collections' },
+  { key: 'nav.support',     href: '/support',      icon: LifeBuoy,        feature: 'support_requests' },
   { key: 'nav.employees',   href: '/employees',    icon: Briefcase,       feature: 'employees' },
   { key: 'nav.books',       href: '/books',        icon: BookOpen,        feature: 'books' },
   { key: 'nav.reports',      href: '/reports',      icon: BarChart3,       feature: 'reports' },

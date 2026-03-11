@@ -23,6 +23,7 @@ export const FEATURES: Feature[] = [
   { key: 'expenses',         label: 'Expenses',          description: 'View and record expenses' },
   { key: 'expenses_delete',  label: 'Delete Expenses',   description: 'Delete expense records', indent: true },
   { key: 'collections',      label: 'Collections',       description: 'Collection calls management' },
+  { key: 'support_requests', label: 'Support Requests',  description: 'Manage student support session bookings' },
   { key: 'salary_slips',     label: 'Salary Slips',      description: 'Manage teacher salaries' },
   { key: 'employees',        label: 'Employees',         description: 'View and manage employees (staff directory)' },
   { key: 'books',            label: 'Books',             description: 'Manage book inventory and issue books to students' },

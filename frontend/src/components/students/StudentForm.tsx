@@ -31,6 +31,7 @@ const studentSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   dob: z.string().min(1, 'Date of birth is required'),
   phone: z.string().optional(),
+  phone2: z.string().optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   parent_name: z.string().optional(),
   parent_phone: z.string().optional(),
@@ -78,6 +79,7 @@ export function StudentForm({
       last_name: student.last_name,
       dob: student.dob || '',
       phone: student.phone || '',
+      phone2: student.phone2 || '',
       email: student.email || '',
       parent_name: student.parent_name || '',
       parent_phone: student.parent_phone || '',
@@ -89,6 +91,7 @@ export function StudentForm({
       last_name: '',
       dob: '',
       phone: '',
+      phone2: '',
       email: '',
       parent_name: '',
       parent_phone: '',
@@ -106,6 +109,7 @@ export function StudentForm({
         last_name: student.last_name,
         dob: student.dob || '',
         phone: student.phone || '',
+        phone2: student.phone2 || '',
         email: student.email || '',
         parent_name: student.parent_name || '',
         parent_phone: student.parent_phone || '',
@@ -117,6 +121,7 @@ export function StudentForm({
         last_name: '',
         dob: '',
         phone: '',
+        phone2: '',
         email: '',
         parent_name: '',
         parent_phone: '',
@@ -242,6 +247,23 @@ export function StudentForm({
                   )}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone2">Phone 2</Label>
+                <Controller
+                  name="phone2"
+                  control={control}
+                  render={({ field }) => (
+                    <PhoneInput
+                      id="phone2"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input

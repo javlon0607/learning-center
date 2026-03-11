@@ -303,9 +303,12 @@ try {
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
                 $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
-                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
+                if (!empty($input['phone2']) && isPhoneTaken($input['phone2'])) { jsonError('Phone 2 is already in use'); break; }
+                $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, phone2, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
-                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null, $input['phone'] ?? '', $input['email'] ?? '',
+                    $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null,
+                    $input['phone'] ?? '', $input['phone2'] ?? null, $input['email'] ?? '',
                     $input['parent_name'] ?? '', $input['parent_phone'] ?? '', $input['status'] ?? 'active', $input['notes'] ?? '',
                     $source, $referredByType, $referredById, $createdBy
                 ]);
@@ -326,13 +329,18 @@ try {
                 ]);
                 jsonResponse(['id' => (int)$id]);
             } elseif ($id && $method === 'PUT') {
-                $oldStmt = db()->prepare("SELECT first_name, last_name, dob, phone, email, parent_name, parent_phone, status, notes, source FROM students WHERE id = ?");
+                $oldStmt = db()->prepare("SELECT first_name, last_name, dob, phone, phone2, email, parent_name, parent_phone, status, notes, source FROM students WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, email=?, parent_name=?, parent_phone=?, status=?, notes=?, source=? WHERE id=?");
+                $newPhone  = $input['phone']  ?? $oldRow['phone'];
+                $newPhone2 = array_key_exists('phone2', $input) ? $input['phone2'] : $oldRow['phone2'];
+                if (!empty($newPhone)  && $newPhone  !== $oldRow['phone']  && isPhoneTaken($newPhone,  'students', (int)$id, 'phone'))  { jsonError('This phone number is already in use'); break; }
+                if (!empty($newPhone2) && $newPhone2 !== $oldRow['phone2'] && isPhoneTaken($newPhone2, 'students', (int)$id, 'phone2')) { jsonError('Phone 2 is already in use'); break; }
+                $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, phone2=?, email=?, parent_name=?, parent_phone=?, status=?, notes=?, source=? WHERE id=?");
                 $newValues = [
                     'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
-                    'dob' => array_key_exists('dob', $input) ? $input['dob'] : $oldRow['dob'], 'phone' => $input['phone'] ?? $oldRow['phone'], 'email' => $input['email'] ?? $oldRow['email'],
+                    'dob' => array_key_exists('dob', $input) ? $input['dob'] : $oldRow['dob'],
+                    'phone' => $newPhone, 'phone2' => $newPhone2, 'email' => $input['email'] ?? $oldRow['email'],
                     'parent_name' => $input['parent_name'] ?? $oldRow['parent_name'], 'parent_phone' => $input['parent_phone'] ?? $oldRow['parent_phone'],
                     'status' => $input['status'] ?? $oldRow['status'], 'notes' => $input['notes'] ?? $oldRow['notes'],
                     'source' => $input['source'] ?? $oldRow['source']
@@ -416,9 +424,11 @@ try {
                 $oldStmt = db()->prepare("SELECT first_name, last_name, phone, email, subjects, salary_type, salary_amount, status, birthday FROM teachers WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
+                $newPhone = $input['phone'] ?? $oldRow['phone'];
+                if (!empty($newPhone) && $newPhone !== $oldRow['phone'] && isPhoneTaken($newPhone, 'teachers', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
                 $newValues = [
                     'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
-                    'phone' => $input['phone'] ?? $oldRow['phone'], 'email' => $input['email'] ?? $oldRow['email'],
+                    'phone' => $newPhone, 'email' => $input['email'] ?? $oldRow['email'],
                     'subjects' => $input['subjects'] ?? $oldRow['subjects'], 'salary_type' => $input['salary_type'] ?? $oldRow['salary_type'],
                     'salary_amount' => $input['salary_amount'] ?? $oldRow['salary_amount'], 'status' => $input['status'] ?? $oldRow['status'],
                     'birthday' => array_key_exists('birthday', $input) ? ($input['birthday'] ?: null) : $oldRow['birthday'],
@@ -1240,6 +1250,7 @@ try {
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
                 $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
+                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
                 $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget, created_by, referred_by_type, referred_by_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
@@ -1271,6 +1282,7 @@ try {
                 $oldStmt = db()->prepare("SELECT first_name, last_name, phone, source, status, priority FROM leads WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
+                if (array_key_exists('phone', $input) && !empty($input['phone']) && $input['phone'] !== $oldRow['phone'] && isPhoneTaken($input['phone'], 'leads', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
                 $updates[] = "updated_at = CURRENT_TIMESTAMP";
                 $values[] = $id;
                 $sql = "UPDATE leads SET " . implode(', ', $updates) . " WHERE id = ?";
@@ -1955,6 +1967,7 @@ try {
                 $role = trim((string)$role) ?: 'user';
                 $name = trim($input['name'] ?? '');
                 $teacherId = isset($input['teacher_id']) ? (int)$input['teacher_id'] : null;
+                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
                 $password = password_hash($input['password'] ?? 'password', PASSWORD_DEFAULT);
                 try {
                     $stmt = db()->prepare("INSERT INTO users (username, password, name, role, teacher_id, email, phone, is_active) VALUES (?,?,?,?,?,?,?,?)");
@@ -2004,6 +2017,7 @@ try {
                     $sets[] = "password = ?";
                     $params[] = password_hash($input['password'], PASSWORD_DEFAULT);
                 }
+                if (array_key_exists('phone', $input) && !empty($input['phone']) && isPhoneTaken($input['phone'], 'users', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
                 if ($sets) {
                     $oldStmt = db()->prepare("SELECT username, name, role, email, phone, is_active FROM users WHERE id = ?");
                     $oldStmt->execute([$id]);
@@ -2873,7 +2887,7 @@ try {
                 }
                 $studentKeyboard = ['keyboard' => [
                     [['text' => '💰 Balance'], ['text' => '📅 Schedule']],
-                    [['text' => '❓ Help']],
+                    [['text' => '🎧 Support'], ['text' => '❓ Help']],
                 ], 'resize_keyboard' => true];
 
                 if ($contact) {
@@ -2890,21 +2904,32 @@ try {
                         break;
                     }
 
-                    // Search in students, leads, teachers
+                    // Search order: student.phone, student.phone2, teacher.phone, lead.phone, user.phone, then parent_phone
                     $found = null;
-                    $searches = [
-                        ['students', 'student', 'first_name', 'last_name', 'deleted_at IS NULL'],
-                        ['leads', 'lead', 'first_name', 'last_name', 'deleted_at IS NULL'],
-                        ['teachers', 'teacher', 'first_name', 'last_name', '1=1'],
-                        ['users', 'user', 'name', null, 'is_active = true'],
-                    ];
-                    foreach ($searches as [$table, $type, $nameCol, $lastNameCol, $cond]) {
-                        $nameExpr = $lastNameCol ? "{$nameCol} || ' ' || {$lastNameCol}" : $nameCol;
-                        $stmt = db()->prepare("SELECT id, ({$nameExpr}) AS full_name FROM {$table} WHERE RIGHT(regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g'), 9) = ? AND {$cond} LIMIT 1");
-                        $stmt->execute([$normalizedPhone]);
-                        $row = $stmt->fetch();
-                        if ($row) {
-                            $found = ['type' => $type, 'id' => $row['id'], 'name' => $row['full_name']];
+                    $norm9 = $normalizedPhone;
+                    $phoneExpr = "RIGHT(regexp_replace(COALESCE(%s,''),'[^0-9]','','g'),9)";
+                    // student by phone or phone2
+                    $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM students WHERE (" . sprintf($phoneExpr,'phone') . " = ? OR " . sprintf($phoneExpr,'phone2') . " = ?) AND deleted_at IS NULL LIMIT 1");
+                    $s->execute([$norm9, $norm9]); $row = $s->fetch();
+                    if ($row) $found = ['type' => 'student', 'id' => $row['id'], 'name' => $row['full_name']];
+                    // teacher
+                    if (!$found) { $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM teachers WHERE " . sprintf($phoneExpr,'phone') . " = ? LIMIT 1"); $s->execute([$norm9]); $row = $s->fetch(); if ($row) $found = ['type' => 'teacher', 'id' => $row['id'], 'name' => $row['full_name']]; }
+                    // lead (non-closed)
+                    if (!$found) { $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM leads WHERE " . sprintf($phoneExpr,'phone') . " = ? AND status != 'closed' AND deleted_at IS NULL LIMIT 1"); $s->execute([$norm9]); $row = $s->fetch(); if ($row) $found = ['type' => 'lead', 'id' => $row['id'], 'name' => $row['full_name']]; }
+                    // user (active)
+                    if (!$found) { $s = db()->prepare("SELECT id, name AS full_name FROM users WHERE " . sprintf($phoneExpr,'phone') . " = ? AND is_active = true LIMIT 1"); $s->execute([$norm9]); $row = $s->fetch(); if ($row) $found = ['type' => 'user', 'id' => $row['id'], 'name' => $row['full_name']]; }
+                    // parent_phone — find students
+                    if (!$found) {
+                        $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM students WHERE " . sprintf($phoneExpr,'parent_phone') . " = ? AND deleted_at IS NULL ORDER BY id");
+                        $s->execute([$norm9]);
+                        $parentStudents = $s->fetchAll();
+                        if (count($parentStudents) === 1) {
+                            $found = ['type' => 'student', 'id' => $parentStudents[0]['id'], 'name' => $parentStudents[0]['full_name']];
+                        } elseif (count($parentStudents) > 1) {
+                            // Ask which student
+                            $buttons = array_map(fn($st) => [['text' => $st['full_name'], 'callback_data' => 'link_student_' . $st['id']]], $parentStudents);
+                            telegramSendWithReplyMarkup($chatId, "👨‍👩‍👧 Siz qaysi o'quvchining ota-onasisiz?\nWhich student are you the parent of?", ['inline_keyboard' => $buttons]);
+                            jsonResponse(['ok' => true]);
                             break;
                         }
                     }
@@ -3044,8 +3069,61 @@ try {
                         }
                     }
 
+                } elseif ($command === '/support' || $text === '🎧 Support') {
+                    $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $linkRow->execute([$chatId]); $link = $linkRow->fetch();
+                    if (!$link || $link['entity_type'] !== 'student') {
+                        telegramSend($chatId, "❌ This command is only available for linked students.\nUse /start to link your account.", 'custom');
+                    } else {
+                        $studentId = (int)$link['entity_id'];
+                        // Check for existing active future request
+                        $existing = db()->prepare("SELECT scheduled_date, scheduled_time, status FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE ORDER BY scheduled_date, scheduled_time LIMIT 1");
+                        $existing->execute([$studentId]); $existingReq = $existing->fetch();
+                        if ($existingReq) {
+                            $dateStr = date('D, M j', strtotime($existingReq['scheduled_date']));
+                            $statusIcon = $existingReq['status'] === 'confirmed' ? '✅' : '⏳';
+                            telegramSendWithReplyMarkup($chatId, "📋 You already have an active support request:\n\n📅 {$dateStr} at " . substr($existingReq['scheduled_time'],0,5) . "\n{$statusIcon} Status: " . ucfirst($existingReq['status']) . "\n\nPlease wait for your session or contact admin to cancel.", $studentKeyboard);
+                        } else {
+                            // Generate available slots for next 7 Mon-Sat days
+                            $supportTimes = ['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
+                            $days = [];
+                            $cur = new DateTime('today');
+                            $endDate = new DateTime('+6 days');
+                            while ($cur <= $endDate) {
+                                $dow = (int)$cur->format('N');
+                                if ($dow <= 6) $days[] = $cur->format('Y-m-d');
+                                $cur->modify('+1 day');
+                            }
+                            $fromDate = $days[0]; $toDate = end($days);
+                            $bookedStmt = db()->prepare("SELECT scheduled_date::text, scheduled_time::text FROM support_requests WHERE scheduled_date BETWEEN ? AND ? AND status != 'cancelled'");
+                            $bookedStmt->execute([$fromDate, $toDate]);
+                            $booked = [];
+                            foreach ($bookedStmt->fetchAll() as $r) $booked[$r['scheduled_date'].'_'.substr($r['scheduled_time'],0,5)] = true;
+                            $dayNames = ['1'=>'Mon','2'=>'Tue','3'=>'Wed','4'=>'Thu','5'=>'Fri','6'=>'Sat'];
+                            $inlineRows = [];
+                            foreach ($days as $d) {
+                                $dow = (int)(new DateTime($d))->format('N');
+                                $label = $dayNames[$dow] . ' ' . date('M j', strtotime($d));
+                                $dayButtons = [];
+                                foreach ($supportTimes as $t) {
+                                    if (!isset($booked[$d.'_'.$t])) $dayButtons[] = ['text' => $t, 'callback_data' => 'support_'.$d.'_'.$t];
+                                }
+                                if ($dayButtons) {
+                                    $inlineRows[] = [['text' => "📅 {$label}", 'callback_data' => 'noop']];
+                                    // Split into rows of 4
+                                    foreach (array_chunk($dayButtons, 4) as $chunk) $inlineRows[] = $chunk;
+                                }
+                            }
+                            if (empty($inlineRows)) {
+                                telegramSendWithReplyMarkup($chatId, "😔 No available support slots in the next 7 days. Please try again later.", $studentKeyboard);
+                            } else {
+                                telegramSendWithReplyMarkup($chatId, "🎧 <b>Book a Support Session</b>\n\nSelect an available time slot:", ['inline_keyboard' => $inlineRows]);
+                            }
+                        }
+                    }
+
                 } elseif ($command === '/help' || $text === '❓ Help') {
-                    telegramSendWithReplyMarkup($chatId, "📋 <b>Available commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n❓ Help — show this list", $studentKeyboard);
+                    telegramSendWithReplyMarkup($chatId, "📋 <b>Available commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n🎧 Support — book a support session\n❓ Help — show this list", $studentKeyboard);
 
                 } else {
                     // Log incoming message
@@ -3053,6 +3131,75 @@ try {
                         $stmt = db()->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, telegram_message_id, status) VALUES (?,?,?,?,?,?)");
                         $stmt->execute([$chatId, 'in', $text ?: '[contact/media]', 'reply', $msg['message_id'] ?? null, 'received']);
                     } catch (PDOException $e) { /* ignore */ }
+                }
+            }
+            // Handle callback_query (inline button taps — e.g. parent selecting their child)
+            $cbq = $input['callback_query'] ?? null;
+            if ($cbq) {
+                $cbChatId = (int)($cbq['message']['chat']['id'] ?? 0);
+                $cbData   = $cbq['callback_query_id'] ?? $cbq['id'] ?? '';
+                $data     = $cbq['data'] ?? '';
+                // Answer the callback to clear loading spinner
+                if ($cbData) {
+                    $ch = curl_init('https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/answerCallbackQuery');
+                    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode(['callback_query_id' => $cbData]), CURLOPT_HTTPHEADER => ['Content-Type: application/json'], CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+                    curl_exec($ch); curl_close($ch);
+                }
+                if ($data === 'noop') {
+                    // Day label button — ignore
+                } elseif (preg_match('/^support_(\d{4}-\d{2}-\d{2})_(\d{2}:\d{2})$/', $data, $m)) {
+                    $reqDate = $m[1]; $reqTime = $m[2];
+                    // Validate date is within next 7 calendar days
+                    $todayStr = date('Y-m-d'); $maxDateStr = date('Y-m-d', strtotime('+6 days'));
+                    if ($reqDate < $todayStr || $reqDate > $maxDateStr) {
+                        telegramSend($cbChatId, "❌ This slot is no longer available.", 'custom');
+                    } else {
+                    $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $linkRow->execute([$cbChatId]); $link = $linkRow->fetch();
+                    if (!$link || $link['entity_type'] !== 'student') {
+                        telegramSend($cbChatId, "❌ Link your account first using /start.", 'custom');
+                    } else {
+                        $studentId = (int)$link['entity_id'];
+                        // Check student has no active request
+                        $existing = db()->prepare("SELECT id FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE LIMIT 1");
+                        $existing->execute([$studentId]);
+                        if ($existing->fetch()) {
+                            telegramSend($cbChatId, "❌ You already have an active support request. Please wait for your session.", 'custom');
+                        } else {
+                            // Check slot still available
+                            $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
+                            $taken->execute([$reqDate, $reqTime]);
+                            if ($taken->fetch()) {
+                                telegramSend($cbChatId, "😔 This slot was just taken. Please send /support to see updated availability.", 'custom');
+                            } else {
+                                db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source) VALUES (?,?,?,'bot')")->execute([$studentId, $reqDate, $reqTime]);
+                                $dateStr = date('D, M j', strtotime($reqDate));
+                                $studentKeyboard = ['keyboard' => [[['text' => '💰 Balance'], ['text' => '📅 Schedule']], [['text' => '🎧 Support'], ['text' => '❓ Help']]], 'resize_keyboard' => true];
+                                telegramSendWithReplyMarkup($cbChatId, "✅ <b>Support session booked!</b>\n\n📅 {$dateStr} at {$reqTime}\n⏳ Status: Pending confirmation\n\nYou'll receive a notification once confirmed.", $studentKeyboard);
+                            }
+                        }
+                    }
+                    } // end date range check
+                } elseif (preg_match('/^link_student_(\d+)$/', $data, $m)) {
+                    $studentId = (int)$m[1];
+                    // Check not already linked
+                    $already = db()->prepare("SELECT id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $already->execute([$cbChatId]);
+                    if ($already->fetch()) {
+                        telegramSendWithReplyMarkup($cbChatId, "✅ Your account is already linked.", ['remove_keyboard' => true]);
+                    } else {
+                        $nameRow = db()->prepare("SELECT first_name || ' ' || last_name AS n FROM students WHERE id = ? AND deleted_at IS NULL");
+                        $nameRow->execute([$studentId]); $nameRow = $nameRow->fetch();
+                        $existing = db()->prepare("SELECT id FROM telegram_links WHERE entity_type = 'student' AND entity_id = ?");
+                        $existing->execute([$studentId]); $existingRow = $existing->fetch();
+                        if ($existingRow) {
+                            db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$cbChatId, $existingRow['id']]);
+                        } else {
+                            db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES ('student', ?, ?, NOW())")->execute([$studentId, $cbChatId]);
+                        }
+                        $studentKeyboard = ['keyboard' => [[['text' => '💰 Balance'], ['text' => '📅 Schedule']], [['text' => '🎧 Support'], ['text' => '❓ Help']]], 'resize_keyboard' => true];
+                        telegramSendWithReplyMarkup($cbChatId, "✅ Linked! Welcome, <b>" . htmlspecialchars($nameRow['n'] ?? '') . "</b>!\n\nUse the buttons below:", $studentKeyboard);
+                    }
                 }
             }
             jsonResponse(['ok' => true]);
@@ -3681,6 +3828,123 @@ try {
                     jsonError($ex->getMessage(), 500);
                 }
             } else { jsonError('Not found', 404); }
+            break;
+
+        case 'support-requests':
+            requireFeature('support_requests');
+            $SUPPORT_TIMES = ['14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
+            // Helper: get booked slots in date range
+            $getBooked = function(string $from, string $to): array {
+                $stmt = db()->prepare("SELECT scheduled_date::text, scheduled_time::text FROM support_requests WHERE scheduled_date BETWEEN ? AND ? AND status != 'cancelled'");
+                $stmt->execute([$from, $to]);
+                $booked = [];
+                foreach ($stmt->fetchAll() as $r) $booked[$r['scheduled_date'] . '_' . substr($r['scheduled_time'],0,5)] = true;
+                return $booked;
+            };
+
+            if ($method === 'GET' && $sub === 'slots') {
+                // GET /support-requests/slots?from=YYYY-MM-DD&to=YYYY-MM-DD
+                $from = $_GET['from'] ?? date('Y-m-d');
+                $to   = $_GET['to']   ?? date('Y-m-d', strtotime('+7 days'));
+                $booked = $getBooked($from, $to);
+                $slots = [];
+                $cur = new DateTime($from);
+                $end = new DateTime($to);
+                while ($cur <= $end) {
+                    $dow = (int)$cur->format('N'); // 1=Mon,7=Sun
+                    if ($dow <= 6) { // Mon-Sat
+                        $d = $cur->format('Y-m-d');
+                        foreach ($SUPPORT_TIMES as $t) {
+                            if (!isset($booked[$d . '_' . $t])) $slots[] = ['date' => $d, 'time' => $t];
+                        }
+                    }
+                    $cur->modify('+1 day');
+                }
+                jsonResponse($slots);
+
+            } elseif ($method === 'GET') {
+                $from = $_GET['from'] ?? date('Y-m-d', strtotime('monday this week'));
+                $to   = $_GET['to']   ?? date('Y-m-d', strtotime('saturday this week'));
+                $stmt = db()->prepare("
+                    SELECT sr.id, sr.student_id, sr.status, sr.source, sr.assigned_to,
+                           sr.notes, sr.cancelled_reason, sr.created_by, sr.created_at, sr.updated_at,
+                           sr.scheduled_date::text AS scheduled_date,
+                           TO_CHAR(sr.scheduled_time, 'HH24:MI') AS scheduled_time,
+                           s.first_name || ' ' || s.last_name AS student_name, s.phone AS student_phone,
+                           e.full_name AS assigned_to_name,
+                           cb.name AS created_by_name
+                    FROM support_requests sr
+                    LEFT JOIN students s ON sr.student_id = s.id
+                    LEFT JOIN employees e ON sr.assigned_to = e.id
+                    LEFT JOIN users cb ON sr.created_by = cb.id
+                    WHERE sr.scheduled_date BETWEEN ? AND ?
+                    ORDER BY sr.scheduled_date, sr.scheduled_time
+                ");
+                $stmt->execute([$from, $to]);
+                jsonResponse($stmt->fetchAll());
+
+            } elseif ($method === 'POST') {
+                $studentId = (int)($input['student_id'] ?? 0);
+                $date = $input['scheduled_date'] ?? '';
+                $time = $input['scheduled_time'] ?? '';
+                if (!$studentId || !$date || !$time) { jsonError('student_id, scheduled_date and scheduled_time are required'); break; }
+                if ($date < date('Y-m-d') || $date > date('Y-m-d', strtotime('+6 days'))) { jsonError('Date must be within the next 7 days'); break; }
+                if (!in_array($time, $SUPPORT_TIMES)) { jsonError('Invalid time slot'); break; }
+                // Check slot not taken
+                $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
+                $taken->execute([$date, $time]);
+                if ($taken->fetch()) { jsonError('This time slot is already booked'); break; }
+                $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
+                $stmt = db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source, created_by, notes) VALUES (?,?,?,?,?,?)");
+                $stmt->execute([$studentId, $date, $time, $input['source'] ?? 'manual', $createdBy, $input['notes'] ?? null]);
+                jsonResponse(['id' => (int)db()->lastInsertId()]);
+
+            } elseif ($method === 'PUT' && $id) {
+                $action = $input['action'] ?? '';
+                if ($action === 'confirm') {
+                    $assignedTo = (int)($input['assigned_to'] ?? 0);
+                    if (!$assignedTo) { jsonError('assigned_to is required'); break; }
+                    db()->prepare("UPDATE support_requests SET status='confirmed', assigned_to=?, updated_at=NOW() WHERE id=?")->execute([$assignedTo, $id]);
+                    // Notify student via Telegram
+                    $row = db()->prepare("SELECT sr.student_id, sr.scheduled_date, sr.scheduled_time, e.full_name AS ta_name, e.teacher_id AS ta_teacher_id FROM support_requests sr LEFT JOIN employees e ON sr.assigned_to=e.id WHERE sr.id=?");
+                    $row->execute([$id]); $row = $row->fetch();
+                    if ($row) {
+                        $dateStr = date('D, M j', strtotime($row['scheduled_date']));
+                        $msg = "✅ Your support request has been <b>confirmed</b>!\n\n📅 {$dateStr} at " . substr($row['scheduled_time'],0,5) . "\n👤 Teacher: {$row['ta_name']}";
+                        telegramNotifyStudent((int)$row['student_id'], $msg, 'custom');
+                        // Also notify the TA via their teacher Telegram link
+                        if ($row['ta_teacher_id']) {
+                            $taLink = db()->prepare("SELECT chat_id FROM telegram_links WHERE entity_type='teacher' AND entity_id=? AND linked_at IS NOT NULL");
+                            $taLink->execute([$row['ta_teacher_id']]); $taLink = $taLink->fetch();
+                            if ($taLink && $taLink['chat_id']) {
+                                $stName = db()->prepare("SELECT first_name||' '||last_name AS n FROM students WHERE id=?");
+                                $stName->execute([$row['student_id']]); $stName = $stName->fetchColumn();
+                                telegramSend((int)$taLink['chat_id'], "📋 New support session assigned to you!\n\n👤 Student: {$stName}\n📅 {$dateStr} at " . substr($row['scheduled_time'],0,5), 'custom');
+                            }
+                        }
+                    }
+                    jsonResponse(['ok' => true]);
+                } elseif ($action === 'cancel') {
+                    $reason = $input['reason'] ?? null;
+                    db()->prepare("UPDATE support_requests SET status='cancelled', cancelled_reason=?, updated_at=NOW() WHERE id=?")->execute([$reason, $id]);
+                    // Notify student
+                    $row = db()->prepare("SELECT student_id, scheduled_date, scheduled_time FROM support_requests WHERE id=?");
+                    $row->execute([$id]); $row = $row->fetch();
+                    if ($row) {
+                        $dateStr = date('D, M j', strtotime($row['scheduled_date']));
+                        telegramNotifyStudent((int)$row['student_id'], "❌ Your support request on {$dateStr} at {$row['scheduled_time']} has been <b>cancelled</b>." . ($reason ? "\nReason: {$reason}" : ''), 'custom');
+                    }
+                    jsonResponse(['ok' => true]);
+                } else {
+                    jsonError('Invalid action');
+                }
+
+            } elseif ($method === 'DELETE' && $id) {
+                db()->prepare("DELETE FROM support_requests WHERE id=?")->execute([$id]);
+                jsonResponse(['ok' => true]);
+            } else {
+                jsonError('Method not allowed', 405);
+            }
             break;
 
         default:

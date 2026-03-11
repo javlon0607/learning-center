@@ -744,6 +744,7 @@ export interface Student {
   last_name: string
   dob?: string
   phone?: string
+  phone2?: string
   email?: string
   parent_name?: string
   parent_phone?: string
@@ -1091,6 +1092,44 @@ export const telegramApi = {
     api.post<{ sent: number; failed: number; errors: string[] }>('/telegram', { action: 'send', target_type, target_id, message }),
   clearQueue: () =>
     api.post<{ ok: boolean; message: string }>('/telegram', { action: 'clear-queue' }),
+}
+
+export interface SupportRequest {
+  id: number
+  student_id: number
+  student_name?: string
+  student_phone?: string
+  scheduled_date: string
+  scheduled_time: string
+  status: 'pending' | 'confirmed' | 'cancelled'
+  assigned_to?: number
+  assigned_to_name?: string
+  notes?: string
+  source: 'bot' | 'manual'
+  cancelled_reason?: string
+  created_by?: number
+  created_by_name?: string
+  created_at: string
+}
+
+export interface SupportSlot {
+  date: string
+  time: string
+}
+
+export const supportRequestsApi = {
+  getAll: (from: string, to: string) =>
+    api.get<SupportRequest[]>(`/support-requests?from=${from}&to=${to}`),
+  getSlots: (from: string, to: string) =>
+    api.get<SupportSlot[]>(`/support-requests/slots?from=${from}&to=${to}`),
+  create: (data: { student_id: number; scheduled_date: string; scheduled_time: string; notes?: string }) =>
+    api.post<{ id: number }>('/support-requests', { ...data, source: 'manual' }),
+  confirm: (id: number, assigned_to: number) =>
+    api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'confirm', assigned_to }),
+  cancel: (id: number, reason?: string) =>
+    api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'cancel', reason }),
+  delete: (id: number) =>
+    api.delete(`/support-requests/${id}`),
 }
 
 /** Unified audit log: tracks all entity changes and actions with before/after values and timestamp. */

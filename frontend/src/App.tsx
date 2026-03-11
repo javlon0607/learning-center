@@ -24,6 +24,7 @@ import { Translations } from '@/pages/Translations'
 import { Telegram } from '@/pages/Telegram'
 import { Employees } from '@/pages/Employees'
 import { Books } from '@/pages/Books'
+import { SupportRequests } from '@/pages/SupportRequests'
 
 function App() {
   return (
@@ -54,6 +55,7 @@ function App() {
           <Route path="telegram" element={<Telegram />} />
           <Route path="employees" element={<Employees />} />
           <Route path="books" element={<Books />} />
+          <Route path="support" element={<SupportRequests />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

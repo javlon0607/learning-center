@@ -11,7 +11,7 @@ if (!defined('IS_API')) {
     $uri = $_SERVER['REQUEST_URI'] ?? '';
     define('IS_API', strpos($uri, '/api') !== false || !empty($_SERVER['HTTP_X_REQUESTED_WITH']));
 }
-
+biz endi bot orqali studentlardan support teacherdan yordam olish uchun request qabul qilib olishimiz kerak. support vaqti dushanmadan shanbagacha soat 14:00dan 18:00gacha bo'ladi, duration 30 minut. student shu vaqat oralig;idagi vaqtni tanlashi kerak. masalan seshanba kuni 14:30. keyingi o'quchi bu vaqtni tanlay olmasin chunki bu vaqtsa support teacher band bo'ladi, endi keyingi o'quvchi masalan 15:00ni tanlashi mumkin. available vaqtlarni ko'rsatib qoyish kere, shuni ichidan tanlaysi student. va ushbu request tizimdagi yangi page ga kelib tushadi. ushbu pagedagi requestlardan kelib chiqib admin support teacherni ogohlantiradi. ushbu page da support requestlar admin tomonidan manual qo'shilishi ham mumkin. 1 o'quvchining activ requesti bor bo'lsa va hali support vaqti/kuni kelmagan bo'lsa yangi request yarata olmasligi kerak. yangi pageni o'zing kerakli shaklda professional uslubda ishlab chiq.
 function db() {
     static $pdo = null;
     if (!$pdo) {

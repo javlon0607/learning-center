@@ -1134,6 +1134,30 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Support request translation keys
+    try {
+        $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?,?,?) ON CONFLICT DO NOTHING");
+        $supKeys = [
+            ['en','nav.support','Support'],          ['uz','nav.support','Yordam'],
+            ['en','sup.title','Support Requests'],   ['uz','sup.title','Yordam so\'rovlari'],
+            ['en','sup.add','Add Request'],           ['uz','sup.add','So\'rov qo\'shish'],
+            ['en','sup.status_pending','Pending'],    ['uz','sup.status_pending','Kutilmoqda'],
+            ['en','sup.status_confirmed','Confirmed'],['uz','sup.status_confirmed','Tasdiqlangan'],
+            ['en','sup.status_cancelled','Cancelled'],['uz','sup.status_cancelled','Bekor qilingan'],
+            ['en','sup.confirm','Confirm'],           ['uz','sup.confirm','Tasdiqlash'],
+            ['en','sup.cancel','Cancel'],             ['uz','sup.cancel','Bekor qilish'],
+            ['en','sup.assign_ta','Assign Teaching Assistant'],['uz','sup.assign_ta','Yordam o\'qituvchini tanlang'],
+            ['en','sup.student','Student'],           ['uz','sup.student','O\'quvchi'],
+            ['en','sup.date','Date'],                 ['uz','sup.date','Sana'],
+            ['en','sup.time','Time'],                 ['uz','sup.time','Vaqt'],
+            ['en','sup.assigned_to','Assigned To'],  ['uz','sup.assigned_to','Tayinlangan'],
+            ['en','sup.notes','Notes'],               ['uz','sup.notes','Izoh'],
+            ['en','sup.source','Source'],             ['uz','sup.source','Manba'],
+            ['en','sup.no_requests','No requests this week'],['uz','sup.no_requests','Bu haftada so\'rovlar yo\'q'],
+        ];
+        foreach ($supKeys as [$lang, $key, $value]) { $stmt->execute([$lang, $key, $value]); }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: Add created_by to payments
     try {
         $m = 'add_payment_created_by';
@@ -1225,6 +1249,61 @@ function initDB() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: support_requests table
+    try {
+        $m = 'support_requests_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS support_requests (
+                    id SERIAL PRIMARY KEY,
+                    student_id INT REFERENCES students(id),
+                    scheduled_date DATE NOT NULL,
+                    scheduled_time TIME NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    assigned_to INT REFERENCES users(id),
+                    notes TEXT,
+                    source VARCHAR(20) DEFAULT 'manual',
+                    cancelled_reason TEXT,
+                    created_by INT REFERENCES users(id),
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(scheduled_date, scheduled_time)
+                )
+            ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('support_requests_202603')");
+        }
+    } catch (Exception $e) { error_log("Migration support_requests_202603 failed: " . $e->getMessage()); }
+
+    // Migration: support_requests permission
+    try {
+        $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+        $stmt->execute(['owner', 'support_requests']);
+        $stmt->execute(['admin', 'support_requests']);
+        $stmt->execute(['manager', 'support_requests']);
+    } catch (Exception $e) {}
+
+    // Migration: support_requests assigned_to → employees FK
+    try {
+        $m = 'support_requests_assigned_employee_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE support_requests DROP CONSTRAINT IF EXISTS support_requests_assigned_to_fkey");
+            getDB()->exec("ALTER TABLE support_requests ADD CONSTRAINT support_requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES employees(id)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (Exception $e) { error_log("Migration support_requests_assigned_employee_202603 failed: " . $e->getMessage()); }
+
+    // Migration: add phone2 to students
+    try {
+        $m = 'students_phone2_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE students ADD COLUMN IF NOT EXISTS phone2 VARCHAR(20)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (Exception $e) { error_log("Migration $m failed: " . $e->getMessage()); }
 
     // Migration: create monthly_discounts table
     try {
@@ -2028,4 +2107,30 @@ function telegramSendWithReplyMarkup(int $chatId, string $text, array $replyMark
     curl_close($ch);
     $result = json_decode($response, true);
     return ['ok' => !empty($result['ok']), 'error' => $result['description'] ?? ''];
+}
+
+// Returns true if phone is already taken across students/teachers/leads/users.
+// $skipTable/$skipId/$skipField: exclude the current record when updating.
+function isPhoneTaken(string $phone, string $skipTable = '', int $skipId = 0, string $skipField = 'phone'): bool {
+    if (!$phone) return false;
+    $norm = substr(preg_replace('/[^0-9]/', '', $phone), -9);
+    if (strlen($norm) < 7) return false;
+    $db = getDB();
+    $fn = "RIGHT(regexp_replace(COALESCE(%s,''),'[^0-9]','','g'),9)";
+    $checks = [
+        ['students', 'phone',  "deleted_at IS NULL"],
+        ['students', 'phone2', "deleted_at IS NULL AND phone2 IS NOT NULL AND phone2 != ''"],
+        ['teachers', 'phone',  "1=1"],
+        ['leads',    'phone',  "status != 'closed' AND deleted_at IS NULL"],
+        ['users',    'phone',  "is_active = true"],
+    ];
+    foreach ($checks as [$table, $field, $cond]) {
+        if ($table === $skipTable && $field === $skipField) continue;
+        $excludeId = ($table === $skipTable && $skipId > 0) ? " AND id != " . (int)$skipId : "";
+        $q = "SELECT 1 FROM {$table} WHERE " . sprintf($fn, $field) . " = ? AND {$cond}{$excludeId} LIMIT 1";
+        $s = $db->prepare($q);
+        $s->execute([$norm]);
+        if ($s->fetch()) return true;
+    }
+    return false;
 }
