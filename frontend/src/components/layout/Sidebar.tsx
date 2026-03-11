@@ -20,6 +20,7 @@ import {
   Languages,
   Send,
   Briefcase,
+  BookOpen,
 } from 'lucide-react'
 
 const navigation = [
@@ -33,6 +34,7 @@ const navigation = [
   { key: 'nav.expenses',     href: '/expenses',     icon: Receipt,         feature: 'expenses' },
   { key: 'nav.collections',  href: '/collections',  icon: PhoneCall,       feature: 'collections' },
   { key: 'nav.employees',   href: '/employees',    icon: Briefcase,       feature: 'employees' },
+  { key: 'nav.books',       href: '/books',        icon: BookOpen,        feature: 'books' },
   { key: 'nav.reports',      href: '/reports',      icon: BarChart3,       feature: 'reports' },
   { key: 'nav.logs',         href: '/logs',         icon: ScrollText,      feature: 'logs' },
   { key: 'nav.settings',     href: '/settings',     icon: Settings,        feature: 'settings' },

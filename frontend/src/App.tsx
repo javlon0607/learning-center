@@ -23,6 +23,7 @@ import { Permissions } from '@/pages/Permissions'
 import { Translations } from '@/pages/Translations'
 import { Telegram } from '@/pages/Telegram'
 import { Employees } from '@/pages/Employees'
+import { Books } from '@/pages/Books'
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
           <Route path="translations" element={<Translations />} />
           <Route path="telegram" element={<Telegram />} />
           <Route path="employees" element={<Employees />} />
+          <Route path="books" element={<Books />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

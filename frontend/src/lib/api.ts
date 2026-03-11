@@ -144,6 +144,15 @@ export const api = {
     return handleResponse<T>(response)
   },
 
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    const response = await fetchWithAuth(`${API_BASE}${endpoint}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: data ? JSON.stringify(data) : undefined,
+    })
+    return handleResponse<T>(response)
+  },
+
   async delete<T>(endpoint: string): Promise<T> {
     const response = await fetchWithAuth(`${API_BASE}${endpoint}`, {
       method: 'DELETE',
@@ -628,6 +637,75 @@ export const cronNotificationsApi = {
   run: () => api.post<{ ok: boolean; notifications_created: number }>('/cron-notifications'),
 }
 
+// Books API
+export interface Book {
+  id: number
+  title: string
+  author?: string
+  isbn?: string
+  price: number
+  quantity: number
+  description?: string
+  issued_count: number
+  available: number
+  unpaid_amount: number
+  unpaid_count: number
+  created_at: string
+}
+
+export interface BookIssue {
+  id: number
+  book_id: number
+  book_title?: string
+  book_price?: number
+  student_id: number
+  student_name?: string
+  quantity: number
+  total_price: number
+  payment_id?: number
+  issued_by?: number
+  issued_at: string
+  notes?: string
+  is_paid: boolean
+}
+
+export interface BookIssuesResponse {
+  data: BookIssue[]
+  total: number
+  page: number
+  per_page: number
+}
+
+export interface BookMonthStat {
+  month: string
+  issues_count: number
+  books_count: number
+  total_revenue: number
+  paid_revenue: number
+  unpaid_revenue: number
+}
+
+export const booksApi = {
+  getAll: () => api.get<Book[]>('/books'),
+  getStats: () => api.get<BookMonthStat[]>('/books', { stats: '1' }),
+  create: (data: { title: string; author?: string; isbn?: string; price: number; quantity: number; description?: string }) =>
+    api.post<{ id: number }>('/books', data),
+  update: (id: number, data: Partial<{ title: string; author: string; isbn: string; price: number; quantity: number; description: string }>) =>
+    api.put<{ ok: boolean }>(`/books/${id}`, data),
+  delete: (id: number) => api.delete<{ ok: boolean }>(`/books/${id}`),
+}
+
+export const bookIssuesApi = {
+  getAll: (params?: { book_id?: string; student_id?: string; group_id?: string; is_paid?: string; page?: string; per_page?: string }) =>
+    api.get<BookIssuesResponse>('/book-issues', params),
+  create: (data: { book_id: number; student_id: number; quantity: number; notes?: string }) =>
+    api.post<{ id: number }>('/book-issues', data),
+  createBulk: (data: { book_id: number; students: { student_id: number; quantity: number }[]; notes?: string }) =>
+    api.post<{ ids: number[]; count: number }>('/book-issues', data),
+  markPaid: (id: number, method: string) =>
+    api.patch<{ ok: boolean; payment_id: number }>(`/book-issues/${id}`, { method }),
+}
+
 // Profile API (update current user)
 export const profileApi = {
   update: (data: { name?: string; email?: string; phone?: string }) =>
@@ -735,6 +813,7 @@ export interface Enrollment {
   group_id: number
   student_name?: string
   student_phone?: string
+  parent_phone?: string
   group_name?: string
   group_price?: number
   enrolled_at: string

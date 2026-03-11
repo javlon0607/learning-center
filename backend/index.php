@@ -22,9 +22,9 @@ if ($sub === '' && isset($segments[1]) && !ctype_digit($segments[1])) {
 }
 
 $input = [];
-if (in_array($method, ['POST', 'PUT']) && strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
+if (in_array($method, ['POST', 'PUT', 'PATCH']) && strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
     $input = json_decode(file_get_contents('php://input'), true) ?: [];
-} elseif ($method === 'POST' || $method === 'PUT') {
+} elseif ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
     $input = $_POST ?: (json_decode(file_get_contents('php://input'), true) ?: []);
 }
 
@@ -568,7 +568,7 @@ try {
                 $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
                 $student = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
                 if ($group) {
-                    $stmt = db()->prepare("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name, s.phone AS student_phone FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ?");
+                    $stmt = db()->prepare("SELECT e.*, s.first_name || ' ' || s.last_name AS student_name, s.phone AS student_phone, s.parent_phone FROM enrollments e JOIN students s ON e.student_id = s.id WHERE e.group_id = ?");
                     $stmt->execute([$group]);
                 } elseif ($student) {
                     $stmt = db()->prepare("SELECT e.*, g.name AS group_name, g.price AS group_price FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = ?");
@@ -3218,6 +3218,268 @@ try {
                 db()->prepare("UPDATE salary_records SET paid = TRUE, paid_at = NOW(), paid_by = ? WHERE month = ? AND paid = FALSE")
                     ->execute([$paidBy, $month]);
                 jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'books':
+            requireFeature('books');
+            if ($method === 'GET' && !$id) {
+                if (!empty($_GET['stats'])) {
+                    // Monthly revenue report
+                    $rows = db()->query("
+                        SELECT
+                            TO_CHAR(bi.issued_at, 'YYYY-MM') AS month,
+                            COUNT(*) AS issues_count,
+                            COALESCE(SUM(bi.quantity), 0) AS books_count,
+                            COALESCE(SUM(bi.total_price), 0) AS total_revenue,
+                            COALESCE(SUM(bi.total_price) FILTER (WHERE bi.is_paid), 0) AS paid_revenue,
+                            COALESCE(SUM(bi.total_price) FILTER (WHERE NOT bi.is_paid), 0) AS unpaid_revenue
+                        FROM book_issues bi
+                        WHERE bi.deleted_at IS NULL
+                        GROUP BY TO_CHAR(bi.issued_at, 'YYYY-MM')
+                        ORDER BY month DESC
+                        LIMIT 24
+                    ")->fetchAll();
+                    jsonResponse($rows);
+                } else {
+                    $rows = db()->query("
+                        SELECT b.*,
+                            COALESCE(SUM(bi.quantity) FILTER (WHERE bi.deleted_at IS NULL), 0) AS issued_count,
+                            b.quantity - COALESCE(SUM(bi.quantity) FILTER (WHERE bi.deleted_at IS NULL), 0) AS available,
+                            COALESCE(SUM(bi.total_price) FILTER (WHERE bi.deleted_at IS NULL AND NOT bi.is_paid), 0) AS unpaid_amount,
+                            COALESCE(COUNT(*) FILTER (WHERE bi.deleted_at IS NULL AND NOT bi.is_paid), 0) AS unpaid_count
+                        FROM books b
+                        LEFT JOIN book_issues bi ON bi.book_id = b.id
+                        WHERE b.deleted_at IS NULL
+                        GROUP BY b.id
+                        ORDER BY b.title
+                    ")->fetchAll();
+                    jsonResponse($rows);
+                }
+            } elseif ($method === 'GET' && $id) {
+                $stmt = db()->prepare("SELECT * FROM books WHERE id = ? AND deleted_at IS NULL");
+                $stmt->execute([$id]);
+                $book = $stmt->fetch();
+                if (!$book) jsonError('Not found', 404);
+                jsonResponse($book);
+            } elseif ($method === 'POST' && !$id) {
+                $title = trim($input['title'] ?? '');
+                if (!$title) jsonError('Title is required', 400);
+                $price    = max(0, (float)($input['price']    ?? 0));
+                $quantity = max(0, (int)  ($input['quantity'] ?? 0));
+                $stmt = db()->prepare("INSERT INTO books (title, author, isbn, price, quantity, description) VALUES (?, ?, ?, ?, ?, ?) RETURNING id");
+                $stmt->execute([$title, $input['author'] ?? null, $input['isbn'] ?? null, $price, $quantity, $input['description'] ?? null]);
+                $row = $stmt->fetch();
+                jsonResponse(['id' => (int)$row['id']]);
+            } elseif ($method === 'PUT' && $id) {
+                $stmt = db()->prepare("SELECT id FROM books WHERE id = ? AND deleted_at IS NULL");
+                $stmt->execute([$id]);
+                if (!$stmt->fetch()) jsonError('Not found', 404);
+                // Validate quantity >= issued count
+                if (isset($input['quantity'])) {
+                    $newQty = max(0, (int)$input['quantity']);
+                    $issuedStmt = db()->prepare("SELECT COALESCE(SUM(quantity), 0) FROM book_issues WHERE book_id = ? AND deleted_at IS NULL");
+                    $issuedStmt->execute([$id]);
+                    $issuedCount = (int)$issuedStmt->fetchColumn();
+                    if ($newQty < $issuedCount) {
+                        jsonError('Quantity cannot be less than already issued count (' . $issuedCount . ')', 400);
+                        break;
+                    }
+                }
+                $fields = [];
+                $vals   = [];
+                foreach (['title','author','isbn','description'] as $f) {
+                    if (isset($input[$f])) { $fields[] = "$f = ?"; $vals[] = $input[$f]; }
+                }
+                if (isset($input['price']))    { $fields[] = 'price = ?';    $vals[] = max(0, (float)$input['price']); }
+                if (isset($input['quantity'])) { $fields[] = 'quantity = ?'; $vals[] = max(0, (int)$input['quantity']); }
+                if ($fields) {
+                    $vals[] = $id;
+                    db()->prepare("UPDATE books SET " . implode(', ', $fields) . " WHERE id = ?")->execute($vals);
+                }
+                jsonResponse(['ok' => true]);
+            } elseif ($method === 'DELETE' && $id) {
+                requireFeature('books_delete');
+                db()->prepare("UPDATE book_issues SET deleted_at = NOW() WHERE book_id = ? AND deleted_at IS NULL")->execute([$id]);
+                db()->prepare("UPDATE books SET deleted_at = NOW() WHERE id = ?")->execute([$id]);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'book-issues':
+            requireFeature('books');
+            if ($method === 'GET') {
+                $bookId       = $_GET['book_id']    ?? null;
+                $studentId    = $_GET['student_id'] ?? null;
+                $groupId      = $_GET['group_id']   ?? null;
+                $isPaidFilter = $_GET['is_paid']    ?? null;
+                $page    = max(1, (int)($_GET['page']     ?? 1));
+                $perPage = min(100, max(5, (int)($_GET['per_page'] ?? 20)));
+                $offset  = ($page - 1) * $perPage;
+
+                $where  = ['bi.deleted_at IS NULL'];
+                $params = [];
+                if ($bookId)               { $where[] = 'bi.book_id = ?';    $params[] = (int)$bookId; }
+                if ($studentId)            { $where[] = 'bi.student_id = ?'; $params[] = (int)$studentId; }
+                if ($groupId)              { $where[] = 'bi.student_id IN (SELECT student_id FROM enrollments WHERE group_id = ?)'; $params[] = (int)$groupId; }
+                if ($isPaidFilter === '1') { $where[] = 'bi.is_paid = TRUE'; }
+                elseif ($isPaidFilter === '0') { $where[] = 'bi.is_paid = FALSE'; }
+
+                $whereClause = implode(' AND ', $where);
+
+                $cStmt = db()->prepare("SELECT COUNT(*) FROM book_issues bi WHERE $whereClause");
+                $cStmt->execute($params);
+                $total = (int)$cStmt->fetchColumn();
+
+                $dStmt = db()->prepare("
+                    SELECT bi.*,
+                        b.title AS book_title,
+                        b.price AS book_price,
+                        s.first_name || ' ' || s.last_name AS student_name
+                    FROM book_issues bi
+                    JOIN books b ON b.id = bi.book_id
+                    JOIN students s ON s.id = bi.student_id
+                    WHERE $whereClause
+                    ORDER BY bi.issued_at DESC
+                    LIMIT ? OFFSET ?
+                ");
+                $dStmt->execute(array_merge($params, [$perPage, $offset]));
+
+                jsonResponse([
+                    'data'     => $dStmt->fetchAll(),
+                    'total'    => $total,
+                    'page'     => $page,
+                    'per_page' => $perPage,
+                ]);
+            } elseif ($method === 'POST') {
+                $bookId = (int)($input['book_id'] ?? 0);
+                $notes  = $input['notes'] ?? null;
+                if (!$bookId) jsonError('book_id required', 400);
+
+                // ── Bulk issue: students array provided ──────────────────
+                if (isset($input['students']) && is_array($input['students'])) {
+                    $students = array_values(array_filter($input['students'], fn($s) => !empty($s['student_id'])));
+                    if (empty($students)) jsonError('No students provided', 400);
+
+                    $totalQty = array_sum(array_map(fn($s) => max(1, (int)($s['quantity'] ?? 1)), $students));
+
+                    db()->beginTransaction();
+                    try {
+                        // Lock book row (no GROUP BY allowed with FOR UPDATE)
+                        $bStmt = db()->prepare("SELECT id, title, price, quantity FROM books WHERE id = ? AND deleted_at IS NULL FOR UPDATE");
+                        $bStmt->execute([$bookId]);
+                        $book = $bStmt->fetch();
+                        if (!$book) { db()->rollBack(); jsonError('Book not found', 404); break; }
+
+                        $cStmt = db()->prepare("SELECT COALESCE(SUM(quantity),0) FROM book_issues WHERE book_id = ? AND deleted_at IS NULL");
+                        $cStmt->execute([$bookId]);
+                        $issuedCount = (int)$cStmt->fetchColumn();
+
+                        $available = (int)$book['quantity'] - $issuedCount;
+                        if ($totalQty > $available) {
+                            db()->rollBack();
+                            jsonError('Not enough stock. Available: ' . $available . ', needed: ' . $totalQty, 400);
+                            break;
+                        }
+
+                        $issuedBy = $GLOBALS['jwt_user']['id'] ?? null;
+                        $iStmt = db()->prepare("
+                            INSERT INTO book_issues (book_id, student_id, quantity, total_price, issued_by, notes)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            RETURNING id
+                        ");
+                        $ids = [];
+                        foreach ($students as $s) {
+                            $sid = (int)($s['student_id'] ?? 0);
+                            $qty = max(1, (int)($s['quantity'] ?? 1));
+                            if (!$sid) continue;
+                            $iStmt->execute([$bookId, $sid, $qty, round((float)$book['price'] * $qty, 2), $issuedBy, $notes]);
+                            $ids[] = (int)$iStmt->fetch()['id'];
+                        }
+
+                        db()->commit();
+                        jsonResponse(['ids' => $ids, 'count' => count($ids)]);
+                    } catch (Exception $ex) {
+                        db()->rollBack();
+                        jsonError($ex->getMessage(), 500);
+                    }
+
+                // ── Single issue ─────────────────────────────────────────
+                } else {
+                    $studentId = (int)($input['student_id'] ?? 0);
+                    $qty       = max(1, (int)($input['quantity'] ?? 1));
+                    if (!$studentId) jsonError('student_id required', 400);
+
+                    db()->beginTransaction();
+                    try {
+                        // Lock book row
+                        $bStmt = db()->prepare("SELECT id, title, price, quantity FROM books WHERE id = ? AND deleted_at IS NULL FOR UPDATE");
+                        $bStmt->execute([$bookId]);
+                        $book = $bStmt->fetch();
+                        if (!$book) { db()->rollBack(); jsonError('Book not found', 404); break; }
+
+                        $cStmt = db()->prepare("SELECT COALESCE(SUM(quantity),0) FROM book_issues WHERE book_id = ? AND deleted_at IS NULL");
+                        $cStmt->execute([$bookId]);
+                        $issuedCount = (int)$cStmt->fetchColumn();
+
+                        $available = (int)$book['quantity'] - $issuedCount;
+                        if ($qty > $available) { db()->rollBack(); jsonError('Not enough stock. Available: ' . $available, 400); break; }
+
+                        $issuedBy = $GLOBALS['jwt_user']['id'] ?? null;
+                        $iStmt = db()->prepare("
+                            INSERT INTO book_issues (book_id, student_id, quantity, total_price, issued_by, notes)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                            RETURNING id
+                        ");
+                        $iStmt->execute([$bookId, $studentId, $qty, round((float)$book['price'] * $qty, 2), $issuedBy, $notes]);
+                        $issueId = (int)$iStmt->fetch()['id'];
+
+                        db()->commit();
+                        jsonResponse(['id' => $issueId]);
+                    } catch (Exception $ex) {
+                        db()->rollBack();
+                        jsonError($ex->getMessage(), 500);
+                    }
+                }
+            } elseif ($method === 'PATCH' && $id) {
+                // Mark book issue as paid
+                $payMethod = $input['method'] ?? 'cash';
+
+                $stmt = db()->prepare("
+                    SELECT bi.*, b.title AS book_title
+                    FROM book_issues bi
+                    JOIN books b ON b.id = bi.book_id
+                    WHERE bi.id = ? AND bi.deleted_at IS NULL
+                ");
+                $stmt->execute([$id]);
+                $issue = $stmt->fetch();
+                if (!$issue) { jsonError('Not found', 404); break; }
+                if ($issue['is_paid'] === true || $issue['is_paid'] === 't' || $issue['is_paid'] === '1' || $issue['is_paid'] === 1) {
+                    jsonError('Already marked as paid', 400); break;
+                }
+
+                $issuedBy = $GLOBALS['jwt_user']['id'] ?? null;
+                $today    = date('Y-m-d');
+
+                db()->beginTransaction();
+                try {
+                    $payNote = 'Book: ' . $issue['book_title'];
+                    $pStmt = db()->prepare("
+                        INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes, created_by, is_approved, approved_at)
+                        VALUES (?, NULL, ?, ?, ?, ?, ?, TRUE, NOW())
+                        RETURNING id
+                    ");
+                    $pStmt->execute([$issue['student_id'], $issue['total_price'], $today, $payMethod, $payNote, $issuedBy]);
+                    $paymentId = (int)$pStmt->fetch()['id'];
+
+                    db()->prepare("UPDATE book_issues SET is_paid = TRUE, payment_id = ? WHERE id = ?")->execute([$paymentId, $id]);
+
+                    db()->commit();
+                    jsonResponse(['ok' => true, 'payment_id' => $paymentId]);
+                } catch (Exception $ex) {
+                    db()->rollBack();
+                    jsonError($ex->getMessage(), 500);
+                }
             } else { jsonError('Not found', 404); }
             break;
 

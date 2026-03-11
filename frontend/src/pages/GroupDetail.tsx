@@ -78,7 +78,7 @@ export function GroupDetail() {
       <tr>
         <td>${i + 1}</td>
         <td>${e.student_name ?? ''}</td>
-        <td>${e.student_phone ?? ''}</td>
+        <td>${e.student_phone ?? ''}${e.parent_phone ? `<br/><span style="color:#555">${e.parent_phone}</span>` : ''}</td>
         ${Array(14).fill('<td></td>').join('')}
       </tr>`).join('')
 
@@ -193,13 +193,13 @@ export function GroupDetail() {
       padding: 0 4px;
       text-align: center;
       vertical-align: middle;
-      border: 1px solid #999;
+      border: 1px solid #000;
     }
     th:nth-child(2) { text-align: left; padding-left: 8px; }
 
     tbody tr { height: 26px; }
     td {
-      border: 1px solid #bbb;
+      border: 1px solid #000;
       padding: 0 4px;
       text-align: center;
       vertical-align: middle;

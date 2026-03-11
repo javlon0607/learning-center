@@ -1490,6 +1490,181 @@ function initDB() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: create books and book_issues tables
+    try {
+        $m = 'create_books_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS books (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    author VARCHAR(255),
+                    isbn VARCHAR(100),
+                    price NUMERIC(10,2) NOT NULL DEFAULT 0,
+                    quantity INT NOT NULL DEFAULT 0,
+                    description TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    deleted_at TIMESTAMPTZ
+                )
+            ");
+            getDB()->exec("
+                CREATE TABLE IF NOT EXISTS book_issues (
+                    id SERIAL PRIMARY KEY,
+                    book_id INT NOT NULL REFERENCES books(id),
+                    student_id INT NOT NULL REFERENCES students(id),
+                    quantity INT NOT NULL DEFAULT 1,
+                    total_price NUMERIC(10,2) NOT NULL DEFAULT 0,
+                    payment_id INT REFERENCES payments(id),
+                    issued_by INT REFERENCES users(id),
+                    issued_at TIMESTAMPTZ DEFAULT NOW(),
+                    notes TEXT,
+                    deleted_at TIMESTAMPTZ
+                )
+            ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add is_paid to book_issues
+    try {
+        $m = 'book_issues_is_paid_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE book_issues ADD COLUMN IF NOT EXISTS is_paid BOOLEAN NOT NULL DEFAULT FALSE");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add books permission for default roles
+    try {
+        $m = 'books_permission_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            foreach ([['admin','books'],['owner','books'],['manager','books']] as [$role, $feature]) {
+                $stmt->execute([$role, $feature]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: books page full translations
+    try {
+        $m = 'books_translations_full_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO UPDATE SET value = EXCLUDED.value");
+            foreach ([
+                ['en','books.tab_inventory','Inventory'],              ['uz','books.tab_inventory','Zaxira'],
+                ['en','books.tab_issues','All Issues'],                ['uz','books.tab_issues','Barcha berishlar'],
+                ['en','books.tab_report','Monthly Report'],            ['uz','books.tab_report','Oylik hisobot'],
+                ['en','books.stat_revenue','Total Revenue'],           ['uz','books.stat_revenue','Jami daromad'],
+                ['en','books.stat_unpaid','Unpaid'],                   ['uz','books.stat_unpaid',"To'lanmagan"],
+                ['en','books.paid','Paid'],                            ['uz','books.paid',"To'langan"],
+                ['en','books.unpaid','Unpaid'],                        ['uz','books.unpaid',"To'lanmagan"],
+                ['en','books.mark_paid','Mark as Paid'],               ['uz','books.mark_paid',"To'landi"],
+                ['en','books.toast_paid','Marked as paid'],            ['uz','books.toast_paid',"To'landi deb belgilandi"],
+                ['en','books.col_status','Status'],                    ['uz','books.col_status','Holati'],
+                ['en','books.col_month','Month'],                      ['uz','books.col_month','Oy'],
+                ['en','books.col_issues','Issues'],                    ['uz','books.col_issues','Berishlar'],
+                ['en','books.col_books_count','Books'],                ['uz','books.col_books_count','Kitoblar'],
+                ['en','books.col_revenue','Revenue'],                  ['uz','books.col_revenue','Daromad'],
+                ['en','books.col_paid','Paid'],                        ['uz','books.col_paid',"To'langan"],
+                ['en','books.col_unpaid','Unpaid'],                    ['uz','books.col_unpaid',"To'lanmagan"],
+                ['en','books.filter_all','All'],                       ['uz','books.filter_all','Barchasi'],
+                ['en','books.filter_paid','Paid'],                     ['uz','books.filter_paid',"To'langan"],
+                ['en','books.filter_unpaid','Unpaid'],                 ['uz','books.filter_unpaid',"To'lanmagan"],
+                ['en','books.filter_all_books','All Books'],           ['uz','books.filter_all_books','Barcha kitoblar'],
+                ['en','books.filter_all_groups','All Groups'],         ['uz','books.filter_all_groups','Barcha guruhlar'],
+                ['en','books.total_records','Total'],                  ['uz','books.total_records','Jami'],
+                ['en','books.issue_group','Group *'],                  ['uz','books.issue_group','Guruh *'],
+                ['en','books.issue_select_students','Select at least one student'], ['uz','books.issue_select_students',"Kamida bitta o'quvchi tanlang"],
+                ['en','books.students_in_group','students in group'],  ['uz','books.students_in_group',"guruhda o'quvchilar"],
+                ['en','books.no_students_in_group','No students in this group'], ['uz','books.no_students_in_group',"Bu guruhda o'quvchilar yo'q"],
+                ['en','books.students','students'],                    ['uz','books.students',"o'quvchi"],
+                ['en','books.books_count','books'],                    ['uz','books.books_count','kitob'],
+                ['en','common.prev','Prev'],                           ['uz','common.prev','Oldingi'],
+                ['en','common.next','Next'],                           ['uz','common.next','Keyingi'],
+                ['en','sd.tab_books','Books'],                         ['uz','sd.tab_books','Kitoblar'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: books_delete permission for admin/owner
+    try {
+        $m = 'books_delete_permission_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            foreach ([['admin','books_delete'],['owner','books_delete']] as [$role, $feature]) {
+                $stmt->execute([$role, $feature]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: books translation keys
+    try {
+        $m = 'books_translations_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO NOTHING");
+            foreach ([
+                ['en','nav.books','Books'],               ['uz','nav.books','Kitoblar'],
+                ['en','books.title','Books'],              ['uz','books.title','Kitoblar'],
+                ['en','books.description','Manage book inventory and sales to students'], ['uz','books.description',"Kitoblar zaxirasini va o'quvchilarga sotishni boshqaring"],
+                ['en','books.add','Add Book'],             ['uz','books.add',"Kitob qo'shish"],
+                ['en','books.edit','Edit Book'],           ['uz','books.edit','Kitobni tahrirlash'],
+                ['en','books.issue','Issue Book'],         ['uz','books.issue','Kitob berish'],
+                ['en','books.history','Issue History'],    ['uz','books.history','Berish tarixi'],
+                ['en','books.stat_titles','Total Titles'], ['uz','books.stat_titles','Jami nomlari'],
+                ['en','books.stat_copies','Total Copies'], ['uz','books.stat_copies','Jami nusxalar'],
+                ['en','books.stat_issued','Issued'],       ['uz','books.stat_issued','Berilgan'],
+                ['en','books.stat_available','Available'], ['uz','books.stat_available','Mavjud'],
+                ['en','books.col_title','Title'],          ['uz','books.col_title','Sarlavha'],
+                ['en','books.col_author','Author'],        ['uz','books.col_author','Muallif'],
+                ['en','books.col_price','Price'],          ['uz','books.col_price','Narxi'],
+                ['en','books.col_quantity','Stock'],       ['uz','books.col_quantity','Zaxira'],
+                ['en','books.col_issued','Issued'],        ['uz','books.col_issued','Berilgan'],
+                ['en','books.col_available','Available'],  ['uz','books.col_available','Mavjud'],
+                ['en','books.form_title','Title *'],       ['uz','books.form_title','Sarlavha *'],
+                ['en','books.form_author','Author'],       ['uz','books.form_author','Muallif'],
+                ['en','books.form_isbn','ISBN'],           ['uz','books.form_isbn','ISBN'],
+                ['en','books.form_price','Price *'],       ['uz','books.form_price','Narxi *'],
+                ['en','books.form_quantity','Quantity *'], ['uz','books.form_quantity','Miqdor *'],
+                ['en','books.form_description','Description'], ['uz','books.form_description','Tavsif'],
+                ['en','books.issue_book','Issue Book'],    ['uz','books.issue_book','Kitob berish'],
+                ['en','books.issue_student','Student *'],  ['uz','books.issue_student',"O'quvchi *"],
+                ['en','books.issue_quantity','Quantity *'], ['uz','books.issue_quantity','Miqdor *'],
+                ['en','books.issue_price','Total Price'],  ['uz','books.issue_price','Jami narx'],
+                ['en','books.issue_method','Payment Method'], ['uz','books.issue_method',"To'lov usuli"],
+                ['en','books.issue_notes','Notes'],        ['uz','books.issue_notes','Izoh'],
+                ['en','books.no_stock','Out of stock'],    ['uz','books.no_stock',"Zaxira yo'q"],
+                ['en','books.empty','No books found'],     ['uz','books.empty',"Kitoblar topilmadi"],
+                ['en','books.toast_added','Book added'],   ['uz','books.toast_added',"Kitob qo'shildi"],
+                ['en','books.toast_updated','Book updated'], ['uz','books.toast_updated','Kitob yangilandi'],
+                ['en','books.toast_deleted','Book deleted'], ['uz','books.toast_deleted',"Kitob o'chirildi"],
+                ['en','books.toast_issued','Book issued successfully'], ['uz','books.toast_issued','Kitob muvaffaqiyatli berildi'],
+                ['en','books.toast_issue_error','Failed to issue book'], ['uz','books.toast_issue_error','Kitob berishda xatolik'],
+                ['en','books.confirm_delete','Delete this book?'], ['uz','books.confirm_delete',"Bu kitobni o'chirasizmi?"],
+                ['en','books.no_history','No issue history'], ['uz','books.no_history',"Berish tarixi yo'q"],
+                ['en','books.col_student','Student'],      ['uz','books.col_student',"O'quvchi"],
+                ['en','books.col_date','Date'],            ['uz','books.col_date','Sana'],
+                ['en','books.col_qty','Qty'],              ['uz','books.col_qty','Miqdor'],
+                ['en','books.col_total','Total'],          ['uz','books.col_total','Jami'],
+                ['en','books.col_notes','Notes'],          ['uz','books.col_notes','Izoh'],
+                ['en','books.search','Search books...'],   ['uz','books.search','Kitoblarni qidirish...'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────

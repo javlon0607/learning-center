@@ -25,6 +25,8 @@ export const FEATURES: Feature[] = [
   { key: 'collections',      label: 'Collections',       description: 'Collection calls management' },
   { key: 'salary_slips',     label: 'Salary Slips',      description: 'Manage teacher salaries' },
   { key: 'employees',        label: 'Employees',         description: 'View and manage employees (staff directory)' },
+  { key: 'books',            label: 'Books',             description: 'Manage book inventory and issue books to students' },
+  { key: 'books_delete',    label: 'Delete Books',      description: 'Delete book records from inventory', indent: true },
   { key: 'reports',          label: 'Reports',           description: 'View financial and activity reports' },
   { key: 'logs',             label: 'Audit Logs',        description: 'View system audit logs' },
   { key: 'settings',         label: 'Settings',          description: 'Manage system settings' },

@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   studentsApi, enrollmentsApi, paymentsApi, groupsApi, studentAttendanceApi,
-  studentNotesApi, studentDebtApi, monthlyDiscountsApi,
-  sourceOptions, Student, Payment,
+  studentNotesApi, studentDebtApi, monthlyDiscountsApi, bookIssuesApi,
+  sourceOptions, Student, Payment, BookIssue,
 } from '@/lib/api'
 import { StudentForm } from '@/components/students/StudentForm'
 import { Button } from '@/components/ui/button'
@@ -41,7 +41,7 @@ import {
   ArrowLeft, Mail, Phone, User, Calendar, BookOpen, Info,
   Pencil, Trash2, GraduationCap, AlertCircle, CheckCircle2,
   ChevronLeft, ChevronRight, Cake, CreditCard, UserPlus,
-  ChevronDown, Plus, Loader2, ClipboardList, MessageSquare,
+  ChevronDown, Plus, Loader2, ClipboardList, MessageSquare, ShoppingBag,
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency, calculateAge, parseAmountFromInput, cn } from '@/lib/utils'
 
@@ -176,6 +176,28 @@ export function StudentDetail() {
     queryKey: ['monthly-discounts', studentId],
     queryFn: () => monthlyDiscountsApi.getAll({ student_id: String(studentId) }),
     enabled: !!studentId,
+  })
+
+  const { data: bookIssuesData } = useQuery({
+    queryKey: ['book-issues', { studentId }],
+    queryFn: () => bookIssuesApi.getAll({ student_id: String(studentId), per_page: '100' }),
+    enabled: !!studentId,
+  })
+  const studentBookIssues: BookIssue[] = bookIssuesData?.data ?? []
+
+  const [markPaidIssueId, setMarkPaidIssueId] = useState<number | null>(null)
+  const [markPaidMethod, setMarkPaidMethod]   = useState('cash')
+  const [markPaidOpen, setMarkPaidOpen]       = useState(false)
+
+  const markPaidMutation = useMutation({
+    mutationFn: ({ id, method }: { id: number; method: string }) =>
+      bookIssuesApi.markPaid(id, method),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['book-issues', { studentId }] })
+      toast({ title: t('books.toast_paid', 'Marked as paid') })
+      setMarkPaidOpen(false)
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: 'destructive' }),
   })
 
   // Available groups (active, not already enrolled)
@@ -623,6 +645,10 @@ export function StudentDetail() {
             <MessageSquare className="mr-2 h-4 w-4" />
             {t('sd.tab_notes', 'Notes')} ({studentNotes.length})
           </TabsTrigger>
+          <TabsTrigger value="books">
+            <ShoppingBag className="mr-2 h-4 w-4" />
+            {t('sd.tab_books', 'Books')} ({studentBookIssues.length})
+          </TabsTrigger>
         </TabsList>
 
         {/* Enrollments Tab */}
@@ -975,7 +1001,95 @@ export function StudentDetail() {
             </div>
           )}
         </TabsContent>
+
+        {/* Books Tab */}
+        <TabsContent value="books" className="mt-4">
+          <Card>
+            <CardContent className="p-0 overflow-x-auto">
+              {studentBookIssues.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">{t('books.no_history', 'No books issued yet')}</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>{t('books.col_title', 'Book')}</TableHead>
+                      <TableHead className="text-right">{t('books.col_qty', 'Qty')}</TableHead>
+                      <TableHead className="text-right">{t('books.col_total', 'Total')}</TableHead>
+                      <TableHead>{t('books.col_status', 'Status')}</TableHead>
+                      <TableHead>{t('books.col_date', 'Date')}</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {studentBookIssues.map(issue => (
+                      <TableRow key={issue.id}>
+                        <TableCell className="font-medium">{issue.book_title}</TableCell>
+                        <TableCell className="text-right">{issue.quantity}</TableCell>
+                        <TableCell className="text-right font-mono">{formatCurrency(issue.total_price)}</TableCell>
+                        <TableCell>
+                          {issue.is_paid ? (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700">
+                              {t('books.paid', 'Paid')}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700">
+                              {t('books.unpaid', 'Unpaid')}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(issue.issued_at)}</TableCell>
+                        <TableCell>
+                          {!issue.is_paid && (
+                            <Button
+                              size="sm" variant="outline" className="h-7 text-xs"
+                              onClick={() => { setMarkPaidIssueId(issue.id); setMarkPaidMethod('cash'); setMarkPaidOpen(true) }}
+                            >
+                              {t('books.mark_paid', 'Mark Paid')}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Mark Book Paid Dialog */}
+      <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('books.mark_paid', 'Mark as Paid')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>{t('books.issue_method', 'Payment Method')}</Label>
+              <select
+                value={markPaidMethod}
+                onChange={e => setMarkPaidMethod(e.target.value)}
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="cash">{t('payments.method_cash', 'Cash')}</option>
+                <option value="card">{t('payments.method_card', 'Card')}</option>
+                <option value="transfer">{t('payments.method_transfer', 'Bank Transfer')}</option>
+                <option value="other">{t('payments.method_other', 'Other')}</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMarkPaidOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+            <Button
+              onClick={() => markPaidIssueId && markPaidMutation.mutate({ id: markPaidIssueId, method: markPaidMethod })}
+              disabled={markPaidMutation.isPending}
+            >
+              {markPaidMutation.isPending ? t('common.loading', 'Loading...') : t('books.mark_paid', 'Confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Form */}
       <StudentForm
