@@ -474,6 +474,10 @@ function initDB() {
             ['en','sd.col_discount','Discount'], ['uz','sd.col_discount','Chegirma'],
             ['en','sd.col_monthly_cost','Monthly Cost'], ['uz','sd.col_monthly_cost',"Oylik to'lov"],
             ['en','sd.col_enrolled','Enrolled'], ['uz','sd.col_enrolled',"Ro'yxatdan o'tgan"],
+            ['en','sd.col_left','Left'], ['uz','sd.col_left',"Chiqgan"],
+            ['en','sd.col_transferred_to','Transferred To'], ['uz','sd.col_transferred_to',"Ko'chirilgan guruh"],
+            ['en','sd.col_reason','Reason'], ['uz','sd.col_reason',"Sabab"],
+            ['en','sd.past_groups','Previous Groups'], ['uz','sd.past_groups',"Avvalgi guruhlar"],
             ['en','sd.col_date','Date'], ['uz','sd.col_date','Sana'],
             ['en','sd.col_amount','Amount'], ['uz','sd.col_amount','Miqdor'],
             ['en','sd.col_months','Month(s)'], ['uz','sd.col_months','Oy(lar)'],
@@ -1755,6 +1759,16 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Migration: group_transfers from_enrolled_at column
+    try {
+        $m = 'group_transfers_from_enrolled_at_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE group_transfers ADD COLUMN IF NOT EXISTS from_enrolled_at TIMESTAMPTZ");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: support_requests topic column
     try {
         $m = 'support_requests_topic_202603';
@@ -1772,6 +1786,24 @@ function initDB() {
         if (!$done) {
             getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS pending_support_date DATE");
             getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS pending_support_time VARCHAR(5)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: transfer history translation keys
+    try {
+        $m = 'transfer_history_translations_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO NOTHING");
+            foreach ([
+                ['en','sd.col_left','Left'],                  ['uz','sd.col_left','Chiqgan'],
+                ['en','sd.col_transferred_to','Transferred To'], ['uz','sd.col_transferred_to',"Ko'chirilgan guruh"],
+                ['en','sd.col_reason','Reason'],               ['uz','sd.col_reason','Sabab'],
+                ['en','sd.past_groups','Previous Groups'],      ['uz','sd.past_groups','Avvalgi guruhlar'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }

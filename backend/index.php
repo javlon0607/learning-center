@@ -642,6 +642,7 @@ try {
                 if ($studentId) {
                     $stmt = db()->prepare("
                         SELECT gt.*,
+                               gt.from_enrolled_at::text AS from_enrolled_at,
                                fg.name AS from_group_name,
                                tg.name AS to_group_name,
                                s.first_name || ' ' || s.last_name AS student_name,
@@ -754,6 +755,11 @@ try {
                 ]);
                 $sourceGroupDebt = (float)$debtStmt->fetchColumn();
 
+                // Capture enrolled_at before deletion
+                $enrolledAtStmt = db()->prepare("SELECT enrolled_at FROM enrollments WHERE student_id = ? AND group_id = ?");
+                $enrolledAtStmt->execute([$studentId, $fromGroupId]);
+                $fromEnrolledAt = $enrolledAtStmt->fetchColumn();
+
                 // Start transaction
                 db()->beginTransaction();
                 try {
@@ -768,18 +774,18 @@ try {
                     // Record transfer history
                     $userId = $GLOBALS['jwt_user']['id'] ?? null;
                     $histStmt = db()->prepare("
-                        INSERT INTO group_transfers (student_id, from_group_id, to_group_id, reason, paid_month, discount_percentage, transferred_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO group_transfers (student_id, from_group_id, to_group_id, reason, paid_month, discount_percentage, transferred_by, from_enrolled_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ");
-                    $histStmt->execute([$studentId, $fromGroupId, $toGroupId, $reason, $paidMonth, $discountPct, $userId]);
+                    $histStmt->execute([$studentId, $fromGroupId, $toGroupId, $reason, $paidMonth, $discountPct, $userId, $fromEnrolledAt ?: null]);
 
                     // If student paid for current month, create a payment record for the new group
                     // to mark this month as paid (amount = 0, just a marker)
                     if ($paidMonth) {
-                        // Insert a "transfer credit" payment
+                        // Insert a "transfer credit" payment (auto-approved so it counts in debt calculations)
                         $creditStmt = db()->prepare("
-                            INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes)
-                            VALUES (?, ?, 0, CURRENT_DATE, 'transfer', ?)
+                            INSERT INTO payments (student_id, group_id, amount, payment_date, method, notes, is_approved)
+                            VALUES (?, ?, 0, CURRENT_DATE, 'transfer', ?, TRUE)
                         ");
                         $creditStmt->execute([$studentId, $toGroupId, 'Transfer credit from ' . $fromGroupId . ' - month already paid']);
                         $creditPaymentId = db()->lastInsertId();

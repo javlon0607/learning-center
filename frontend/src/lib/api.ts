@@ -835,6 +835,7 @@ export interface GroupTransfer {
   discount_percentage: number
   transferred_by?: number
   transferred_by_name?: string
+  from_enrolled_at?: string
   created_at: string
 }
 

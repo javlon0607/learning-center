@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   studentsApi, enrollmentsApi, paymentsApi, groupsApi, studentAttendanceApi,
-  studentNotesApi, studentDebtApi, monthlyDiscountsApi, bookIssuesApi,
-  sourceOptions, Student, Payment, BookIssue,
+  studentNotesApi, studentDebtApi, monthlyDiscountsApi, bookIssuesApi, groupTransfersApi,
+  sourceOptions, Student, Payment, BookIssue, GroupTransfer,
 } from '@/lib/api'
 import { StudentForm } from '@/components/students/StudentForm'
 import { Button } from '@/components/ui/button'
@@ -184,6 +184,12 @@ export function StudentDetail() {
     enabled: !!studentId,
   })
   const studentBookIssues: BookIssue[] = bookIssuesData?.data ?? []
+
+  const { data: transferHistory = [] } = useQuery({
+    queryKey: ['group-transfers', 'student', studentId],
+    queryFn: () => groupTransfersApi.getByStudent(studentId!),
+    enabled: !!studentId,
+  })
 
   const [markPaidIssueId, setMarkPaidIssueId] = useState<number | null>(null)
   const [markPaidMethod, setMarkPaidMethod]   = useState('cash')
@@ -759,6 +765,59 @@ export function StudentDetail() {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Transfer History / Past Groups */}
+          {(transferHistory as GroupTransfer[]).length > 0 && (
+            <Card className="mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-medium text-muted-foreground">
+                  {t('sd.past_groups', 'Previous Groups')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="min-w-[500px]">
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>{t('sd.col_group', 'Group')}</TableHead>
+                      <TableHead>{t('sd.col_enrolled', 'Enrolled')}</TableHead>
+                      <TableHead>{t('sd.col_left', 'Left')}</TableHead>
+                      <TableHead>{t('sd.col_transferred_to', 'Transferred To')}</TableHead>
+                      <TableHead>{t('sd.col_reason', 'Reason')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(transferHistory as GroupTransfer[]).map((tr) => (
+                      <TableRow key={tr.id} className="text-sm">
+                        <TableCell>
+                          <button
+                            onClick={() => navigate(`/groups/${tr.from_group_id}`)}
+                            className="text-blue-600 hover:underline font-medium"
+                          >
+                            {tr.from_group_name}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {tr.from_enrolled_at ? formatDate(tr.from_enrolled_at) : '—'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDate(tr.created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => navigate(`/groups/${tr.to_group_id}`)}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {tr.to_group_name}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{tr.reason || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Payments Tab */}
