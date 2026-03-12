@@ -1769,6 +1769,23 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Migration: performance indexes
+    try {
+        $m = 'perf_indexes_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_payment_months_for_month ON payment_months(for_month)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_payments_group_id ON payments(group_id)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_payments_student_group ON payments(student_id, group_id)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_monthly_discounts_lookup ON monthly_discounts(student_id, group_id, for_month) WHERE deleted_at IS NULL");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_students_status_deleted ON students(status, deleted_at)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_collection_calls_student_created ON collection_calls(student_id, created_at DESC)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_book_issues_student ON book_issues(student_id) WHERE deleted_at IS NULL");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_book_issues_book ON book_issues(book_id) WHERE deleted_at IS NULL");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: group_transfers from_enrolled_at column
     try {
         $m = 'group_transfers_from_enrolled_at_202603';

@@ -191,11 +191,12 @@ try {
                     // Credit from payments made this month in groups student is no longer enrolled in
                     $tcStmt = db()->prepare("
                         SELECT COALESCE(SUM(pm.amount), 0)
-                        FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
-                        WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
-                          AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = ?)
+                        FROM payment_months pm
+                        JOIN payments p ON pm.payment_id = p.id
+                        LEFT JOIN enrollments ecur ON ecur.student_id = p.student_id AND ecur.group_id = p.group_id
+                        WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND ecur.id IS NULL
                     ");
-                    $tcStmt->execute([$id, $currentMonth, $id]);
+                    $tcStmt->execute([$id, $currentMonth]);
                     $transferCredit = (float)$tcStmt->fetchColumn();
                     $student['current_month_debt'] = round(max(0, $expected - $paid - $transferCredit), 2);
                     $student['current_month_expected'] = round($expected, 2);
@@ -263,49 +264,61 @@ try {
                 if ($params) $stmt->execute($params);
                 $students = $stmt->fetchAll();
 
-                // Calculate debt for each student
+                // Calculate debt for all students in a single batch query (avoids N+1)
                 $currentMonth = date('Y-m-01');
-                $debtStmt = db()->prepare("
-                    SELECT
-                        e.student_id,
-                        SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
-                        COALESCE(SUM(
-                            (SELECT COALESCE(SUM(pm.amount), 0)
-                             FROM payment_months pm
-                             JOIN payments p ON pm.payment_id = p.id
-                             WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
-                        ), 0) +
-                        COALESCE((
-                            SELECT SUM(pm.amount)
-                            FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
-                            WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL
-                              AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
-                        ), 0) AS paid
-                    FROM enrollments e
-                    JOIN groups g ON e.group_id = g.id
-                    WHERE e.student_id = ?
-                    GROUP BY e.student_id
-                ");
-
                 foreach ($students as &$student) {
-                    // Parse enrollments JSON
                     $student['enrollments'] = json_decode($student['enrollments_json'], true) ?: [];
                     unset($student['enrollments_json']);
-
-                    // Calculate current month debt
-                    $debtStmt->execute([$currentMonth, $currentMonth, $student['id']]);
-                    $debtRow = $debtStmt->fetch();
-                    if ($debtRow) {
-                        $expected = (float)$debtRow['expected'];
-                        $paid = (float)$debtRow['paid'];
-                        $student['current_month_debt'] = round(max(0, $expected - $paid), 2);
-                        $student['current_month_expected'] = round($expected, 2);
-                        $student['current_month_paid'] = round($paid, 2);
-                    } else {
-                        $student['current_month_debt'] = 0;
-                        $student['current_month_expected'] = 0;
-                        $student['current_month_paid'] = 0;
+                    $student['current_month_debt'] = 0;
+                    $student['current_month_expected'] = 0;
+                    $student['current_month_paid'] = 0;
+                }
+                unset($student);
+                $studentIds = array_column($students, 'id');
+                if (!empty($studentIds)) {
+                    $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
+                    $batchDebt = db()->prepare("
+                        SELECT
+                            e.student_id,
+                            SUM(g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)) AS expected,
+                            COALESCE(SUM(COALESCE(pm_g.paid, 0)), 0)
+                                + COALESCE(MAX(COALESCE(tc.transfer_credit, 0)), 0) AS paid
+                        FROM enrollments e
+                        JOIN groups g ON e.group_id = g.id
+                        LEFT JOIN (
+                            SELECT p.student_id, p.group_id, SUM(pm.amount) AS paid
+                            FROM payments p
+                            JOIN payment_months pm ON pm.payment_id = p.id
+                            WHERE pm.for_month = ? AND p.deleted_at IS NULL
+                            GROUP BY p.student_id, p.group_id
+                        ) pm_g ON pm_g.student_id = e.student_id AND pm_g.group_id = e.group_id
+                        LEFT JOIN (
+                            SELECT p.student_id, SUM(pm.amount) AS transfer_credit
+                            FROM payments p
+                            JOIN payment_months pm ON pm.payment_id = p.id
+                            LEFT JOIN enrollments ecur ON ecur.student_id = p.student_id AND ecur.group_id = p.group_id
+                            WHERE pm.for_month = ? AND p.deleted_at IS NULL AND ecur.id IS NULL
+                            GROUP BY p.student_id
+                        ) tc ON tc.student_id = e.student_id
+                        WHERE e.student_id IN ($placeholders)
+                        GROUP BY e.student_id
+                    ");
+                    $batchDebt->execute([$currentMonth, $currentMonth, ...$studentIds]);
+                    $debtMap = [];
+                    foreach ($batchDebt->fetchAll() as $row) {
+                        $debtMap[(int)$row['student_id']] = $row;
                     }
+                    foreach ($students as &$student) {
+                        $debtRow = $debtMap[$student['id']] ?? null;
+                        if ($debtRow) {
+                            $expected = (float)$debtRow['expected'];
+                            $paid = (float)$debtRow['paid'];
+                            $student['current_month_debt'] = round(max(0, $expected - $paid), 2);
+                            $student['current_month_expected'] = round($expected, 2);
+                            $student['current_month_paid'] = round($paid, 2);
+                        }
+                    }
+                    unset($student);
                 }
                 jsonResponse($students);
             } elseif ($method === 'POST') {
@@ -2310,12 +2323,13 @@ try {
             // Credit from payments made this month in groups student is no longer enrolled in
             $tcStmt2 = db()->prepare("
                 SELECT COALESCE(SUM(pm.amount), 0)
-                FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                FROM payment_months pm
+                JOIN payments p ON pm.payment_id = p.id
+                LEFT JOIN enrollments ecur ON ecur.student_id = p.student_id AND ecur.group_id = p.group_id
                 WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
-                  AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = ?)
-                  AND p.group_id != ?
+                  AND ecur.id IS NULL AND p.group_id != ?
             ");
-            $tcStmt2->execute([$studentId, $monthStart, $studentId, $groupId]);
+            $tcStmt2->execute([$studentId, $monthStart, $groupId]);
             $transferCredit2 = (float)$tcStmt2->fetchColumn();
             $remainingDebt = max(0, $monthlyDebt - $paidAmount - $transferCredit2);
 
@@ -2548,41 +2562,40 @@ try {
                         cc_agg.call_count
                     FROM students s
                     INNER JOIN (
-                        SELECT
-                            e.student_id,
-                            SUM(GREATEST(0, g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
-                                - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
-                            )) AS expected,
-                            COALESCE(SUM(
-                                (SELECT COALESCE(SUM(pm.amount), 0)
-                                 FROM payment_months pm
-                                 JOIN payments p ON pm.payment_id = p.id
-                                 WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
-                            ), 0) +
-                            COALESCE((
-                                SELECT SUM(pm.amount)
-                                FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
-                                WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
-                                  AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
-                            ), 0) AS paid
-                        FROM enrollments e
-                        JOIN groups g ON e.group_id = g.id
-                        GROUP BY e.student_id
-                        HAVING SUM(GREATEST(0, g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
-                                - COALESCE((SELECT SUM(md.amount) FROM monthly_discounts md WHERE md.student_id = e.student_id AND md.group_id = e.group_id AND md.for_month = ? AND md.deleted_at IS NULL), 0)
-                            )) -
-                               COALESCE(SUM(
-                                   (SELECT COALESCE(SUM(pm.amount), 0)
-                                    FROM payment_months pm
-                                    JOIN payments p ON pm.payment_id = p.id
-                                    WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
-                               ), 0) -
-                               COALESCE((
-                                   SELECT SUM(pm.amount)
-                                   FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
-                                   WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
-                                     AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
-                               ), 0) > 0
+                        SELECT student_id, expected, paid FROM (
+                            SELECT
+                                e.student_id,
+                                SUM(GREATEST(0,
+                                    g.price * (1 - COALESCE(e.discount_percentage, 0) / 100)
+                                    - COALESCE(md_s.discount, 0)
+                                )) AS expected,
+                                COALESCE(SUM(COALESCE(pm_g.paid, 0)), 0)
+                                    + COALESCE(MAX(COALESCE(tc.transfer_credit, 0)), 0) AS paid
+                            FROM enrollments e
+                            JOIN groups g ON e.group_id = g.id
+                            LEFT JOIN (
+                                SELECT student_id, group_id, SUM(amount) AS discount
+                                FROM monthly_discounts
+                                WHERE for_month = ? AND deleted_at IS NULL
+                                GROUP BY student_id, group_id
+                            ) md_s ON md_s.student_id = e.student_id AND md_s.group_id = e.group_id
+                            LEFT JOIN (
+                                SELECT p.student_id, p.group_id, SUM(pm.amount) AS paid
+                                FROM payments p
+                                JOIN payment_months pm ON pm.payment_id = p.id
+                                WHERE pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                                GROUP BY p.student_id, p.group_id
+                            ) pm_g ON pm_g.student_id = e.student_id AND pm_g.group_id = e.group_id
+                            LEFT JOIN (
+                                SELECT p.student_id, SUM(pm.amount) AS transfer_credit
+                                FROM payments p
+                                JOIN payment_months pm ON pm.payment_id = p.id
+                                LEFT JOIN enrollments ecur ON ecur.student_id = p.student_id AND ecur.group_id = p.group_id
+                                WHERE pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE AND ecur.id IS NULL
+                                GROUP BY p.student_id
+                            ) tc ON tc.student_id = e.student_id
+                            GROUP BY e.student_id
+                        ) t WHERE expected > paid
                     ) debt ON debt.student_id = s.id
                     LEFT JOIN (
                         SELECT
@@ -2596,7 +2609,7 @@ try {
                     WHERE s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY debt.expected - debt.paid DESC
                 ");
-                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth]);
+                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth]);
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
