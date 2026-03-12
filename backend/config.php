@@ -1759,6 +1759,16 @@ function initDB() {
         }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Migration: approve existing transfer credit payments (backfill)
+    try {
+        $m = 'approve_transfer_credits_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("UPDATE payments SET is_approved = TRUE WHERE method = 'transfer' AND amount = 0 AND is_approved = FALSE AND deleted_at IS NULL");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: group_transfers from_enrolled_at column
     try {
         $m = 'group_transfers_from_enrolled_at_202603';
