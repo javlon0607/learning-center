@@ -1321,10 +1321,10 @@ try {
                 $values[] = $id;
                 $sql = "UPDATE leads SET " . implode(', ', $updates) . " WHERE id = ?";
                 db()->prepare($sql)->execute($values);
-                $newStmt = db()->prepare("SELECT first_name, last_name, phone, source, status, priority FROM leads WHERE id = ?");
-                $newStmt->execute([$id]);
-                $newRow = $newStmt->fetch();
-                auditLog('update', 'lead', $id, $oldRow ?: null, $newRow ?: null);
+                $auditKeys = ['first_name', 'last_name', 'phone', 'source', 'status', 'priority'];
+                $newAudit = $oldRow ?: [];
+                foreach ($auditKeys as $k) { if (array_key_exists($k, $input)) $newAudit[$k] = $input[$k]; }
+                auditLog('update', 'lead', $id, $oldRow ?: null, $newAudit ?: null);
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
                 $old = db()->prepare("SELECT id, first_name, last_name, phone, source, status, priority, created_at FROM leads WHERE id = ? AND deleted_at IS NULL");
@@ -1437,6 +1437,8 @@ try {
                 $rows = $input['rows'] ?? [];
                 $markedBy = $GLOBALS['jwt_user']['id'] ?? null;
                 $fetchOld = db()->prepare("SELECT id, student_id, group_id, attendance_date, status FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
+                $attendanceOld = [];
+                $attendanceNew = [];
                 foreach ($rows as $r) {
                     $sid = (int)($r['student_id'] ?? 0);
                     $status = $r['status'] ?? 'present';
@@ -1447,15 +1449,8 @@ try {
                         ->execute([$sid, $group, $date, $status, $markedBy, $status, $markedBy]);
                     $oldStatus = $oldRow ? $oldRow['status'] : null;
                     if ($oldStatus !== $status) {
-                        $attendanceId = $oldRow ? (int)$oldRow['id'] : 0;
-                        if (!$attendanceId) {
-                            $getId = db()->prepare("SELECT id FROM attendance WHERE student_id = ? AND group_id = ? AND attendance_date = ?");
-                            $getId->execute([$sid, $group, $date]);
-                            $attendanceId = (int)$getId->fetchColumn();
-                        }
-                        $oldValues = $oldRow ? ['student_id' => (int)$oldRow['student_id'], 'group_id' => (int)$oldRow['group_id'], 'attendance_date' => $oldRow['attendance_date'], 'status' => $oldRow['status']] : null;
-                        $newValues = ['student_id' => $sid, 'group_id' => $group, 'attendance_date' => $date, 'status' => $status];
-                        auditLog($oldStatus === null ? 'create' : 'update', 'attendance', $attendanceId, $oldValues, $newValues);
+                        $attendanceOld[$sid] = $oldStatus;
+                        $attendanceNew[$sid] = $status;
 
                         // Telegram: notify parent if marked absent or late
                         if (in_array($status, ['absent', 'late'])) {
@@ -1466,12 +1461,19 @@ try {
                                 $groupStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
                                 $groupStmt->execute([$group]);
                                 $groupName = $groupStmt->fetchColumn() ?: 'Group';
-                                telegramNotifyStudent($sid, "Your child {$studentName} was marked <b>{$status}</b> in {$groupName} on {$date}.", 'attendance', $attendanceId);
+                                $attId = $oldRow ? (int)$oldRow['id'] : 0;
+                                if (!$attId) { $getId = db()->prepare("SELECT id FROM attendance WHERE student_id=? AND group_id=? AND attendance_date=?"); $getId->execute([$sid,$group,$date]); $attId=(int)$getId->fetchColumn(); }
+                                telegramNotifyStudent($sid, "Your child {$studentName} was marked <b>{$status}</b> in {$groupName} on {$date}.", 'attendance', $attId);
                             } catch (Exception $e) { /* ignore telegram errors */ }
                         }
                     }
                 }
-                activityLog('attendance_save', 'attendance', null, json_encode(['date' => $date, 'group_id' => $group]));
+                if (!empty($attendanceNew)) {
+                    auditLog('update', 'attendance', $group,
+                        ['group_id' => $group, 'date' => $date, 'statuses' => $attendanceOld],
+                        ['group_id' => $group, 'date' => $date, 'statuses' => $attendanceNew]
+                    );
+                }
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
@@ -2059,10 +2061,10 @@ try {
                     $params[] = $id;
                     $stmt = db()->prepare("UPDATE users SET " . implode(', ', $sets) . " WHERE id = ?");
                     $stmt->execute($params);
-                    $newStmt = db()->prepare("SELECT username, name, role, email, phone, is_active FROM users WHERE id = ?");
-                    $newStmt->execute([$id]);
-                    $newRow = $newStmt->fetch();
-                    auditLog('update', 'user', $id, $oldRow ?: null, $newRow ?: null);
+                    $auditUserKeys = ['username', 'name', 'role', 'email', 'phone', 'is_active'];
+                    $newUserAudit = $oldRow ?: [];
+                    foreach ($auditUserKeys as $k) { if (array_key_exists($k, $input)) $newUserAudit[$k] = $input[$k]; }
+                    auditLog('update', 'user', $id, $oldRow ?: null, $newUserAudit ?: null);
                 }
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
@@ -3731,11 +3733,17 @@ try {
                 $notes = trim($input['notes'] ?? '') ?: null;
                 db()->prepare("UPDATE employees SET full_name=?, department=?, position=?, phone=?, hire_date=?, birthday=?, base_salary=?, teacher_id=?, status=?, notes=? WHERE id=?")
                     ->execute([$fullName, $department, $position, $phone, $hireDate, $birthday, $baseSalary, $teacherId, $status, $notes, $id]);
-                auditLog('update', 'employee', $id, null, ['full_name' => $fullName, 'status' => $status]);
+                auditLog('update', 'employee', $id,
+                    ['full_name' => $oldEmpRow['full_name'], 'department' => $oldEmpRow['department'], 'position' => $oldEmpRow['position'], 'phone' => $oldEmpRow['phone'], 'base_salary' => $oldEmpRow['base_salary'], 'status' => $oldEmpRow['status']],
+                    ['full_name' => $fullName, 'department' => $department, 'position' => $position, 'phone' => $phone, 'base_salary' => $baseSalary, 'status' => $status]
+                );
                 jsonResponse(['ok' => true]);
             } elseif ($id && $method === 'DELETE') {
+                $delEmp = db()->prepare("SELECT full_name, department, position, status FROM employees WHERE id = ? AND deleted_at IS NULL");
+                $delEmp->execute([$id]);
+                $delEmpRow = $delEmp->fetch();
                 db()->prepare("UPDATE employees SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL")->execute([$id]);
-                auditLog('delete', 'employee', $id, null, null);
+                auditLog('delete', 'employee', $id, $delEmpRow ?: null, null);
                 jsonResponse(['ok' => true]);
             } else { jsonError('Not found', 404); }
             break;
