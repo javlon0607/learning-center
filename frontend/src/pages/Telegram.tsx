@@ -457,20 +457,35 @@ function LinkedAccountsTab({
 
 function MessageLogTab() {
   const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(50)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['telegram-log', page],
-    queryFn: () => telegramApi.getLog(page),
+    queryKey: ['telegram-log', page, limit],
+    queryFn: () => telegramApi.getLog(page, limit),
   })
 
   const entries = data?.data || []
   const total = data?.total || 0
-  const totalPages = Math.ceil(total / (data?.limit || 50))
-
-  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+  const totalPages = Math.max(1, Math.ceil(total / limit))
+  const from = total === 0 ? 0 : (page - 1) * limit + 1
+  const to = Math.min(page * limit, total)
 
   return (
     <div className="space-y-4 pt-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          {total > 0 ? `Showing ${from}–${to} of ${total}` : 'No messages yet'}
+        </span>
+        <Select value={String(limit)} onValueChange={v => { setLimit(Number(v)); setPage(1) }}>
+          <SelectTrigger className="w-28 h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="20">20 / page</SelectItem>
+            <SelectItem value="50">50 / page</SelectItem>
+            <SelectItem value="100">100 / page</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -482,7 +497,13 @@ function MessageLogTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {entries.length === 0 ? (
+          {isLoading ? (
+            <TableRow>
+              <TableCell colSpan={5} className="text-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+              </TableCell>
+            </TableRow>
+          ) : entries.length === 0 ? (
             <TableRow>
               <TableCell colSpan={5} className="text-center text-muted-foreground">No messages yet</TableCell>
             </TableRow>
@@ -516,19 +537,13 @@ function MessageLogTab() {
         </TableBody>
       </Table>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-            Previous
-          </Button>
-          <span className="flex items-center text-sm text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-            Next
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center justify-center gap-2">
+        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)}>«</Button>
+        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹ Prev</Button>
+        <span className="px-3 text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next ›</Button>
+        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
+      </div>
     </div>
   )
 }

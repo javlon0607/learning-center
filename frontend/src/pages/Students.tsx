@@ -50,7 +50,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/contexts/PermissionsContext'
 import {
-  Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, Mail, User,
+  Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, User,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
   Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, Download
 } from 'lucide-react'
@@ -511,20 +511,20 @@ export function Students() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
+                        <div className={`flex flex-col gap-1 ${!student.phone2 ? 'justify-center' : ''}`}>
                           {student.phone && (
                             <div className="flex items-center gap-2 text-sm">
-                              <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                              <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               {student.phone}
                             </div>
                           )}
-                          {student.email && (
+                          {student.phone2 && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5" />
-                              <span className="truncate max-w-[150px]">{student.email}</span>
+                              <Phone className="h-3.5 w-3.5 shrink-0" />
+                              {student.phone2}
                             </div>
                           )}
-                          {!student.phone && !student.email && <span className="text-muted-foreground text-sm">-</span>}
+                          {!student.phone && !student.phone2 && <span className="text-muted-foreground text-sm">-</span>}
                         </div>
                       </TableCell>
                       <TableCell>

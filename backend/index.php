@@ -331,8 +331,8 @@ try {
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
                 $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
-                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
-                if (!empty($input['phone2']) && isPhoneTaken($input['phone2'])) { jsonError('Phone 2 is already in use'); break; }
+                if (!empty($input['phone']) && ($pt = isPhoneTaken($input['phone']))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
+                if (!empty($input['phone2']) && ($pt = isPhoneTaken($input['phone2']))) { jsonError("Phone 2 is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $stmt = db()->prepare("INSERT INTO students (first_name, last_name, dob, phone, phone2, email, parent_name, parent_phone, status, notes, source, referred_by_type, referred_by_id, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['dob'] ?? null,
@@ -362,8 +362,8 @@ try {
                 $oldRow = $oldStmt->fetch();
                 $newPhone  = $input['phone']  ?? $oldRow['phone'];
                 $newPhone2 = array_key_exists('phone2', $input) ? $input['phone2'] : $oldRow['phone2'];
-                if (!empty($newPhone)  && $newPhone  !== $oldRow['phone']  && isPhoneTaken($newPhone,  'students', (int)$id, 'phone'))  { jsonError('This phone number is already in use'); break; }
-                if (!empty($newPhone2) && $newPhone2 !== $oldRow['phone2'] && isPhoneTaken($newPhone2, 'students', (int)$id, 'phone2')) { jsonError('Phone 2 is already in use'); break; }
+                if (!empty($newPhone)  && $newPhone  !== $oldRow['phone']  && ($pt = isPhoneTaken($newPhone,  'students', (int)$id, 'phone')))  { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
+                if (!empty($newPhone2) && $newPhone2 !== $oldRow['phone2'] && ($pt = isPhoneTaken($newPhone2, 'students', (int)$id, 'phone2'))) { jsonError("Phone 2 is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $stmt = db()->prepare("UPDATE students SET first_name=?, last_name=?, dob=?, phone=?, phone2=?, email=?, parent_name=?, parent_phone=?, status=?, notes=?, source=? WHERE id=?");
                 $newValues = [
                     'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
@@ -453,7 +453,7 @@ try {
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
                 $newPhone = $input['phone'] ?? $oldRow['phone'];
-                if (!empty($newPhone) && $newPhone !== $oldRow['phone'] && isPhoneTaken($newPhone, 'teachers', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
+                if (!empty($newPhone) && $newPhone !== $oldRow['phone'] && ($pt = isPhoneTaken($newPhone, 'teachers', (int)$id, 'phone'))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $newValues = [
                     'first_name' => $input['first_name'] ?? $oldRow['first_name'], 'last_name' => $input['last_name'] ?? $oldRow['last_name'],
                     'phone' => $newPhone, 'email' => $input['email'] ?? $oldRow['email'],
@@ -1284,7 +1284,7 @@ try {
                     $referredById = isset($input['referred_by_id']) ? (int)$input['referred_by_id'] : null;
                 }
                 $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
-                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
+                if (!empty($input['phone']) && ($pt = isPhoneTaken($input['phone']))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $stmt = db()->prepare("INSERT INTO leads (first_name, last_name, phone, email, parent_name, parent_phone, source, status, notes, follow_up_date, priority, interested_courses, trial_date, trial_group_id, birth_year, preferred_schedule, budget, created_by, referred_by_type, referred_by_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 $stmt->execute([
                     $input['first_name'] ?? '', $input['last_name'] ?? '', $input['phone'] ?? '', $input['email'] ?? '',
@@ -1316,7 +1316,7 @@ try {
                 $oldStmt = db()->prepare("SELECT first_name, last_name, phone, source, status, priority FROM leads WHERE id = ?");
                 $oldStmt->execute([$id]);
                 $oldRow = $oldStmt->fetch();
-                if (array_key_exists('phone', $input) && !empty($input['phone']) && $input['phone'] !== $oldRow['phone'] && isPhoneTaken($input['phone'], 'leads', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
+                if (array_key_exists('phone', $input) && !empty($input['phone']) && $input['phone'] !== $oldRow['phone'] && ($pt = isPhoneTaken($input['phone'], 'leads', (int)$id, 'phone'))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $updates[] = "updated_at = CURRENT_TIMESTAMP";
                 $values[] = $id;
                 $sql = "UPDATE leads SET " . implode(', ', $updates) . " WHERE id = ?";
@@ -2006,7 +2006,7 @@ try {
                 $role = trim((string)$role) ?: 'user';
                 $name = trim($input['name'] ?? '');
                 $teacherId = isset($input['teacher_id']) ? (int)$input['teacher_id'] : null;
-                if (!empty($input['phone']) && isPhoneTaken($input['phone'])) { jsonError('This phone number is already in use'); break; }
+                if (!empty($input['phone']) && ($pt = isPhoneTaken($input['phone']))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $password = password_hash($input['password'] ?? 'password', PASSWORD_DEFAULT);
                 try {
                     $stmt = db()->prepare("INSERT INTO users (username, password, name, role, teacher_id, email, phone, is_active) VALUES (?,?,?,?,?,?,?,?)");
@@ -2056,7 +2056,7 @@ try {
                     $sets[] = "password = ?";
                     $params[] = password_hash($input['password'], PASSWORD_DEFAULT);
                 }
-                if (array_key_exists('phone', $input) && !empty($input['phone']) && isPhoneTaken($input['phone'], 'users', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
+                if (array_key_exists('phone', $input) && !empty($input['phone']) && ($pt = isPhoneTaken($input['phone'], 'users', (int)$id, 'phone'))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 if ($sets) {
                     $oldStmt = db()->prepare("SELECT username, name, role, email, phone, is_active FROM users WHERE id = ?");
                     $oldStmt->execute([$id]);
@@ -3702,7 +3702,7 @@ try {
                     break;
                 }
                 $phone = trim($input['phone'] ?? '') ?: null;
-                if (!empty($phone) && isPhoneTaken($phone)) { jsonError('This phone number is already in use'); break; }
+                if (!empty($phone) && ($pt = isPhoneTaken($phone))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $hireDate = $input['hire_date'] ?? null ?: null;
                 $birthday = $input['birthday'] ?? null ?: null;
                 $baseSalary = (float)($input['base_salary'] ?? 0);
@@ -3727,7 +3727,7 @@ try {
                     break;
                 }
                 $phone = trim($input['phone'] ?? '') ?: null;
-                if (!empty($phone) && $phone !== $oldEmpRow['phone'] && isPhoneTaken($phone, 'employees', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
+                if (!empty($phone) && $phone !== $oldEmpRow['phone'] && ($pt = isPhoneTaken($phone, 'employees', (int)$id, 'phone'))) { jsonError("This phone number is already linked to {$pt['type']}: {$pt['name']}"); break; }
                 $hireDate = $input['hire_date'] ?? null ?: null;
                 $birthday = $input['birthday'] ?? null ?: null;
                 $baseSalary = (float)($input['base_salary'] ?? 0);

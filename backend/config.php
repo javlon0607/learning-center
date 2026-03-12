@@ -2217,29 +2217,30 @@ function telegramSendWithReplyMarkup(int $chatId, string $text, array $replyMark
     return ['ok' => !empty($result['ok']), 'error' => $result['description'] ?? ''];
 }
 
-// Returns true if phone is already taken across students/teachers/leads/users.
+// Returns false if phone is free, or ['type'=>'Student','name'=>'John Doe','id'=>5] if already taken.
 // $skipTable/$skipId/$skipField: exclude the current record when updating.
-function isPhoneTaken(string $phone, string $skipTable = '', int $skipId = 0, string $skipField = 'phone'): bool {
+function isPhoneTaken(string $phone, string $skipTable = '', int $skipId = 0, string $skipField = 'phone'): array|false {
     if (!$phone) return false;
     $norm = substr(preg_replace('/[^0-9]/', '', $phone), -9);
     if (strlen($norm) < 7) return false;
     $db = getDB();
     $fn = "RIGHT(regexp_replace(COALESCE(%s,''),'[^0-9]','','g'),9)";
     $checks = [
-        ['students',  'phone',  "deleted_at IS NULL"],
-        ['students',  'phone2', "deleted_at IS NULL AND phone2 IS NOT NULL AND phone2 != ''"],
-        ['teachers',  'phone',  "1=1"],
-        ['leads',     'phone',  "status != 'closed' AND deleted_at IS NULL"],
-        ['users',     'phone',  "is_active = true"],
-        ['employees', 'phone',  "deleted_at IS NULL AND phone IS NOT NULL AND phone != ''"],
+        ['students',  'phone',  "deleted_at IS NULL",                                        "first_name || ' ' || last_name", 'Student'],
+        ['students',  'phone2', "deleted_at IS NULL AND phone2 IS NOT NULL AND phone2 != ''", "first_name || ' ' || last_name", 'Student'],
+        ['teachers',  'phone',  "1=1",                                                        "first_name || ' ' || last_name", 'Teacher'],
+        ['leads',     'phone',  "status != 'closed' AND deleted_at IS NULL",                  "first_name || ' ' || last_name", 'Lead'],
+        ['users',     'phone',  "is_active = true",                                           "name",                           'User'],
+        ['employees', 'phone',  "deleted_at IS NULL AND phone IS NOT NULL AND phone != ''",   "full_name",                      'Employee'],
     ];
-    foreach ($checks as [$table, $field, $cond]) {
+    foreach ($checks as [$table, $field, $cond, $nameExpr, $label]) {
         if ($table === $skipTable && $field === $skipField) continue;
         $excludeId = ($table === $skipTable && $skipId > 0) ? " AND id != " . (int)$skipId : "";
-        $q = "SELECT 1 FROM {$table} WHERE " . sprintf($fn, $field) . " = ? AND {$cond}{$excludeId} LIMIT 1";
+        $q = "SELECT id, ({$nameExpr}) AS name FROM {$table} WHERE " . sprintf($fn, $field) . " = ? AND {$cond}{$excludeId} LIMIT 1";
         $s = $db->prepare($q);
         $s->execute([$norm]);
-        if ($s->fetch()) return true;
+        $row = $s->fetch();
+        if ($row) return ['type' => $label, 'name' => $row['name'], 'id' => (int)$row['id']];
     }
     return false;
 }
