@@ -274,6 +274,12 @@ try {
                              FROM payment_months pm
                              JOIN payments p ON pm.payment_id = p.id
                              WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL)
+                        ), 0) +
+                        COALESCE((
+                            SELECT SUM(pm.amount)
+                            FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                            WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL
+                              AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
                         ), 0) AS paid
                     FROM enrollments e
                     JOIN groups g ON e.group_id = g.id
@@ -287,7 +293,7 @@ try {
                     unset($student['enrollments_json']);
 
                     // Calculate current month debt
-                    $debtStmt->execute([$currentMonth, $student['id']]);
+                    $debtStmt->execute([$currentMonth, $currentMonth, $student['id']]);
                     $debtRow = $debtStmt->fetch();
                     if ($debtRow) {
                         $expected = (float)$debtRow['expected'];
@@ -2484,7 +2490,7 @@ try {
                 WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
                 ORDER BY s.first_name, s.last_name
             ");
-            $stmt->execute([$monthStart, $monthStart, $groupId]);
+            $stmt->execute([$monthStart, $monthStart, $monthStart, $groupId]);
             $rows = $stmt->fetchAll();
             $result = [];
             foreach ($rows as $row) {
@@ -2552,6 +2558,12 @@ try {
                                  FROM payment_months pm
                                  JOIN payments p ON pm.payment_id = p.id
                                  WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
+                            ), 0) +
+                            COALESCE((
+                                SELECT SUM(pm.amount)
+                                FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                                WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                                  AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
                             ), 0) AS paid
                         FROM enrollments e
                         JOIN groups g ON e.group_id = g.id
@@ -2564,6 +2576,12 @@ try {
                                     FROM payment_months pm
                                     JOIN payments p ON pm.payment_id = p.id
                                     WHERE p.student_id = e.student_id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE)
+                               ), 0) -
+                               COALESCE((
+                                   SELECT SUM(pm.amount)
+                                   FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                                   WHERE p.student_id = e.student_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                                     AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = e.student_id)
                                ), 0) > 0
                     ) debt ON debt.student_id = s.id
                     LEFT JOIN (
@@ -2578,7 +2596,7 @@ try {
                     WHERE s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY debt.expected - debt.paid DESC
                 ");
-                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth]);
+                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth]);
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
