@@ -3697,6 +3697,7 @@ try {
                     break;
                 }
                 $phone = trim($input['phone'] ?? '') ?: null;
+                if (!empty($phone) && isPhoneTaken($phone)) { jsonError('This phone number is already in use'); break; }
                 $hireDate = $input['hire_date'] ?? null ?: null;
                 $birthday = $input['birthday'] ?? null ?: null;
                 $baseSalary = (float)($input['base_salary'] ?? 0);
@@ -3711,7 +3712,8 @@ try {
             } elseif ($id && $method === 'PUT') {
                 $old = db()->prepare("SELECT * FROM employees WHERE id = ? AND deleted_at IS NULL");
                 $old->execute([$id]);
-                if (!$old->fetch()) { jsonError('Employee not found', 404); break; }
+                $oldEmpRow = $old->fetch();
+                if (!$oldEmpRow) { jsonError('Employee not found', 404); break; }
                 $fullName = trim($input['full_name'] ?? '');
                 $department = trim($input['department'] ?? '');
                 $position = trim($input['position'] ?? '');
@@ -3720,6 +3722,7 @@ try {
                     break;
                 }
                 $phone = trim($input['phone'] ?? '') ?: null;
+                if (!empty($phone) && $phone !== $oldEmpRow['phone'] && isPhoneTaken($phone, 'employees', (int)$id, 'phone')) { jsonError('This phone number is already in use'); break; }
                 $hireDate = $input['hire_date'] ?? null ?: null;
                 $birthday = $input['birthday'] ?? null ?: null;
                 $baseSalary = (float)($input['base_salary'] ?? 0);

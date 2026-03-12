@@ -2208,11 +2208,12 @@ function isPhoneTaken(string $phone, string $skipTable = '', int $skipId = 0, st
     $db = getDB();
     $fn = "RIGHT(regexp_replace(COALESCE(%s,''),'[^0-9]','','g'),9)";
     $checks = [
-        ['students', 'phone',  "deleted_at IS NULL"],
-        ['students', 'phone2', "deleted_at IS NULL AND phone2 IS NOT NULL AND phone2 != ''"],
-        ['teachers', 'phone',  "1=1"],
-        ['leads',    'phone',  "status != 'closed' AND deleted_at IS NULL"],
-        ['users',    'phone',  "is_active = true"],
+        ['students',  'phone',  "deleted_at IS NULL"],
+        ['students',  'phone2', "deleted_at IS NULL AND phone2 IS NOT NULL AND phone2 != ''"],
+        ['teachers',  'phone',  "1=1"],
+        ['leads',     'phone',  "status != 'closed' AND deleted_at IS NULL"],
+        ['users',     'phone',  "is_active = true"],
+        ['employees', 'phone',  "deleted_at IS NULL AND phone IS NOT NULL AND phone != ''"],
     ];
     foreach ($checks as [$table, $field, $cond]) {
         if ($table === $skipTable && $field === $skipField) continue;
