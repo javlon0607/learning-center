@@ -188,7 +188,16 @@ try {
                 if ($debtRow) {
                     $expected = (float)$debtRow['expected'];
                     $paid = (float)$debtRow['paid'];
-                    $student['current_month_debt'] = round(max(0, $expected - $paid), 2);
+                    // Credit from payments made this month in groups student is no longer enrolled in
+                    $tcStmt = db()->prepare("
+                        SELECT COALESCE(SUM(pm.amount), 0)
+                        FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                        WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL
+                          AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = ?)
+                    ");
+                    $tcStmt->execute([$id, $currentMonth, $id]);
+                    $transferCredit = (float)$tcStmt->fetchColumn();
+                    $student['current_month_debt'] = round(max(0, $expected - $paid - $transferCredit), 2);
                     $student['current_month_expected'] = round($expected, 2);
                     $student['current_month_paid'] = round($paid, 2);
                 } else {
@@ -2292,7 +2301,17 @@ try {
             ");
             $paidStmt->execute([$studentId, $groupId, $monthStart]);
             $paidAmount = (float)$paidStmt->fetchColumn();
-            $remainingDebt = max(0, $monthlyDebt - $paidAmount);
+            // Credit from payments made this month in groups student is no longer enrolled in
+            $tcStmt2 = db()->prepare("
+                SELECT COALESCE(SUM(pm.amount), 0)
+                FROM payment_months pm JOIN payments p ON pm.payment_id = p.id
+                WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                  AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = ?)
+                  AND p.group_id != ?
+            ");
+            $tcStmt2->execute([$studentId, $monthStart, $studentId, $groupId]);
+            $transferCredit2 = (float)$tcStmt2->fetchColumn();
+            $remainingDebt = max(0, $monthlyDebt - $paidAmount - $transferCredit2);
 
             jsonResponse([
                 'student_id' => $studentId,
@@ -2431,6 +2450,14 @@ try {
                          FROM payment_months pm
                          JOIN payments p ON pm.payment_id = p.id
                          WHERE p.student_id = s.id AND p.group_id = e.group_id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE),
+                        0
+                    ) +
+                    COALESCE(
+                        (SELECT SUM(pm.amount)
+                         FROM payment_months pm
+                         JOIN payments p ON pm.payment_id = p.id
+                         WHERE p.student_id = s.id AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                           AND p.group_id NOT IN (SELECT group_id FROM enrollments WHERE student_id = s.id)),
                         0
                     ) AS paid,
                     COALESCE(
