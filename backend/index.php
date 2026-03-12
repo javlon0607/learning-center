@@ -2906,6 +2906,8 @@ try {
                     'support_slot_taken'  => "😔 This slot was just taken. Send /support to see updated slots.",
                     'support_has_active'  => "❌ You already have an active support request. Please wait for your session.",
                     'support_unavailable' => "❌ This slot is no longer available.",
+                    'support_too_soon'    => "⏰ Please select a slot at least 3 hours from now.",
+                    'support_ask_topic'   => "📝 What topic do you need help with? Please describe your question briefly:",
                     'help_text' => "📋 <b>Commands:</b>\n\n💰 Balance — monthly fee &amp; debt\n📅 Schedule — class schedule\n🎧 Support — book a support session\n❓ Help — show this list\n🌐 Language — change language",
                     'link_error'  => "❌ Please link your account first using /start.",
                     'invalid_code'=> "❌ Invalid or expired link code.",
@@ -2914,7 +2916,7 @@ try {
                 ],
                 'uz' => [
                     'btn_balance'  => '💰 Balans',   'btn_schedule' => '📅 Jadval',
-                    'btn_support'  => '🎧 So\'rov',  'btn_help'     => '❓ Yordam',
+                    'btn_support'  => '🎧 Supportga ariza',  'btn_help'     => '❓ Yordam',
                     'btn_lang'     => '🌐 Til',
                     'share_phone_prompt' => "👋 O'quv markaziga xush kelibsiz!\n\nHisobingizni ulash uchun telefon raqamingizni yuboring:",
                     'share_phone_btn'    => '📱 Telefon raqamni yuborish',
@@ -2940,7 +2942,9 @@ try {
                     'support_slot_taken'  => "😔 Bu vaqt band bo'ldi. Yangi vaqtlar uchun /support yuboring.",
                     'support_has_active'  => "❌ Sizda faol so'rov mavjud. Sessiyangizni kuting.",
                     'support_unavailable' => "❌ Bu vaqt endi mavjud emas.",
-                    'help_text' => "📋 <b>Buyruqlar:</b>\n\n💰 Balans — oylik to'lov va qarz\n📅 Jadval — dars jadvali\n🎧 So'rov — qo'llab-quvvatlash sessiyasi\n❓ Yordam — shu ro'yxat\n🌐 Til — tilni o'zgartirish",
+                    'support_too_soon'    => "⏰ Iltimos, hozirdan kamida 3 soat keyingi vaqtni tanlang.",
+                    'support_ask_topic'   => "📝 Qaysi mavzu bo'yicha yordam kerak? Savolingizni qisqacha yozing:",
+                    'help_text' => "📋 <b>Buyruqlar:</b>\n\n💰 Balans — oylik to'lov va qarz\n📅 Jadval — dars jadvali\n🎧 Supportga ariza — qo'llab-quvvatlash sessiyasi\n❓ Yordam — shu ro'yxat\n🌐 Til — tilni o'zgartirish",
                     'link_error'  => "❌ Avval /start orqali hisobingizni ulang.",
                     'invalid_code'=> "❌ Noto'g'ri yoki muddati o'tgan kod.",
                     'which_child'  => "👨‍👩‍👧 Qaysi o'quvchining ota-onasisiz?",
@@ -3162,7 +3166,9 @@ try {
                         }
                     }
 
-                } elseif ($command === '/support' || $text === '🎧 Support' || $text === "🎧 So'rov") {
+                } elseif ($command === '/support' || $text === '🎧 Support' || $text === "🎧 So'rov" || $text === '🎧 Supportga ariza') {
+                    // Clear any pending support state
+                    db()->prepare("UPDATE telegram_links SET pending_support_date = NULL, pending_support_time = NULL WHERE chat_id = ?")->execute([$chatId]);
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
                     $linkRow->execute([$chatId]); $link = $linkRow->fetch();
                     if (!$link || $link['entity_type'] !== 'student') {
@@ -3228,11 +3234,45 @@ try {
                     telegramSendWithReplyMarkup($chatId, $T['choose_lang'], $langInlineKb);
 
                 } else {
-                    // Log incoming message
-                    try {
-                        $stmt = db()->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, telegram_message_id, status) VALUES (?,?,?,?,?,?)");
-                        $stmt->execute([$chatId, 'in', $text ?: '[contact/media]', 'reply', $msg['message_id'] ?? null, 'received']);
-                    } catch (PDOException $e) { /* ignore */ }
+                    // Check for pending support topic input
+                    $pendingRow = db()->prepare("SELECT pending_support_date::text AS pending_support_date, pending_support_time FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL AND pending_support_date IS NOT NULL");
+                    $pendingRow->execute([$chatId]); $pendingSupport = $pendingRow->fetch();
+                    if ($pendingSupport && $text) {
+                        // Clear pending state
+                        db()->prepare("UPDATE telegram_links SET pending_support_date = NULL, pending_support_time = NULL WHERE chat_id = ?")->execute([$chatId]);
+                        $reqDate = $pendingSupport['pending_support_date'];
+                        $reqTime = substr($pendingSupport['pending_support_time'], 0, 5);
+                        $topic = trim($text);
+                        // Re-validate and book
+                        $linkRow2 = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                        $linkRow2->execute([$chatId]); $link2 = $linkRow2->fetch();
+                        if (!$link2 || $link2['entity_type'] !== 'student') {
+                            telegramSend($chatId, $T['link_error'], 'custom');
+                        } else {
+                            $studentId2 = (int)$link2['entity_id'];
+                            $existingReq2 = db()->prepare("SELECT id FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE LIMIT 1");
+                            $existingReq2->execute([$studentId2]);
+                            if ($existingReq2->fetch()) {
+                                telegramSendWithReplyMarkup($chatId, $T['support_has_active'], $studentKeyboard);
+                            } else {
+                                $takenSlot = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
+                                $takenSlot->execute([$reqDate, $reqTime]);
+                                if ($takenSlot->fetch()) {
+                                    telegramSendWithReplyMarkup($chatId, $T['support_slot_taken'], $studentKeyboard);
+                                } else {
+                                    db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source, topic) VALUES (?,?,?,'bot',?)")->execute([$studentId2, $reqDate, $reqTime, $topic]);
+                                    $dateStr2 = date('d/m/Y', strtotime($reqDate));
+                                    telegramSendWithReplyMarkup($chatId, sprintf($T['support_booked'], $dateStr2, $reqTime), $studentKeyboard);
+                                }
+                            }
+                        }
+                    } else {
+                        // Log incoming message
+                        try {
+                            $stmt = db()->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, telegram_message_id, status) VALUES (?,?,?,?,?,?)");
+                            $stmt->execute([$chatId, 'in', $text ?: '[contact/media]', 'reply', $msg['message_id'] ?? null, 'received']);
+                        } catch (PDOException $e) { /* ignore */ }
+                    }
                 }
             }
             // Handle callback_query (inline button taps)
@@ -3277,28 +3317,35 @@ try {
                     if ($reqDate < $todayStr || $reqDate > $maxDateStr) {
                         telegramSend($cbChatId, $cbT['support_unavailable'], 'custom');
                     } else {
-                    $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
-                    $linkRow->execute([$cbChatId]); $link = $linkRow->fetch();
-                    if (!$link || $link['entity_type'] !== 'student') {
-                        telegramSend($cbChatId, $cbT['link_error'], 'custom');
-                    } else {
-                        $studentId = (int)$link['entity_id'];
-                        $existing = db()->prepare("SELECT id FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE LIMIT 1");
-                        $existing->execute([$studentId]);
-                        if ($existing->fetch()) {
-                            telegramSend($cbChatId, $cbT['support_has_active'], 'custom');
+                        // Validate slot is at least 3 hours from now
+                        $slotDt = new DateTime($reqDate . ' ' . $reqTime . ':00');
+                        $minDt = new DateTime('+3 hours');
+                        if ($slotDt < $minDt) {
+                            telegramSend($cbChatId, $cbT['support_too_soon'], 'custom');
                         } else {
-                            $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
-                            $taken->execute([$reqDate, $reqTime]);
-                            if ($taken->fetch()) {
-                                telegramSend($cbChatId, $cbT['support_slot_taken'], 'custom');
+                        $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                        $linkRow->execute([$cbChatId]); $link = $linkRow->fetch();
+                        if (!$link || $link['entity_type'] !== 'student') {
+                            telegramSend($cbChatId, $cbT['link_error'], 'custom');
+                        } else {
+                            $studentId = (int)$link['entity_id'];
+                            $existing = db()->prepare("SELECT id FROM support_requests WHERE student_id = ? AND status IN ('pending','confirmed') AND scheduled_date >= CURRENT_DATE LIMIT 1");
+                            $existing->execute([$studentId]);
+                            if ($existing->fetch()) {
+                                telegramSend($cbChatId, $cbT['support_has_active'], 'custom');
                             } else {
-                                db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source) VALUES (?,?,?,'bot')")->execute([$studentId, $reqDate, $reqTime]);
-                                $dateStr = date('d/m/Y', strtotime($reqDate));
-                                telegramSendWithReplyMarkup($cbChatId, sprintf($cbT['support_booked'], $dateStr, $reqTime), $cbKb);
+                                $taken = db()->prepare("SELECT id FROM support_requests WHERE scheduled_date = ? AND scheduled_time = ? AND status != 'cancelled'");
+                                $taken->execute([$reqDate, $reqTime]);
+                                if ($taken->fetch()) {
+                                    telegramSend($cbChatId, $cbT['support_slot_taken'], 'custom');
+                                } else {
+                                    // Store pending slot and ask for topic
+                                    db()->prepare("UPDATE telegram_links SET pending_support_date = ?, pending_support_time = ? WHERE chat_id = ?")->execute([$reqDate, $reqTime, $cbChatId]);
+                                    telegramSend($cbChatId, $cbT['support_ask_topic'], 'custom');
+                                }
                             }
                         }
-                    }
+                        } // end 3-hour check
                     } // end date range check
                 } elseif (preg_match('/^link_student_(\d+)$/', $data, $m)) {
                     $studentId = (int)$m[1];
@@ -3990,7 +4037,7 @@ try {
                 $to   = $_GET['to']   ?? date('Y-m-d', strtotime('saturday this week'));
                 $stmt = db()->prepare("
                     SELECT sr.id, sr.student_id, sr.status, sr.source, sr.assigned_to,
-                           sr.notes, sr.cancelled_reason, sr.created_by, sr.created_at, sr.updated_at,
+                           sr.notes, sr.topic, sr.cancelled_reason, sr.created_by, sr.created_at, sr.updated_at,
                            sr.scheduled_date::text AS scheduled_date,
                            TO_CHAR(sr.scheduled_time, 'HH24:MI') AS scheduled_time,
                            s.first_name || ' ' || s.last_name AS student_name, s.phone AS student_phone,
@@ -4018,8 +4065,8 @@ try {
                 $taken->execute([$date, $time]);
                 if ($taken->fetch()) { jsonError('This time slot is already booked'); break; }
                 $createdBy = $GLOBALS['jwt_user']['id'] ?? null;
-                $stmt = db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source, created_by, notes) VALUES (?,?,?,?,?,?)");
-                $stmt->execute([$studentId, $date, $time, $input['source'] ?? 'manual', $createdBy, $input['notes'] ?? null]);
+                $stmt = db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source, created_by, notes, topic) VALUES (?,?,?,?,?,?,?)");
+                $stmt->execute([$studentId, $date, $time, $input['source'] ?? 'manual', $createdBy, $input['notes'] ?? null, $input['topic'] ?? null]);
                 jsonResponse(['id' => (int)db()->lastInsertId()]);
 
             } elseif ($method === 'PUT' && $id) {

@@ -1754,6 +1754,27 @@ function initDB() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: support_requests topic column
+    try {
+        $m = 'support_requests_topic_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE support_requests ADD COLUMN IF NOT EXISTS topic VARCHAR(255)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: telegram_links pending support state columns
+    try {
+        $m = 'telegram_links_pending_support_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS pending_support_date DATE");
+            getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS pending_support_time VARCHAR(5)");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────

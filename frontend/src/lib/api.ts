@@ -1105,6 +1105,7 @@ export interface SupportRequest {
   assigned_to?: number
   assigned_to_name?: string
   notes?: string
+  topic?: string
   source: 'bot' | 'manual'
   cancelled_reason?: string
   created_by?: number
@@ -1122,7 +1123,7 @@ export const supportRequestsApi = {
     api.get<SupportRequest[]>(`/support-requests?from=${from}&to=${to}`),
   getSlots: (from: string, to: string) =>
     api.get<SupportSlot[]>(`/support-requests/slots?from=${from}&to=${to}`),
-  create: (data: { student_id: number; scheduled_date: string; scheduled_time: string; notes?: string }) =>
+  create: (data: { student_id: number; scheduled_date: string; scheduled_time: string; notes?: string; topic?: string }) =>
     api.post<{ id: number }>('/support-requests', { ...data, source: 'manual' }),
   confirm: (id: number, assigned_to: number) =>
     api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'confirm', assigned_to }),

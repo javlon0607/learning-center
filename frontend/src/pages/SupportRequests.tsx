@@ -84,6 +84,7 @@ export function SupportRequests() {
   const [addStudentSearch, setAddStudentSearch] = useState('')
   const [addStudentOpen, setAddStudentOpen] = useState(false)
   const studentDropdownRef = useRef<HTMLDivElement>(null)
+  const [addTopic, setAddTopic] = useState('')
   const [addNotes, setAddNotes] = useState('')
   const [confirmAssignee, setConfirmAssignee] = useState('')
   const [cancelReason, setCancelReason] = useState('')
@@ -156,12 +157,13 @@ export function SupportRequests() {
       student_id: Number(addStudentId),
       scheduled_date: addDate,
       scheduled_time: addTime,
+      topic: addTopic || undefined,
       notes: addNotes || undefined,
     }),
     onSuccess: () => {
       toast({ title: 'Request added' })
       setAddOpen(false)
-      setAddGroupId(''); setAddStudentId(''); setAddDate(''); setAddTime(''); setAddNotes(''); setAddStudentSearch('')
+      setAddGroupId(''); setAddStudentId(''); setAddDate(''); setAddTime(''); setAddTopic(''); setAddNotes(''); setAddStudentSearch('')
       invalidate()
     },
     onError: (e: Error) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
@@ -284,6 +286,7 @@ export function SupportRequests() {
                             className={cn('w-full rounded px-2 py-1 text-left text-xs transition-colors', STATUS_STYLES[req.status])}
                           >
                             <div className="font-medium truncate">{req.student_name}</div>
+                            {req.topic && <div className="text-xs opacity-70 truncate">{req.topic}</div>}
                             {req.assigned_to_name && <div className="text-xs opacity-70 truncate">👤 {req.assigned_to_name}</div>}
                             {req.source === 'bot' ? <Bot className="h-2.5 w-2.5 inline opacity-50" /> : <User2 className="h-2.5 w-2.5 inline opacity-50" />}
                           </button>
@@ -333,6 +336,9 @@ export function SupportRequests() {
                 )}
                 {selectedRequest.cancelled_reason && (
                   <div className="col-span-2"><span className="text-muted-foreground">Cancel reason</span><p className="font-medium">{selectedRequest.cancelled_reason}</p></div>
+                )}
+                {selectedRequest.topic && (
+                  <div className="col-span-2"><span className="text-muted-foreground">Topic</span><p className="font-medium">{selectedRequest.topic}</p></div>
                 )}
                 {selectedRequest.notes && (
                   <div className="col-span-2"><span className="text-muted-foreground">Notes</span><p className="font-medium">{selectedRequest.notes}</p></div>
@@ -424,7 +430,7 @@ export function SupportRequests() {
       </Dialog>
 
       {/* Add Request Dialog */}
-      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { setAddGroupId(''); setAddStudentId(''); setAddStudentOpen(false); setAddDate(''); setAddTime(''); setAddNotes(''); setAddStudentSearch('') } }}>
+      <Dialog open={addOpen} onOpenChange={open => { setAddOpen(open); if (!open) { setAddGroupId(''); setAddStudentId(''); setAddStudentOpen(false); setAddDate(''); setAddTime(''); setAddTopic(''); setAddNotes(''); setAddStudentSearch('') } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Add Support Request</DialogTitle></DialogHeader>
           <div className="space-y-3">
@@ -514,13 +520,17 @@ export function SupportRequests() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label>Topic *</Label>
+              <Input value={addTopic} onChange={e => setAddTopic(e.target.value)} placeholder="What topic needs support?" />
+            </div>
+            <div className="space-y-2">
               <Label>Notes</Label>
               <Textarea value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes..." rows={2} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button disabled={!addStudentId || !addDate || !addTime || createMutation.isPending} onClick={() => createMutation.mutate()}>
+            <Button disabled={!addStudentId || !addDate || !addTime || !addTopic || createMutation.isPending} onClick={() => createMutation.mutate()}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add Request
             </Button>
