@@ -2961,6 +2961,9 @@ try {
                 ['text' => "🇺🇿 O'zbekcha", 'callback_data' => 'set_lang_uz'],
             ]]];
 
+            // Always return 200 to Telegram so it never retries (retries cause duplicate inserts)
+            try {
+
             $msg = $input['message'] ?? null;
             if ($msg) {
                 $chatId = (int)($msg['chat']['id'] ?? 0);
@@ -3194,8 +3197,8 @@ try {
                                 $booked = [];
                                 foreach ($bookedStmt->fetchAll() as $r) $booked[$r['scheduled_date'].'_'.substr($r['scheduled_time'],0,5)] = true;
                                 $dayNames = $lang === 'uz'
-                                    ? ['1'=>'Du','2'=>'Se','3'=>'Ch','4'=>'Pa','5'=>'Ju','6'=>'Sh']
-                                    : ['1'=>'Mon','2'=>'Tue','3'=>'Wed','4'=>'Thu','5'=>'Fri','6'=>'Sat'];
+                                    ? ['1'=>'Dushanba','2'=>'Seshanba','3'=>'Chorshanba','4'=>'Payshanba','5'=>'Juma','6'=>'Shanba']
+                                    : ['1'=>'Monday','2'=>'Tuesday','3'=>'Wednesday','4'=>'Thursday','5'=>'Friday','6'=>'Saturday'];
                                 $inlineRows = [];
                                 foreach ($days as $d) {
                                     $dow = (int)(new DateTime($d))->format('N');
@@ -3318,6 +3321,9 @@ try {
                         telegramSendWithReplyMarkup($cbChatId, $cbT['choose_lang'], $langInlineKb);
                     }
                 }
+            }
+            } catch (Throwable $e) {
+                error_log("Telegram webhook error: " . $e->getMessage());
             }
             jsonResponse(['ok' => true]);
             break;
