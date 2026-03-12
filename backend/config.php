@@ -1834,6 +1834,43 @@ function initDB() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: telegram_unknown_contacts table
+    try {
+        $m = 'telegram_unknown_contacts_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE TABLE IF NOT EXISTS telegram_unknown_contacts (
+                id SERIAL PRIMARY KEY,
+                chat_id BIGINT NOT NULL,
+                phone VARCHAR(30) NOT NULL,
+                tg_first_name VARCHAR(100),
+                tg_last_name VARCHAR(100),
+                tg_username VARCHAR(100),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(chat_id)
+            )");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: book_batches table
+    try {
+        $m = 'book_batches_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE TABLE IF NOT EXISTS book_batches (
+                id SERIAL PRIMARY KEY,
+                book_id INTEGER NOT NULL REFERENCES books(id),
+                quantity INTEGER NOT NULL,
+                unit_price NUMERIC(10,2) NOT NULL,
+                notes TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────

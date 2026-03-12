@@ -3,12 +3,13 @@ import { formatDateTime } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   telegramApi,
+  leadsApi,
   studentsApi,
   teachersApi,
   groupsApi,
-  leadsApi,
   TelegramLink,
   TelegramLogEntry,
+  TelegramUnknownContact,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus, Trash2, UserX, UserPlus } from 'lucide-react'
 
 export function Telegram() {
   const queryClient = useQueryClient()
@@ -75,6 +76,7 @@ export function Telegram() {
         <TabsList>
           <TabsTrigger value="send">Send Message</TabsTrigger>
           <TabsTrigger value="links">Linked Accounts</TabsTrigger>
+          <TabsTrigger value="unknown"><UnknownContactsBadge /></TabsTrigger>
           <TabsTrigger value="log">Message Log</TabsTrigger>
         </TabsList>
 
@@ -84,6 +86,10 @@ export function Telegram() {
 
         <TabsContent value="links">
           <LinkedAccountsTab toast={toast} queryClient={queryClient} />
+        </TabsContent>
+
+        <TabsContent value="unknown">
+          <UnknownContactsTab toast={toast} queryClient={queryClient} />
         </TabsContent>
 
         <TabsContent value="log">
@@ -449,6 +455,157 @@ function LinkedAccountsTab({
           )}
         </TableBody>
       </Table>
+    </div>
+  )
+}
+
+// ── Unknown Contacts Tab ─────────────────────────────────────────────────
+
+function UnknownContactsBadge() {
+  const { data = [] } = useQuery({
+    queryKey: ['telegram-unknown-contacts'],
+    queryFn: telegramApi.getUnknownContacts,
+    refetchInterval: 60000,
+  })
+  return (
+    <span className="flex items-center gap-1.5">
+      <UserX className="h-4 w-4" />
+      Unknown
+      {data.length > 0 && (
+        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-xs px-1.5 py-0">{data.length}</Badge>
+      )}
+    </span>
+  )
+}
+
+function UnknownContactsTab({
+  toast,
+  queryClient,
+}: {
+  toast: ReturnType<typeof useToast>['toast']
+  queryClient: ReturnType<typeof useQueryClient>
+}) {
+  const [createLeadFor, setCreateLeadFor] = useState<TelegramUnknownContact | null>(null)
+  const [leadName, setLeadName] = useState('')
+
+  const { data: contacts = [], isLoading } = useQuery({
+    queryKey: ['telegram-unknown-contacts'],
+    queryFn: telegramApi.getUnknownContacts,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: telegramApi.deleteUnknownContact,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['telegram-unknown-contacts'] }),
+  })
+
+  const createLeadMutation = useMutation({
+    mutationFn: ({ contact, name }: { contact: TelegramUnknownContact; name: string }) => {
+      const parts = name.trim().split(' ')
+      return leadsApi.create({
+        first_name: parts[0] || 'Unknown',
+        last_name: parts.slice(1).join(' ') || '',
+        phone: contact.phone,
+        source: 'telegram',
+        status: 'new',
+      })
+    },
+    onSuccess: (_, { contact }) => {
+      toast({ title: 'Lead created' })
+      deleteMutation.mutate(contact.id)
+      setCreateLeadFor(null)
+      setLeadName('')
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: 'destructive' }),
+  })
+
+  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+
+  return (
+    <div className="space-y-4 pt-4">
+      <p className="text-sm text-muted-foreground">
+        These people shared their phone number with the bot but were not found in the system.
+      </p>
+
+      {contacts.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">No unknown contacts</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Telegram Name</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(contacts as TelegramUnknownContact[]).map(c => (
+              <TableRow key={c.id}>
+                <TableCell className="font-medium">
+                  {[c.tg_first_name, c.tg_last_name].filter(Boolean).join(' ') || '—'}
+                </TableCell>
+                <TableCell className="font-mono">{c.phone}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {c.tg_username ? `@${c.tg_username}` : '—'}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {formatDateTime(c.created_at)}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 justify-end">
+                    <Button
+                      size="sm" variant="outline" className="h-7 text-xs gap-1"
+                      onClick={() => {
+                        setCreateLeadFor(c)
+                        setLeadName([c.tg_first_name, c.tg_last_name].filter(Boolean).join(' '))
+                      }}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" /> Lead
+                    </Button>
+                    <Button
+                      size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
+                      onClick={() => deleteMutation.mutate(c.id)}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {/* Create Lead Dialog */}
+      <Dialog open={!!createLeadFor} onOpenChange={v => { if (!v) setCreateLeadFor(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Create Lead</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label>Phone</Label>
+              <Input value={createLeadFor?.phone ?? ''} disabled className="mt-1 font-mono" />
+            </div>
+            <div>
+              <Label>Full Name</Label>
+              <Input value={leadName} onChange={e => setLeadName(e.target.value)} className="mt-1" placeholder="First Last" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setCreateLeadFor(null)}>Cancel</Button>
+            <Button
+              onClick={() => createLeadFor && createLeadMutation.mutate({ contact: createLeadFor, name: leadName })}
+              disabled={createLeadMutation.isPending || !leadName.trim()}
+            >
+              {createLeadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Lead'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

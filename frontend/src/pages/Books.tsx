@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Plus, Pencil, Trash2, ShoppingCart, X, TrendingUp, AlertTriangle, DollarSign, Clock, Users } from 'lucide-react'
+import { BookOpen, Plus, Pencil, Trash2, ShoppingCart, X, TrendingUp, AlertTriangle, DollarSign, Clock, Users, PackagePlus } from 'lucide-react'
 import {
   booksApi, bookIssuesApi, groupsApi, enrollmentsApi,
   Book, BookIssue, BookMonthStat, Enrollment,
@@ -39,6 +39,8 @@ function BookFormDialog({ open, onOpenChange, book, onSuccess }: BookFormDialogP
   const price    = useAmountInput(book ? String(book.price) : '')
   const quantity = useAmountInput(book ? String(book.quantity) : '')
 
+  const isEdit = !!book
+
   function resetForm() {
     setTitle(book?.title ?? '')
     setAuthor(book?.author ?? '')
@@ -76,18 +78,22 @@ function BookFormDialog({ open, onOpenChange, book, onSuccess }: BookFormDialogP
       toast({ title: 'Title is required', variant: 'destructive' })
       return
     }
-    const data = {
-      title: title.trim(),
-      author: author.trim() || undefined,
-      isbn: isbn.trim() || undefined,
-      price: price.numericValue(),
-      quantity: Math.round(quantity.numericValue()),
-      description: description.trim() || undefined,
-    }
-    if (book) {
-      updateMutation.mutate({ id: book.id, data })
+    if (isEdit) {
+      updateMutation.mutate({ id: book.id, data: {
+        title: title.trim(),
+        author: author.trim() || undefined,
+        isbn: isbn.trim() || undefined,
+        description: description.trim() || undefined,
+      }})
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate({
+        title: title.trim(),
+        author: author.trim() || undefined,
+        isbn: isbn.trim() || undefined,
+        price: price.numericValue(),
+        quantity: Math.round(quantity.numericValue()),
+        description: description.trim() || undefined,
+      })
     }
   }
 
@@ -97,7 +103,7 @@ function BookFormDialog({ open, onOpenChange, book, onSuccess }: BookFormDialogP
     <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); onOpenChange(v) }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{book ? t('books.edit', 'Edit Book') : t('books.add', 'Add Book')}</DialogTitle>
+          <DialogTitle>{isEdit ? t('books.edit', 'Edit Book') : t('books.add', 'Add Book')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div>
@@ -114,16 +120,18 @@ function BookFormDialog({ open, onOpenChange, book, onSuccess }: BookFormDialogP
               <Input value={isbn} onChange={e => setIsbn(e.target.value)} className="mt-1" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>{t('books.form_price', 'Price *')}</Label>
-              <Input ref={price.ref} value={price.value} onChange={price.onChange} onBlur={price.onBlur} className="mt-1" placeholder="0" />
+          {!isEdit && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>{t('books.form_price', 'Price *')}</Label>
+                <Input ref={price.ref} value={price.value} onChange={price.onChange} onBlur={price.onBlur} className="mt-1" placeholder="0" />
+              </div>
+              <div>
+                <Label>{t('books.form_quantity', 'Quantity *')}</Label>
+                <Input ref={quantity.ref} value={quantity.value} onChange={quantity.onChange} onBlur={quantity.onBlur} className="mt-1" placeholder="0" />
+              </div>
             </div>
-            <div>
-              <Label>{t('books.form_quantity', 'Quantity *')}</Label>
-              <Input ref={quantity.ref} value={quantity.value} onChange={quantity.onChange} onBlur={quantity.onBlur} className="mt-1" placeholder="0" />
-            </div>
-          </div>
+          )}
           <div>
             <Label>{t('books.form_description', 'Description')}</Label>
             <Input value={description} onChange={e => setDesc(e.target.value)} className="mt-1" />
@@ -132,7 +140,85 @@ function BookFormDialog({ open, onOpenChange, book, onSuccess }: BookFormDialogP
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel', 'Cancel')}</Button>
           <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? t('common.loading', 'Loading...') : (book ? t('common.save', 'Save') : t('common.add', 'Add'))}
+            {isPending ? t('common.loading', 'Loading...') : (isEdit ? t('common.save', 'Save') : t('common.add', 'Add'))}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ── Add Stock Dialog ───────────────────────────────────────────────────────
+
+interface AddStockDialogProps {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  book: Book
+}
+
+function AddStockDialog({ open, onOpenChange, book }: AddStockDialogProps) {
+  const { t } = useTranslation()
+  const { toast } = useToast()
+  const qc = useQueryClient()
+  const qty   = useAmountInput('')
+  const price = useAmountInput(String(book.price))
+
+  useEffect(() => {
+    if (open) {
+      qty.setFromNumber(0)
+      price.setFromNumber(book.price)
+    }
+  }, [open])
+
+  const mutation = useMutation({
+    mutationFn: (data: { quantity: number; price?: number; notes?: string }) =>
+      booksApi.addStock(book.id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['books'] })
+      toast({ title: 'Stock added' })
+      onOpenChange(false)
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: 'destructive' }),
+  })
+
+  function handleSubmit() {
+    const q = Math.round(qty.numericValue())
+    if (q < 1) { toast({ title: 'Quantity must be at least 1', variant: 'destructive' }); return }
+    const newPrice = price.numericValue()
+    mutation.mutate({
+      quantity: q,
+      price: newPrice !== book.price ? newPrice : undefined,
+    })
+  }
+
+  const newPrice = price.numericValue()
+  const priceChanged = newPrice !== book.price
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Stock — {book.title}</DialogTitle>
+          <DialogDescription>Current stock: {book.available} available / {book.quantity} total</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>New Batch Quantity *</Label>
+            <Input ref={qty.ref} value={qty.value} onChange={qty.onChange} onBlur={qty.onBlur} className="mt-1" placeholder="0" />
+          </div>
+          <div>
+            <Label>
+              Selling Price
+              {priceChanged && <span className="ml-2 text-xs text-amber-600">(was {book.price.toLocaleString()} → will update)</span>}
+            </Label>
+            <Input ref={price.ref} value={price.value} onChange={price.onChange} onBlur={price.onBlur} className="mt-1" />
+            <p className="text-xs text-muted-foreground mt-1">Change only if the new batch has a different selling price</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button onClick={handleSubmit} disabled={mutation.isPending}>
+            {mutation.isPending ? t('common.loading', 'Loading...') : 'Add Stock'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -588,7 +674,7 @@ function IssuesTable({ bookId, studentId }: IssuesTableProps) {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {total > 0 && (
         <div className="flex items-center justify-between pt-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
             {t('common.prev', 'Prev')}
@@ -695,12 +781,13 @@ export function Books() {
   const { hasFeature } = usePermissions()
   const canDeleteBooks = hasFeature('books_delete')
 
-  const [search, setSearch]           = useState('')
-  const [addOpen, setAddOpen]         = useState(false)
-  const [editBook, setEditBook]       = useState<Book | null>(null)
-  const [issueBook, setIssueBook]     = useState<Book | null>(null)
-  const [historyBook, setHistoryBook] = useState<Book | null>(null)
-  const [deleteBook, setDeleteBook]   = useState<Book | null>(null)
+  const [search, setSearch]             = useState('')
+  const [addOpen, setAddOpen]           = useState(false)
+  const [editBook, setEditBook]         = useState<Book | null>(null)
+  const [restockBook, setRestockBook]   = useState<Book | null>(null)
+  const [issueBook, setIssueBook]       = useState<Book | null>(null)
+  const [historyBook, setHistoryBook]   = useState<Book | null>(null)
+  const [deleteBook, setDeleteBook]     = useState<Book | null>(null)
 
   const { data: books = [], isLoading } = useQuery({
     queryKey: ['books'],
@@ -891,6 +978,13 @@ export function Books() {
                             </Button>
                             <Button
                               variant="ghost" size="icon" className="h-8 w-8"
+                              title="Add Stock"
+                              onClick={() => setRestockBook(book)}
+                            >
+                              <PackagePlus className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="icon" className="h-8 w-8"
                               title={t('common.edit', 'Edit')}
                               onClick={() => setEditBook(book)}
                             >
@@ -942,6 +1036,15 @@ export function Books() {
           onOpenChange={v => { if (!v) setEditBook(null) }}
           book={editBook}
           onSuccess={() => setEditBook(null)}
+        />
+      )}
+
+      {/* Add Stock Dialog */}
+      {restockBook && (
+        <AddStockDialog
+          open={!!restockBook}
+          onOpenChange={v => { if (!v) setRestockBook(null) }}
+          book={restockBook}
         />
       )}
 

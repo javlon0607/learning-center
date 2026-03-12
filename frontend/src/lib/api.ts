@@ -690,8 +690,10 @@ export const booksApi = {
   getStats: () => api.get<BookMonthStat[]>('/books', { stats: '1' }),
   create: (data: { title: string; author?: string; isbn?: string; price: number; quantity: number; description?: string }) =>
     api.post<{ id: number }>('/books', data),
-  update: (id: number, data: Partial<{ title: string; author: string; isbn: string; price: number; quantity: number; description: string }>) =>
+  update: (id: number, data: Partial<{ title: string; author: string; isbn: string; description: string }>) =>
     api.put<{ ok: boolean }>(`/books/${id}`, data),
+  addStock: (id: number, data: { quantity: number; price?: number; notes?: string }) =>
+    api.post<{ ok: boolean }>(`/books/${id}/restock`, data),
   delete: (id: number) => api.delete<{ ok: boolean }>(`/books/${id}`),
 }
 
@@ -1082,6 +1084,16 @@ export interface TelegramLogEntry {
   created_at: string
 }
 
+export interface TelegramUnknownContact {
+  id: number
+  chat_id: number
+  phone: string
+  tg_first_name?: string
+  tg_last_name?: string
+  tg_username?: string
+  created_at: string
+}
+
 export const telegramApi = {
   getLinks: () => api.get<TelegramLink[]>('/telegram'),
   generateCode: (entity_type: string, entity_id: number) =>
@@ -1093,6 +1105,8 @@ export const telegramApi = {
     api.post<{ sent: number; failed: number; errors: string[] }>('/telegram', { action: 'send', target_type, target_id, message }),
   clearQueue: () =>
     api.post<{ ok: boolean; message: string }>('/telegram', { action: 'clear-queue' }),
+  getUnknownContacts: () => api.get<TelegramUnknownContact[]>('/telegram/unknown-contacts'),
+  deleteUnknownContact: (id: number) => api.delete(`/telegram/unknown-contacts/${id}`),
 }
 
 export interface SupportRequest {

@@ -877,6 +877,7 @@ try {
                 // Include months_covered for each payment
                 $where = ['p.deleted_at IS NULL'];
                 $params = [];
+                $where[] = "NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = p.id)";
                 if (!empty($_GET['student_id'])) {
                     $where[] = "p.student_id = ?";
                     $params[] = (int)$_GET['student_id'];
@@ -1703,7 +1704,7 @@ try {
                     $students = db()->query("SELECT COUNT(*) FROM students WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
                     $teachers = db()->query("SELECT COUNT(*) FROM teachers WHERE status='active'")->fetchColumn();
                     $groups = db()->query("SELECT COUNT(*) FROM groups WHERE status='active' AND deleted_at IS NULL")->fetchColumn();
-                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenue = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE) AND NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = payments.id)")->fetchColumn();
                     $expenses = db()->query("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)")->fetchColumn();
                     $leads = 0;
                     try {
@@ -1717,7 +1718,7 @@ try {
                     $studentsTrend = $studentsLastMonth > 0 ? round(($studentsThisMonth - $studentsLastMonth) / $studentsLastMonth * 100) : ($studentsThisMonth > 0 ? 100 : 0);
                     
                     // Revenue: this month vs last month
-                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE)")->fetchColumn();
+                    $revenueLastMonth = db()->query("SELECT COALESCE(SUM(amount),0) FROM payments WHERE deleted_at IS NULL AND is_approved = TRUE AND payment_date >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND payment_date < date_trunc('month', CURRENT_DATE) AND NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = payments.id)")->fetchColumn();
                     $revenueTrend = $revenueLastMonth > 0 ? round(($revenue - $revenueLastMonth) / $revenueLastMonth * 100) : ($revenue > 0 ? 100 : 0);
 
                     // Expenses: this month vs last month
@@ -1762,7 +1763,7 @@ try {
                         $monthYear = date('Y-m', strtotime($monthStart));
 
                         // Get revenue for this month
-                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE");
+                        $revStmt = db()->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE AND NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = payments.id)");
                         $revStmt->execute([$monthStart, $monthEnd]);
                         $revenue = (float)$revStmt->fetchColumn();
 
@@ -1805,7 +1806,7 @@ try {
             $from = $_GET['from'] ?? date('Y-m-01');
             $to = $_GET['to'] ?? date('Y-m-d');
             if ($report === 'payments') {
-                $stmt = db()->prepare("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id WHERE p.payment_date BETWEEN ? AND ? AND p.deleted_at IS NULL ORDER BY p.payment_date");
+                $stmt = db()->prepare("SELECT p.*, s.first_name || ' ' || s.last_name AS student_name, g.name AS group_name FROM payments p JOIN students s ON p.student_id = s.id LEFT JOIN groups g ON p.group_id = g.id WHERE p.payment_date BETWEEN ? AND ? AND p.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = p.id) ORDER BY p.payment_date");
                 $stmt->execute([$from, $to]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($report === 'expenses') {
@@ -1813,7 +1814,7 @@ try {
                 $stmt->execute([$from, $to]);
                 jsonResponse($stmt->fetchAll());
             } elseif ($report === 'income-expense') {
-                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE");
+                $inc = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date BETWEEN ? AND ? AND deleted_at IS NULL AND is_approved = TRUE AND NOT EXISTS (SELECT 1 FROM book_issues WHERE book_issues.payment_id = payments.id)");
                 $inc->execute([$from, $to]);
                 $exp = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date BETWEEN ? AND ? AND deleted_at IS NULL");
                 $exp->execute([$from, $to]);
@@ -3116,6 +3117,25 @@ try {
                         }
                     } else {
                         telegramSendWithReplyMarkup($chatId, $T['phone_not_found'], ['remove_keyboard' => true]);
+                        // Save unknown contact for admin review
+                        try {
+                            $tgFrom = $msg['from'] ?? [];
+                            db()->prepare("
+                                INSERT INTO telegram_unknown_contacts (chat_id, phone, tg_first_name, tg_last_name, tg_username)
+                                VALUES (?, ?, ?, ?, ?)
+                                ON CONFLICT (chat_id) DO UPDATE SET
+                                    phone = EXCLUDED.phone,
+                                    tg_first_name = EXCLUDED.tg_first_name,
+                                    tg_last_name = EXCLUDED.tg_last_name,
+                                    tg_username = EXCLUDED.tg_username,
+                                    created_at = NOW()
+                            ")->execute([
+                                $chatId, $rawPhone,
+                                $tgFrom['first_name'] ?? null,
+                                $tgFrom['last_name'] ?? null,
+                                $tgFrom['username'] ?? null,
+                            ]);
+                        } catch (PDOException $e) { /* ignore */ }
                     }
 
                 } elseif (preg_match('#^/start\s+(\S+)$#', $text, $m)) {
@@ -3459,6 +3479,14 @@ try {
                 $stmt = db()->prepare("SELECT tl.*, u.name AS sent_by_name FROM telegram_log tl LEFT JOIN users u ON tl.sent_by = u.id ORDER BY tl.created_at DESC LIMIT ? OFFSET ?");
                 $stmt->execute([$limit, $offset]);
                 jsonResponse(['data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+
+            } elseif ($method === 'GET' && $sub === 'unknown-contacts') {
+                $rows = db()->query("SELECT * FROM telegram_unknown_contacts ORDER BY created_at DESC")->fetchAll();
+                jsonResponse($rows);
+
+            } elseif ($method === 'DELETE' && $sub === 'unknown-contacts' && $id) {
+                db()->prepare("DELETE FROM telegram_unknown_contacts WHERE id = ?")->execute([$id]);
+                jsonResponse(['ok' => true]);
 
             } elseif ($method === 'GET') {
                 // GET /telegram — list all links with entity names
@@ -3870,29 +3898,49 @@ try {
                 $stmt = db()->prepare("SELECT id FROM books WHERE id = ? AND deleted_at IS NULL");
                 $stmt->execute([$id]);
                 if (!$stmt->fetch()) jsonError('Not found', 404);
-                // Validate quantity >= issued count
-                if (isset($input['quantity'])) {
-                    $newQty = max(0, (int)$input['quantity']);
-                    $issuedStmt = db()->prepare("SELECT COALESCE(SUM(quantity), 0) FROM book_issues WHERE book_id = ? AND deleted_at IS NULL");
-                    $issuedStmt->execute([$id]);
-                    $issuedCount = (int)$issuedStmt->fetchColumn();
-                    if ($newQty < $issuedCount) {
-                        jsonError('Quantity cannot be less than already issued count (' . $issuedCount . ')', 400);
-                        break;
-                    }
-                }
                 $fields = [];
                 $vals   = [];
                 foreach (['title','author','isbn','description'] as $f) {
                     if (isset($input[$f])) { $fields[] = "$f = ?"; $vals[] = $input[$f]; }
                 }
-                if (isset($input['price']))    { $fields[] = 'price = ?';    $vals[] = max(0, (float)$input['price']); }
-                if (isset($input['quantity'])) { $fields[] = 'quantity = ?'; $vals[] = max(0, (int)$input['quantity']); }
                 if ($fields) {
                     $vals[] = $id;
                     db()->prepare("UPDATE books SET " . implode(', ', $fields) . " WHERE id = ?")->execute($vals);
                 }
                 jsonResponse(['ok' => true]);
+            } elseif ($method === 'POST' && $id && $sub === 'restock') {
+                requireFeature('books');
+                $qty = max(1, (int)($input['quantity'] ?? 0));
+                if ($qty < 1) { jsonError('Quantity must be at least 1', 400); break; }
+                $newPrice = isset($input['price']) ? max(0, (float)$input['price']) : null;
+                $notes    = trim($input['notes'] ?? '') ?: null;
+                $issuedBy = $GLOBALS['jwt_user']['id'] ?? null;
+
+                $bStmt = db()->prepare("SELECT id, price, quantity FROM books WHERE id = ? AND deleted_at IS NULL");
+                $bStmt->execute([$id]);
+                $book = $bStmt->fetch();
+                if (!$book) { jsonError('Book not found', 404); break; }
+
+                db()->beginTransaction();
+                try {
+                    // Record the batch
+                    db()->prepare("INSERT INTO book_batches (book_id, quantity, unit_price, notes, created_by) VALUES (?, ?, ?, ?, ?)")
+                        ->execute([$id, $qty, $newPrice ?? $book['price'], $notes, $issuedBy]);
+                    // Increase quantity
+                    $updateFields = ['quantity = quantity + ?'];
+                    $updateVals   = [$qty];
+                    if ($newPrice !== null) {
+                        $updateFields[] = 'price = ?';
+                        $updateVals[]   = $newPrice;
+                    }
+                    $updateVals[] = $id;
+                    db()->prepare("UPDATE books SET " . implode(', ', $updateFields) . " WHERE id = ?")->execute($updateVals);
+                    db()->commit();
+                    jsonResponse(['ok' => true]);
+                } catch (Exception $ex) {
+                    db()->rollBack();
+                    jsonError($ex->getMessage(), 500);
+                }
             } elseif ($method === 'DELETE' && $id) {
                 requireFeature('books_delete');
                 db()->prepare("UPDATE book_issues SET deleted_at = NOW() WHERE book_id = ? AND deleted_at IS NULL")->execute([$id]);
