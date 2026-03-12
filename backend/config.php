@@ -2018,10 +2018,28 @@ function activityLog($action, $entity = null, $entity_id = null, $details = null
     }
 }
 
-// Audit logging with before/after values
+// Audit logging with before/after values.
+// When both old and new are arrays, only changed fields are stored.
 function auditLog($action, $entity_type, $entity_id, $old_values = null, $new_values = null) {
     $user_id = $GLOBALS['jwt_user']['id'] ?? null;
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+
+    if (is_array($old_values) && is_array($new_values)) {
+        $diffOld = [];
+        $diffNew = [];
+        $keys = array_unique(array_merge(array_keys($old_values), array_keys($new_values)));
+        foreach ($keys as $k) {
+            $o = $old_values[$k] ?? null;
+            $n = $new_values[$k] ?? null;
+            if ((string)$o !== (string)$n) {
+                $diffOld[$k] = $o;
+                $diffNew[$k] = $n;
+            }
+        }
+        if (empty($diffOld)) return; // nothing actually changed
+        $old_values = $diffOld;
+        $new_values = $diffNew;
+    }
 
     try {
         $db = getDB();

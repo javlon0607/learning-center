@@ -1469,9 +1469,12 @@ try {
                     }
                 }
                 if (!empty($attendanceNew)) {
-                    auditLog('update', 'attendance', $group,
-                        ['group_id' => $group, 'date' => $date, 'statuses' => $attendanceOld],
-                        ['group_id' => $group, 'date' => $date, 'statuses' => $attendanceNew]
+                    $attChanges = [];
+                    foreach ($attendanceNew as $sid => $newSt) {
+                        $attChanges[$sid] = ['from' => $attendanceOld[$sid] ?? null, 'to' => $newSt];
+                    }
+                    auditLog('update', 'attendance', $group, null,
+                        ['group_id' => $group, 'date' => $date, 'changes' => $attChanges]
                     );
                 }
                 jsonResponse(['ok' => true]);
