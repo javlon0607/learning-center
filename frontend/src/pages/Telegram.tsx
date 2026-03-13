@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
-import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus, Trash2, UserX, UserPlus } from 'lucide-react'
+import { Loader2, Send, ArrowUp, ArrowDown, Unlink, Copy, Plus, Trash2, UserX, UserPlus, RefreshCw, Settings, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 
 export function Telegram() {
   const queryClient = useQueryClient()
@@ -78,6 +78,7 @@ export function Telegram() {
           <TabsTrigger value="links">Linked Accounts</TabsTrigger>
           <TabsTrigger value="unknown"><UnknownContactsBadge /></TabsTrigger>
           <TabsTrigger value="log">Message Log</TabsTrigger>
+          <TabsTrigger value="setup"><Settings className="h-4 w-4 mr-1 inline" />Bot Setup</TabsTrigger>
         </TabsList>
 
         <TabsContent value="send">
@@ -94,6 +95,10 @@ export function Telegram() {
 
         <TabsContent value="log">
           <MessageLogTab />
+        </TabsContent>
+
+        <TabsContent value="setup">
+          <BotSetupTab toast={toast} />
         </TabsContent>
       </Tabs>
     </div>
@@ -606,6 +611,145 @@ function UnknownContactsTab({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ── Bot Setup Tab ────────────────────────────────────────────────────────
+
+function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] }) {
+  const [webhookUrl, setWebhookUrl] = useState('')
+
+  const { data: webhookInfo, isLoading: infoLoading, refetch, isFetching } = useQuery({
+    queryKey: ['telegram-webhook-info'],
+    queryFn: () => telegramApi.getWebhookInfo(),
+    retry: false,
+  })
+
+  const setWebhookMutation = useMutation({
+    mutationFn: () => telegramApi.setWebhook(webhookUrl),
+    onSuccess: (data) => {
+      toast({ title: 'Webhook set', description: data.description })
+      refetch()
+      setWebhookUrl('')
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to set webhook', description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const suggestedUrl = `${window.location.origin.replace(/:\d+$/, '')}/api/telegram-webhook`
+
+  const isRegistered = webhookInfo && webhookInfo.url && webhookInfo.url.length > 0
+  const hasError = webhookInfo && webhookInfo.last_error_message
+
+  return (
+    <div className="max-w-2xl space-y-6 pt-4">
+
+      {/* Status Card */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-base">Webhook Status</h3>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        {infoLoading ? (
+          <div className="flex justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : !webhookInfo ? (
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-5 w-5" />
+            <span className="text-sm">Could not fetch webhook info. Check bot token configuration.</span>
+          </div>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <div className="flex items-start gap-2">
+              {isRegistered
+                ? <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+                : <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />}
+              <div>
+                <p className="font-medium">{isRegistered ? 'Webhook registered' : 'No webhook registered'}</p>
+                {isRegistered && (
+                  <p className="text-muted-foreground font-mono break-all mt-0.5">{webhookInfo.url}</p>
+                )}
+              </div>
+            </div>
+
+            {webhookInfo.pending_update_count > 0 && (
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="h-4 w-4" />
+                <span>{webhookInfo.pending_update_count} pending updates in queue</span>
+              </div>
+            )}
+
+            {hasError && (
+              <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 space-y-1">
+                <p className="font-medium text-red-700 dark:text-red-400 flex items-center gap-1">
+                  <XCircle className="h-4 w-4" /> Last delivery error
+                </p>
+                <p className="text-red-600 dark:text-red-300">{webhookInfo.last_error_message}</p>
+                {webhookInfo.last_error_date && (
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(webhookInfo.last_error_date * 1000).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Register Webhook */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-base">Register Webhook</h3>
+        <p className="text-sm text-muted-foreground">
+          Telegram will POST incoming messages to this URL. Must be <strong>HTTPS</strong>.
+        </p>
+
+        <div className="space-y-2">
+          <Label>Webhook URL</Label>
+          <div className="flex gap-2">
+            <Input
+              value={webhookUrl}
+              onChange={e => setWebhookUrl(e.target.value)}
+              placeholder={suggestedUrl}
+              className="font-mono text-sm"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => setWebhookUrl(suggestedUrl)}
+            >
+              Auto-fill
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Suggested: <code className="bg-muted rounded px-1">{suggestedUrl}</code>
+          </p>
+        </div>
+
+        <Button
+          onClick={() => setWebhookMutation.mutate()}
+          disabled={setWebhookMutation.isPending || !webhookUrl.trim()}
+        >
+          {setWebhookMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          {isRegistered ? 'Update Webhook' : 'Register Webhook'}
+        </Button>
+      </div>
+
+      {/* Info */}
+      <div className="rounded-lg bg-muted/40 border border-border p-4 text-sm text-muted-foreground space-y-2">
+        <p className="font-medium text-foreground">How incoming messages work</p>
+        <ul className="space-y-1 list-disc list-inside">
+          <li>Users send a message to your bot in Telegram</li>
+          <li>Telegram delivers it via POST to your webhook URL</li>
+          <li>The server processes it and responds to the user</li>
+          <li>If the webhook URL is missing or wrong, incoming messages won't work</li>
+          <li>Telegram requires <strong>HTTPS</strong> — plain HTTP is not accepted</li>
+        </ul>
+      </div>
     </div>
   )
 }

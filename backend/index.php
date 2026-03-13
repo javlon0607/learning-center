@@ -3579,6 +3579,41 @@ try {
                         break;
                     }
                     jsonResponse($results);
+                } elseif ($action === 'get-webhook-info') {
+                    if (!TELEGRAM_BOT_TOKEN) { jsonError('Bot token not configured'); break; }
+                    $apiBase = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN;
+                    $ch = curl_init($apiBase . '/getWebhookInfo');
+                    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+                    $result = json_decode(curl_exec($ch), true);
+                    curl_close($ch);
+                    if (!empty($result['ok'])) {
+                        jsonResponse($result['result']);
+                    } else {
+                        jsonError($result['description'] ?? 'Failed to get webhook info');
+                    }
+
+                } elseif ($action === 'set-webhook') {
+                    if (!TELEGRAM_BOT_TOKEN) { jsonError('Bot token not configured'); break; }
+                    $webhookUrl = trim($input['url'] ?? '');
+                    if (!$webhookUrl) { jsonError('url is required'); break; }
+                    if (!filter_var($webhookUrl, FILTER_VALIDATE_URL)) { jsonError('Invalid URL'); break; }
+                    $apiBase = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN;
+                    $ch = curl_init($apiBase . '/setWebhook');
+                    curl_setopt_array($ch, [
+                        CURLOPT_POST => true,
+                        CURLOPT_POSTFIELDS => json_encode(['url' => $webhookUrl]),
+                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_TIMEOUT => 10,
+                    ]);
+                    $result = json_decode(curl_exec($ch), true);
+                    curl_close($ch);
+                    if (!empty($result['ok'])) {
+                        jsonResponse(['ok' => true, 'description' => $result['description'] ?? 'Webhook set successfully']);
+                    } else {
+                        jsonError($result['description'] ?? 'Failed to set webhook');
+                    }
+
                 } elseif ($action === 'clear-queue') {
                     if (!TELEGRAM_BOT_TOKEN) { jsonError('Bot token not configured'); break; }
                     $apiBase = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN;

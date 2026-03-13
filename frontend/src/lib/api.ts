@@ -1105,6 +1105,10 @@ export const telegramApi = {
     api.post<{ sent: number; failed: number; errors: string[] }>('/telegram', { action: 'send', target_type, target_id, message }),
   clearQueue: () =>
     api.post<{ ok: boolean; message: string }>('/telegram', { action: 'clear-queue' }),
+  getWebhookInfo: () =>
+    api.post<{ url: string; has_custom_certificate: boolean; pending_update_count: number; last_error_date?: number; last_error_message?: string; max_connections?: number }>('/telegram', { action: 'get-webhook-info' }),
+  setWebhook: (url: string) =>
+    api.post<{ ok: boolean; description: string }>('/telegram', { action: 'set-webhook', url }),
   getUnknownContacts: () => api.get<TelegramUnknownContact[]>('/telegram/unknown-contacts'),
   deleteUnknownContact: (id: number) => api.delete(`/telegram/unknown-contacts/${id}`),
 }
