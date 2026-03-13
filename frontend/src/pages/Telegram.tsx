@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { formatDateTime } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -619,21 +619,32 @@ function UnknownContactsTab({
 // ── Bot Setup Tab ────────────────────────────────────────────────────────
 
 function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] }) {
+  const queryClient = useQueryClient()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [contactInfo, setContactInfo] = useState('')
+  const contactInfoInitialized = useRef(false)
 
   const { data: settings } = useQuery({
     queryKey: ['telegram-settings'],
     queryFn: () => telegramSettingsApi.get(),
+    refetchOnWindowFocus: false,
   })
 
+  // Only sync from DB on first load, never override user edits
   useEffect(() => {
-    if (settings?.contact_info !== undefined) setContactInfo(settings.contact_info)
+    if (!contactInfoInitialized.current && settings !== undefined) {
+      contactInfoInitialized.current = true
+      setContactInfo(settings.contact_info ?? '')
+    }
   }, [settings])
 
   const saveSettingsMutation = useMutation({
     mutationFn: () => telegramSettingsApi.save({ contact_info: contactInfo }),
-    onSuccess: () => toast({ title: 'Contact info saved' }),
+    onSuccess: () => {
+      toast({ title: 'Contact info saved' })
+      queryClient.invalidateQueries({ queryKey: ['telegram-settings'] })
+      contactInfoInitialized.current = false // allow re-sync after invalidation
+    },
     onError: (err: Error) => toast({ title: 'Failed to save', description: err.message, variant: 'destructive' }),
   })
 
