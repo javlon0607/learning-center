@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { formatDateTime } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   telegramApi,
+  telegramSettingsApi,
   leadsApi,
   studentsApi,
   teachersApi,
@@ -619,6 +620,22 @@ function UnknownContactsTab({
 
 function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] }) {
   const [webhookUrl, setWebhookUrl] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
+
+  const { data: settings } = useQuery({
+    queryKey: ['telegram-settings'],
+    queryFn: () => telegramSettingsApi.get(),
+  })
+
+  useEffect(() => {
+    if (settings?.contact_info !== undefined) setContactInfo(settings.contact_info)
+  }, [settings])
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: () => telegramSettingsApi.save({ contact_info: contactInfo }),
+    onSuccess: () => toast({ title: 'Contact info saved' }),
+    onError: (err: Error) => toast({ title: 'Failed to save', description: err.message, variant: 'destructive' }),
+  })
 
   const { data: webhookInfo, isLoading: infoLoading, refetch, isFetching } = useQuery({
     queryKey: ['telegram-webhook-info'],
@@ -736,6 +753,31 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
         >
           {setWebhookMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
           {isRegistered ? 'Update Webhook' : 'Register Webhook'}
+        </Button>
+      </div>
+
+      {/* Contact Info */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-base">Contact Info for Bot</h3>
+        <p className="text-sm text-muted-foreground">
+          Shown to users when they tap "Contact us" in the bot. Supports plain text.
+        </p>
+        <div className="space-y-2">
+          <Label>Contact Information</Label>
+          <Textarea
+            value={contactInfo}
+            onChange={e => setContactInfo(e.target.value)}
+            rows={5}
+            placeholder={"📍 Address: 123 Main St\n📞 Phone: +998 90 123 45 67\n🕐 Hours: Mon–Sat 9:00–18:00\n✉️ Email: info@legacyacademy.uz"}
+            className="font-mono text-sm"
+          />
+        </div>
+        <Button
+          onClick={() => saveSettingsMutation.mutate()}
+          disabled={saveSettingsMutation.isPending}
+        >
+          {saveSettingsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Save Contact Info
         </Button>
       </div>
 

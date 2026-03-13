@@ -1119,6 +1119,11 @@ export const telegramApi = {
   deleteUnknownContact: (id: number) => api.delete(`/telegram/unknown-contacts/${id}`),
 }
 
+export const telegramSettingsApi = {
+  get: () => api.get<{ contact_info?: string }>('/telegram-settings'),
+  save: (data: { contact_info: string }) => api.put<{ ok: boolean }>('/telegram-settings', data),
+}
+
 export interface SupportRequest {
   id: number
   student_id: number

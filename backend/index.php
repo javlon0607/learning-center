@@ -3077,6 +3077,12 @@ try {
                     'invalid_code'=> "❌ Invalid or expired link code.",
                     'which_child'  => "👨‍👩‍👧 Which student are you the parent of?",
                     'linked_notify'=> "✅ Linked! You will now receive notifications.",
+                    'btn_contact_us' => '📞 Contact us',
+                    'btn_login'      => '🔑 Log in',
+                    'btn_back'       => '← Back',
+                    'contact_info_empty' => "📞 Contact information is not available yet. Please contact admin directly.",
+                    'main_menu_prompt'   => "Choose an option:",
+                    'login_prompt'       => "Please share your phone number to log in:",
                 ],
                 'uz' => [
                     'btn_balance'  => '💰 Balans',   'btn_schedule' => '📅 Jadval',
@@ -3113,6 +3119,12 @@ try {
                     'invalid_code'=> "❌ Noto'g'ri yoki muddati o'tgan kod.",
                     'which_child'  => "👨‍👩‍👧 Qaysi o'quvchining ota-onasisiz?",
                     'linked_notify'=> "✅ Ulandi! Endi xabarnomalar olasiz.",
+                    'btn_contact_us' => "📞 Biz bilan bog'laning",
+                    'btn_login'      => '🔑 Kirish',
+                    'btn_back'       => '← Orqaga',
+                    'contact_info_empty' => "📞 Aloqa ma'lumotlari hali kiritilmagan. Iltimos, admin bilan bog'laning.",
+                    'main_menu_prompt'   => "Variantni tanlang:",
+                    'login_prompt'       => "Kirish uchun telefon raqamingizni yuboring:",
                 ],
             ];
             // Helper: build student reply keyboard
@@ -3129,8 +3141,25 @@ try {
                 ['text' => "🇺🇿 O'zbekcha", 'callback_data' => 'set_lang_uz'],
             ]]];
 
+            // Unlinked user keyboard helper
+            $mkUnlinkedKeyboard = function(array $T): array {
+                return ['keyboard' => [
+                    [['text' => $T['btn_contact_us']], ['text' => $T['btn_login']]],
+                ], 'resize_keyboard' => true];
+            };
+            // Welcome screen language selection (before account link)
+            $welcomeLangInlineKb = ['inline_keyboard' => [[
+                ['text' => '🇬🇧 English',    'callback_data' => 'welcome_lang_en'],
+                ['text' => "🇺🇿 O'zbekcha", 'callback_data' => 'welcome_lang_uz'],
+            ]]];
+
             // Always return 200 to Telegram so it never retries (retries cause duplicate inserts)
             try {
+                // Lazy-create tables for bot settings and language cache
+                try {
+                    db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)");
+                    db()->exec("CREATE TABLE IF NOT EXISTS telegram_lang_cache (chat_id BIGINT PRIMARY KEY, language VARCHAR(5) DEFAULT 'en', updated_at TIMESTAMPTZ DEFAULT NOW())");
+                } catch (PDOException $e) { /* ignore */ }
 
             $msg = $input['message'] ?? null;
             if ($msg) {
@@ -3142,9 +3171,10 @@ try {
                 if (str_starts_with($text, '/')) {
                     $command = strtolower(explode('@', explode(' ', $text, 2)[0], 2)[0]);
                 }
-                // Fetch user language
-                $lr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ? LIMIT 1");
-                $lr->execute([$chatId]); $lr = $lr->fetch();
+                // Fetch user language (linked users from telegram_links, unlinked from telegram_lang_cache)
+                $lr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ?
+                    UNION ALL SELECT COALESCE(language,'en') FROM telegram_lang_cache WHERE chat_id = ? LIMIT 1");
+                $lr->execute([$chatId, $chatId]); $lr = $lr->fetch();
                 $lang = $lr ? $lr['language'] : 'en';
                 $T = $BOT_LANG[$lang];
                 $studentKeyboard = $mkKeyboard($T);
@@ -3210,7 +3240,7 @@ try {
                             telegramSendWithReplyMarkup($chatId, sprintf($T['welcome_linked_other'], htmlspecialchars($found['name'])), ['remove_keyboard' => true]);
                         }
                     } else {
-                        telegramSendWithReplyMarkup($chatId, $T['phone_not_found'], ['remove_keyboard' => true]);
+                        telegramSendWithReplyMarkup($chatId, $T['phone_not_found'], $mkUnlinkedKeyboard($T));
                         // Save unknown contact for admin review
                         try {
                             $tgFrom = $msg['from'] ?? [];
@@ -3254,15 +3284,37 @@ try {
                     $alreadyLinked->execute([$chatId]);
                     $linkedRow = $alreadyLinked->fetch();
                     if ($linkedRow) {
-                        $markup = $linkedRow['entity_type'] === 'student' ? $studentKeyboard : ['remove_keyboard' => true];
+                        $markup = $linkedRow['entity_type'] === 'student' ? $studentKeyboard : $mkUnlinkedKeyboard($T);
                         telegramSendWithReplyMarkup($chatId, $T['welcome_back'], $markup);
                     } else {
-                        telegramSendWithReplyMarkup($chatId, $T['share_phone_prompt'], [
+                        // Bilingual welcome + language selection for new users
+                        telegramSend($chatId, "🎓 Welcome to Legacy Academy!\n🎓 Legacy Akademiyasiga hush kelibsiz!", 'custom');
+                        telegramSendWithReplyMarkup($chatId, "🌐 Choose your language / Tilni tanlang:", $welcomeLangInlineKb);
+                    }
+
+                } elseif ($text === '🔑 Log in' || $text === '🔑 Kirish') {
+                    $alr = db()->prepare("SELECT entity_type FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
+                    $alr->execute([$chatId]);
+                    if ($alr->fetch()) {
+                        telegramSendWithReplyMarkup($chatId, $T['already_linked'], $studentKeyboard);
+                    } else {
+                        telegramSendWithReplyMarkup($chatId, $T['login_prompt'], [
                             'keyboard' => [[['text' => $T['share_phone_btn'], 'request_contact' => true]]],
                             'resize_keyboard' => true,
                             'one_time_keyboard' => true,
                         ]);
                     }
+
+                } elseif ($text === '📞 Contact us' || $text === "📞 Biz bilan bog'laning") {
+                    try {
+                        $ci = db()->query("SELECT value FROM telegram_settings WHERE key = 'contact_info'")->fetchColumn();
+                    } catch (PDOException $e) { $ci = false; }
+                    $contactText = ($ci && trim($ci)) ? $ci : $T['contact_info_empty'];
+                    $backKb = ['keyboard' => [[['text' => $T['btn_back']]]], 'resize_keyboard' => true];
+                    telegramSendWithReplyMarkup($chatId, $contactText, $backKb);
+
+                } elseif ($text === '← Back' || $text === '← Orqaga') {
+                    telegramSendWithReplyMarkup($chatId, $T['main_menu_prompt'], $mkUnlinkedKeyboard($T));
 
                 } elseif ($command === '/balance' || $text === '💰 Balance' || $text === '💰 Balans') {
                     $linkRow = db()->prepare("SELECT entity_type, entity_id FROM telegram_links WHERE chat_id = ? AND linked_at IS NOT NULL");
@@ -3471,8 +3523,9 @@ try {
                     curl_exec($ch); curl_close($ch);
                 }
                 // Fetch language for this callback chat
-                $cbLr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ? LIMIT 1");
-                $cbLr->execute([$cbChatId]); $cbLr = $cbLr->fetch();
+                $cbLr = db()->prepare("SELECT COALESCE(language,'en') AS language FROM telegram_links WHERE chat_id = ?
+                    UNION ALL SELECT COALESCE(language,'en') FROM telegram_lang_cache WHERE chat_id = ? LIMIT 1");
+                $cbLr->execute([$cbChatId, $cbChatId]); $cbLr = $cbLr->fetch();
                 $cbLang = $cbLr ? $cbLr['language'] : 'en';
                 $cbT = $BOT_LANG[$cbLang];
                 $cbKb = $mkKeyboard($cbT);
@@ -3489,8 +3542,17 @@ try {
                     if ($linkRow && $linkRow['entity_type'] === 'student') {
                         telegramSendWithReplyMarkup($cbChatId, $confirmMsg, $cbKb);
                     } else {
-                        telegramSend($cbChatId, $confirmMsg, 'custom');
+                        telegramSendWithReplyMarkup($cbChatId, $confirmMsg, $mkUnlinkedKeyboard($cbT));
                     }
+                } elseif ($data === 'welcome_lang_en' || $data === 'welcome_lang_uz') {
+                    $newLang = $data === 'welcome_lang_en' ? 'en' : 'uz';
+                    try {
+                        db()->prepare("INSERT INTO telegram_lang_cache (chat_id, language, updated_at) VALUES (?, ?, NOW())
+                            ON CONFLICT (chat_id) DO UPDATE SET language = EXCLUDED.language, updated_at = NOW()")->execute([$cbChatId, $newLang]);
+                    } catch (PDOException $e) { /* ignore */ }
+                    $cbT = $BOT_LANG[$newLang];
+                    telegramSendWithReplyMarkup($cbChatId, $cbT['main_menu_prompt'], $mkUnlinkedKeyboard($cbT));
+
                 } elseif ($data === 'noop') {
                     // Day label button — ignore
                 } elseif (preg_match('/^support_(\d{4}-\d{2}-\d{2})_(\d{2}:\d{2})$/', $data, $m)) {
@@ -3556,6 +3618,23 @@ try {
                 error_log("Telegram webhook error: " . $e->getMessage());
             }
             jsonResponse(['ok' => true]);
+            break;
+
+        case 'telegram-settings':
+            requireFeature('telegram_send');
+            try { db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)"); } catch (PDOException $e) {}
+            if ($method === 'GET') {
+                $rows = db()->query("SELECT key, value FROM telegram_settings")->fetchAll();
+                $map = [];
+                foreach ($rows as $r) $map[$r['key']] = $r['value'];
+                jsonResponse($map);
+            } elseif ($method === 'PUT') {
+                $stmt = db()->prepare("INSERT INTO telegram_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value");
+                foreach (['contact_info'] as $allowed) {
+                    if (isset($input[$allowed])) $stmt->execute([$allowed, (string)$input[$allowed]]);
+                }
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Method not allowed', 405); }
             break;
 
         case 'telegram':
