@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import {
-  ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Loader2, User2, Bot, ChevronsUpDown, Check,
+  ChevronLeft, ChevronRight, Plus, CheckCircle2, XCircle, Loader2, User2, Bot, ChevronsUpDown, Check, BadgeCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -27,9 +27,9 @@ function getWeekDays(weekOffset: number): Date[] {
   const dow = today.getDay()
   const diffToMon = dow === 0 ? -6 : 1 - dow
   const monday = new Date(today)
-  monday.setDate(today.getDate() + diffToMon + weekOffset * 7)
+  monday.setDate(today.getDate() + diffToMon + weekOffset * 14)
   monday.setHours(0, 0, 0, 0)
-  return Array.from({ length: 6 }, (_, i) => {
+  return Array.from({ length: 12 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     return d
@@ -58,15 +58,17 @@ function formatWeekRange(days: Date[]) {
   return `${first.toLocaleDateString('en', { month: 'short', day: 'numeric' })} – ${last.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`
 }
 
-const STATUS_STYLES = {
+const STATUS_STYLES: Record<string, string> = {
   pending:   'bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100',
   confirmed: 'bg-green-50 border border-green-300 text-green-800 hover:bg-green-100',
+  completed: 'bg-blue-50 border border-blue-300 text-blue-800 hover:bg-blue-100',
   cancelled: 'bg-gray-50 border border-gray-200 text-gray-400 line-through cursor-default',
 }
 
-const STATUS_BADGE = {
+const STATUS_BADGE: Record<string, string> = {
   pending:   'bg-amber-100 text-amber-700 border-amber-300',
   confirmed: 'bg-green-100 text-green-700 border-green-300',
+  completed: 'bg-blue-100 text-blue-700 border-blue-300',
   cancelled: 'bg-gray-100 text-gray-500 border-gray-300',
 }
 
@@ -104,7 +106,7 @@ export function SupportRequests() {
 
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset])
   const fromDate = formatDate(weekDays[0])
-  const toDate = formatDate(weekDays[5])
+  const toDate = formatDate(weekDays[11])
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ['support-requests', fromDate, toDate],
@@ -189,6 +191,16 @@ export function SupportRequests() {
     onError: (e: Error) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   })
 
+  const completeMutation = useMutation({
+    mutationFn: () => supportRequestsApi.complete(selectedRequest!.id),
+    onSuccess: () => {
+      toast({ title: 'Completed', description: 'Support session marked as completed' })
+      setSelectedRequest(null)
+      invalidate()
+    },
+    onError: (e: Error) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => supportRequestsApi.delete(id),
     onSuccess: () => { toast({ title: 'Deleted' }); setSelectedRequest(null); invalidate() },
@@ -247,6 +259,7 @@ export function SupportRequests() {
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 inline-block" /> Pending</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-200 inline-block" /> Confirmed</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-200 inline-block" /> Completed</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-200 inline-block" /> Cancelled</span>
       </div>
 
@@ -261,9 +274,10 @@ export function SupportRequests() {
                 <th className="w-16 p-2 text-right text-muted-foreground font-medium border-b border-r text-xs">Time</th>
                 {weekDays.map((d, i) => {
                   const isToday = formatDate(d) === today
+                  const isWeek2Start = i === 6
                   return (
-                    <th key={i} className={cn('p-2 text-center font-medium border-b min-w-[120px]', isToday && 'bg-primary/5 text-primary')}>
-                      <div>{DAY_LABELS[i]}</div>
+                    <th key={i} className={cn('p-2 text-center font-medium border-b min-w-[110px]', isToday && 'bg-primary/5 text-primary', isWeek2Start && 'border-l-2 border-l-muted-foreground/30')}>
+                      <div>{DAY_LABELS[i % 6]}</div>
                       <div className={cn('text-xs font-normal', isToday ? 'text-primary' : 'text-muted-foreground')}>{formatDateLabel(d)}</div>
                     </th>
                   )
@@ -278,8 +292,9 @@ export function SupportRequests() {
                     const key = `${formatDate(d)}_${time}`
                     const req = slotMap[key]
                     const isPast = formatDate(d) < today || (formatDate(d) === today && time < new Date().toTimeString().slice(0, 5))
+                    const isWeek2Start = di === 6
                     return (
-                      <td key={di} className="p-1 border-r last:border-r-0 align-top">
+                      <td key={di} className={cn('p-1 border-r last:border-r-0 align-top', isWeek2Start && 'border-l-2 border-l-muted-foreground/30')}>
                         {req ? (
                           <button
                             onClick={() => req.status !== 'cancelled' ? setSelectedRequest(req) : setSelectedRequest(req)}
@@ -360,11 +375,12 @@ export function SupportRequests() {
               )}
               {selectedRequest.status === 'confirmed' && (
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" className="flex-1 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300" onClick={() => setCancelOpen(true)}>
-                    <XCircle className="mr-2 h-4 w-4" /> Cancel Session
+                  <Button className="flex-1 bg-blue-600 hover:bg-blue-700" disabled={completeMutation.isPending} onClick={() => completeMutation.mutate()}>
+                    {completeMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BadgeCheck className="mr-2 h-4 w-4" />}
+                    Mark Completed
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { deleteMutation.mutate(selectedRequest.id) }}>
-                    Delete
+                  <Button variant="outline" className="flex-1 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300" onClick={() => setCancelOpen(true)}>
+                    <XCircle className="mr-2 h-4 w-4" /> Cancel
                   </Button>
                 </div>
               )}

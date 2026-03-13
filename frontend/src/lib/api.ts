@@ -1116,7 +1116,7 @@ export interface SupportRequest {
   student_phone?: string
   scheduled_date: string
   scheduled_time: string
-  status: 'pending' | 'confirmed' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
   assigned_to?: number
   assigned_to_name?: string
   notes?: string
@@ -1142,6 +1142,8 @@ export const supportRequestsApi = {
     api.post<{ id: number }>('/support-requests', { ...data, source: 'manual' }),
   confirm: (id: number, assigned_to: number) =>
     api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'confirm', assigned_to }),
+  complete: (id: number) =>
+    api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'complete' }),
   cancel: (id: number, reason?: string) =>
     api.put<{ ok: boolean }>(`/support-requests/${id}`, { action: 'cancel', reason }),
   delete: (id: number) =>

@@ -4220,6 +4220,9 @@ try {
                         }
                     }
                     jsonResponse(['ok' => true]);
+                } elseif ($action === 'complete') {
+                    db()->prepare("UPDATE support_requests SET status='completed', updated_at=NOW() WHERE id=? AND status='confirmed'")->execute([$id]);
+                    jsonResponse(['ok' => true]);
                 } elseif ($action === 'cancel') {
                     $reason = $input['reason'] ?? null;
                     db()->prepare("UPDATE support_requests SET status='cancelled', cancelled_reason=?, updated_at=NOW() WHERE id=?")->execute([$reason, $id]);
