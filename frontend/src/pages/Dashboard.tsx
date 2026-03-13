@@ -115,7 +115,7 @@ export function Dashboard() {
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {t('dashboard.attendance_today', 'Attendance Today')}
             </CardTitle>
-            <div className={`p-2 rounded-lg ${unmarkedGroups.length === 0 ? 'bg-green-100' : 'bg-amber-100'}`}>
+            <div className={`p-2 rounded-lg ${unmarkedGroups.length === 0 ? 'bg-green-100 dark:bg-green-900/20' : 'bg-amber-100 dark:bg-amber-900/20'}`}>
               {unmarkedGroups.length === 0
                 ? <CheckCircle2 className="h-4 w-4 text-green-600" />
                 : <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -150,7 +150,7 @@ export function Dashboard() {
         <Card className="border-border/60 shadow-soft">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.monthly_revenue', 'Monthly Revenue')}</CardTitle>
-            <div className="p-2 rounded-lg bg-green-100">
+            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/20">
               <DollarSign className="h-4 w-4 text-green-600" />
             </div>
           </CardHeader>
@@ -164,7 +164,7 @@ export function Dashboard() {
               </p>
               {canViewFinancials && stats?.trends?.revenue !== undefined && stats.trends.revenue !== 0 && (
                 <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                  stats.trends.revenue >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  stats.trends.revenue >= 0 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                 }`}>
                   {stats.trends.revenue >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   {stats.trends.revenue > 0 ? '+' : ''}{stats.trends.revenue}%
@@ -177,7 +177,7 @@ export function Dashboard() {
         <Card className="border-border/60 shadow-soft">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.monthly_expenses', 'Monthly Expenses')}</CardTitle>
-            <div className="p-2 rounded-lg bg-red-100">
+            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
               <DollarSign className="h-4 w-4 text-red-600" />
             </div>
           </CardHeader>
@@ -191,7 +191,7 @@ export function Dashboard() {
               </p>
               {canViewFinancials && stats?.trends?.expenses !== undefined && stats.trends.expenses !== 0 && (
                 <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                  stats.trends.expenses <= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  stats.trends.expenses <= 0 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                 }`}>
                   {stats.trends.expenses <= 0 ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
                   {stats.trends.expenses > 0 ? '+' : ''}{stats.trends.expenses}%
@@ -204,7 +204,7 @@ export function Dashboard() {
         <Card className="border-border/60 shadow-soft sm:col-span-2 lg:col-span-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.net_profit', 'Net Profit')}</CardTitle>
-            <div className={`p-2 rounded-lg ${isProfit ? 'bg-green-100' : 'bg-red-100'}`}>
+            <div className={`p-2 rounded-lg ${isProfit ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
               {isProfit ? (
                 <TrendingUp className="h-4 w-4 text-green-600" />
               ) : (
@@ -222,7 +222,7 @@ export function Dashboard() {
               </p>
               {canViewFinancials && stats?.trends?.profit !== undefined && stats.trends.profit !== 0 && (
                 <span className={`inline-flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                  stats.trends.profit >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  stats.trends.profit >= 0 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
                 }`}>
                   {stats.trends.profit >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   {stats.trends.profit > 0 ? '+' : ''}{stats.trends.profit}%
@@ -264,7 +264,7 @@ export function Dashboard() {
               className="group flex items-center justify-between rounded-xl border border-border/60 p-4 transition-all hover:border-green-300 hover:bg-green-50 hover:shadow-sm"
             >
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-lg bg-green-100 text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                <div className="p-2.5 rounded-lg bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 group-hover:bg-green-600 group-hover:text-white transition-colors">
                   <DollarSign className="h-5 w-5" />
                 </div>
                 <div>
@@ -280,7 +280,7 @@ export function Dashboard() {
               className="group flex items-center justify-between rounded-xl border border-border/60 p-4 transition-all hover:border-purple-300 hover:bg-purple-50 hover:shadow-sm"
             >
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-lg bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                <div className="p-2.5 rounded-lg bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                   <Calendar className="h-5 w-5" />
                 </div>
                 <div>
@@ -296,7 +296,7 @@ export function Dashboard() {
               className="group flex items-center justify-between rounded-xl border border-border/60 p-4 transition-all hover:border-amber-300 hover:bg-amber-50 hover:shadow-sm"
             >
               <div className="flex items-center gap-4">
-                <div className="p-2.5 rounded-lg bg-amber-100 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                <div className="p-2.5 rounded-lg bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 group-hover:bg-amber-600 group-hover:text-white transition-colors">
                   <UserPlus className="h-5 w-5" />
                 </div>
                 <div>

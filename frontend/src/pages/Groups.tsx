@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { groupsApi, teachersApi, Group } from '@/lib/api'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -47,7 +48,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, BookOpen, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
 import { useAmountInput } from '@/hooks/useAmountInput'
@@ -107,7 +108,7 @@ export function Groups() {
       groupsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
-      toast({ title: 'Group created successfully' })
+      toast({ title: t('groups.toast_created', 'Group created successfully') })
       setFormOpen(false)
     },
   })
@@ -117,7 +118,7 @@ export function Groups() {
       groupsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
-      toast({ title: 'Group updated successfully' })
+      toast({ title: t('groups.toast_updated', 'Group updated successfully') })
       setFormOpen(false)
       setSelectedGroup(null)
     },
@@ -127,12 +128,12 @@ export function Groups() {
     mutationFn: (id: number) => groupsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] })
-      toast({ title: 'Group deleted successfully' })
+      toast({ title: t('groups.toast_deleted', 'Group deleted successfully') })
       setDeleteDialogOpen(false)
       setGroupToDelete(null)
     },
     onError: (error: Error) => {
-      toast({ title: 'Cannot delete group', description: error.message, variant: 'destructive' })
+      toast({ title: t('groups.toast_delete_error', 'Cannot delete group'), description: error.message, variant: 'destructive' })
     },
   })
 
@@ -142,17 +143,31 @@ export function Groups() {
       g.subject?.toLowerCase().includes(search.toLowerCase())
   )
 
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+  const totalPages = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE))
+  const pagedGroups = useMemo(
+    () => filteredGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredGroups, page]
+  )
+
+  useEffect(() => { setPage(1) }, [search])
+
+  const activeCount = groups.filter(g => g.status === 'active').length
+  const totalStudents = groups.reduce((sum, g) => sum + (g.student_count || 0), 0)
+  const fullCount = groups.filter(g => g.student_count >= g.capacity).length
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
 
     if (!formTeacherId) {
-      toast({ title: 'Please select a teacher', variant: 'destructive' })
+      toast({ title: t('groups.toast_select_teacher', 'Please select a teacher'), variant: 'destructive' })
       return
     }
 
     // Validate end time is after start time
     if (formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart) {
-      toast({ title: 'End time must be after start time', variant: 'destructive' })
+      toast({ title: t('groups.toast_time_error', 'End time must be after start time'), variant: 'destructive' })
       return
     }
 
@@ -182,13 +197,69 @@ export function Groups() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('groups.title', 'Groups')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('groups.title', 'Groups')}</h1>
           <p className="text-muted-foreground">{t('groups.description', 'Manage your learning groups')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           {t('groups.add', 'Add Group')}
         </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-100 dark:bg-blue-900/20 p-2">
+                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('groups.stat_total', 'Total')}</p>
+                <p className="text-2xl font-bold">{groups.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-green-100 dark:bg-green-900/20 p-2">
+                <BookOpen className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('groups.stat_active', 'Active')}</p>
+                <p className="text-2xl font-bold">{activeCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-purple-100 dark:bg-purple-900/20 p-2">
+                <Users className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('groups.stat_students', 'Students')}</p>
+                <p className="text-2xl font-bold">{totalStudents}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className={`rounded-lg p-2 ${fullCount > 0 ? 'bg-amber-100 dark:bg-amber-900/20' : 'bg-muted'}`}>
+                <Users className={`h-5 w-5 ${fullCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('groups.stat_full', 'Full')}</p>
+                <p className="text-2xl font-bold">{fullCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="flex items-center gap-4">
@@ -206,7 +277,7 @@ export function Groups() {
       {isLoading ? (
         <GroupsTableSkeleton />
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
@@ -224,12 +295,16 @@ export function Groups() {
             <TableBody>
               {filteredGroups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    {t('groups.empty_msg', 'No groups found')}
+                  <TableCell colSpan={9} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <BookOpen className="h-10 w-10 opacity-20" />
+                      <p className="font-medium">{search ? t('groups.empty_search', 'No groups match your search') : t('groups.empty_msg', 'No groups yet')}</p>
+                      {!search && <p className="text-sm">{t('groups.empty_hint', 'Add your first group to get started')}</p>}
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredGroups.map((group) => {
+                pagedGroups.map((group) => {
                   const scheduleText = group.schedule_days
                     ? `${group.schedule_days}${group.schedule_time_start ? ` ${group.schedule_time_start.slice(0, 5)}` : ''}${group.schedule_time_end ? `-${group.schedule_time_end.slice(0, 5)}` : ''}`
                     : '-'
@@ -238,7 +313,7 @@ export function Groups() {
                     <TableCell>
                       <button
                         onClick={() => navigate(`/groups/${group.id}`)}
-                        className="font-medium text-blue-600 hover:underline"
+                        className="font-medium text-primary hover:underline"
                       >
                         {group.name}
                       </button>
@@ -255,7 +330,7 @@ export function Groups() {
                     <TableCell>{formatCurrency(group.price)}</TableCell>
                     <TableCell>
                       <Badge variant={statusColors[group.status]}>
-                        {group.status}
+                        {group.status === 'active' ? t('common.status_active', 'Active') : group.status === 'inactive' ? t('common.status_inactive', 'Inactive') : t('groups.form_status_completed', 'Completed')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -302,6 +377,23 @@ export function Groups() {
               )}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <span className="text-sm text-muted-foreground">
+            {t('common.showing', 'Showing')} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredGroups.length)} {t('common.of', 'of')} {filteredGroups.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(page - 1)} disabled={page === 1}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm px-3">{page} / {totalPages}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -353,7 +445,7 @@ export function Groups() {
                 <Label htmlFor="teacher_id">{t('groups.form_teacher', 'Teacher *')}</Label>
                 <Select value={formTeacherId} onValueChange={setFormTeacherId}>
                   <SelectTrigger className={!formTeacherId ? 'text-muted-foreground' : ''}>
-                    <SelectValue placeholder="Select teacher" />
+                    <SelectValue placeholder={t('groups.form_select_teacher', 'Select teacher')} />
                   </SelectTrigger>
                   <SelectContent>
                     {teachers.filter(t => t.status === 'active').map((teacher) => (
@@ -364,7 +456,7 @@ export function Groups() {
                   </SelectContent>
                 </Select>
                 {teachers.filter(t => t.status === 'active').length === 0 && (
-                  <p className="text-xs text-amber-600">No active teachers available. Please add a teacher first.</p>
+                  <p className="text-xs text-amber-600">{t('groups.form_no_teachers', 'No active teachers available. Please add a teacher first.')}</p>
                 )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -410,7 +502,7 @@ export function Groups() {
                   <Label htmlFor="room">{t('groups.form_room', 'Room')}</Label>
                   <Select value={formRoom} onValueChange={setFormRoom}>
                     <SelectTrigger className={!formRoom ? 'text-muted-foreground' : ''}>
-                      <SelectValue placeholder="Select room" />
+                      <SelectValue placeholder={t('groups.form_select_room', 'Select room')} />
                     </SelectTrigger>
                     <SelectContent>
                       {ROOMS.map((room) => (
@@ -430,8 +522,8 @@ export function Groups() {
                       key={day.value}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer transition-colors ${
                         formScheduleDays.includes(day.value)
-                          ? 'bg-blue-100 border-blue-300 text-blue-700'
-                          : 'bg-white hover:bg-slate-50'
+                          ? 'bg-primary/10 border-primary/40 text-primary'
+                          : 'bg-background hover:bg-muted/50 border-border'
                       }`}
                     >
                       <Checkbox
@@ -468,7 +560,7 @@ export function Groups() {
                     className={formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart ? 'border-red-500 focus-within:ring-red-500' : ''}
                   />
                   {formTimeStart && formTimeEnd && formTimeEnd <= formTimeStart && (
-                    <p className="text-xs text-red-500">End time must be after start time</p>
+                    <p className="text-xs text-red-500">{t('groups.toast_time_error', 'End time must be after start time')}</p>
                   )}
                 </div>
               </div>
@@ -491,18 +583,18 @@ export function Groups() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Group</AlertDialogTitle>
+            <AlertDialogTitle>{t('groups.dialog_delete_title', 'Delete Group')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{groupToDelete?.name}"? This action cannot be undone.
+              {t('groups.dialog_delete_desc', 'Are you sure you want to delete')} "{groupToDelete?.name}"? {t('common.are_you_sure', 'This action cannot be undone.')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.btn_cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => groupToDelete && deleteGroup.mutate(groupToDelete.id)}
               className="bg-red-600 hover:bg-red-700"
             >
-              Delete
+              {t('common.btn_delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

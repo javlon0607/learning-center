@@ -87,7 +87,7 @@ export function Permissions() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('permissions.title', 'Permissions')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('permissions.title', 'Permissions')}</h1>
           <p className="text-muted-foreground">{t('permissions.description', 'Configure which roles can access which features')}</p>
         </div>
         <Button
@@ -100,7 +100,7 @@ export function Permissions() {
       </div>
 
       {wouldLockSelf() && (
-        <div className="flex items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="flex items-center gap-3 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span>{t('permissions.lockout_warning', 'You are removing your own access to this page. Save is blocked to prevent locking yourself out.')}</span>
         </div>
@@ -108,10 +108,10 @@ export function Permissions() {
 
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
           <Table>
             <TableHeader>
               <TableRow>
@@ -131,10 +131,10 @@ export function Permissions() {
             </TableHeader>
             <TableBody>
               {FEATURES.map(feature => (
-                <TableRow key={feature.key} className={feature.indent ? 'bg-slate-50/60' : ''}>
+                <TableRow key={feature.key} className={feature.indent ? 'bg-muted/30' : ''}>
                   <TableCell>
-                    <div className={feature.indent ? 'pl-5 border-l-2 border-slate-200' : ''}>
-                      <p className={`font-medium ${feature.indent ? 'text-xs text-slate-600' : 'text-sm'}`}>{feature.label}</p>
+                    <div className={feature.indent ? 'pl-5 border-l-2 border-border' : ''}>
+                      <p className={`font-medium ${feature.indent ? 'text-xs text-muted-foreground' : 'text-sm'}`}>{feature.label}</p>
                       <p className="text-xs text-muted-foreground">{feature.description}</p>
                     </div>
                   </TableCell>

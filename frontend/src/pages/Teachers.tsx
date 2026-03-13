@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teachersApi, usersApi, Teacher } from '@/lib/api'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateInput } from '@/components/ui/date-input'
@@ -48,7 +49,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Users, UserCheck, UserX, ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 
@@ -126,6 +127,19 @@ export function Teachers() {
       t.subjects?.toLowerCase().includes(search.toLowerCase())
   )
 
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+  const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / PAGE_SIZE))
+  const pagedTeachers = useMemo(
+    () => filteredTeachers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredTeachers, page]
+  )
+
+  useEffect(() => { setPage(1) }, [search])
+
+  const activeCount = teachers.filter(t => t.status === 'active').length
+  const inactiveCount = teachers.filter(t => t.status !== 'active').length
+
   useEffect(() => {
     if (formOpen) {
       setSalaryType(selectedTeacher?.salary_type || 'fixed')
@@ -171,13 +185,56 @@ export function Teachers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('teachers.title', 'Teachers')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('teachers.title', 'Teachers')}</h1>
           <p className="text-muted-foreground">{t('teachers.description', 'Manage your teaching staff')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           {t('teachers.add', 'Add Teacher')}
         </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-blue-100 dark:bg-blue-900/20 p-2">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('teachers.stat_total', 'Total')}</p>
+                <p className="text-2xl font-bold">{teachers.length}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-green-100 dark:bg-green-900/20 p-2">
+                <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('teachers.stat_active', 'Active')}</p>
+                <p className="text-2xl font-bold">{activeCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-muted p-2">
+                <UserX className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">{t('teachers.stat_inactive', 'Inactive')}</p>
+                <p className="text-2xl font-bold">{inactiveCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="flex items-center gap-4">
@@ -195,7 +252,7 @@ export function Teachers() {
       {isLoading ? (
         <TeachersTableSkeleton />
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
           <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>
@@ -211,17 +268,21 @@ export function Teachers() {
             <TableBody>
               {filteredTeachers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    {t('teachers.empty_msg', 'No teachers found')}
+                  <TableCell colSpan={7} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Users className="h-10 w-10 opacity-20" />
+                      <p className="font-medium">{search ? t('teachers.empty_search', 'No teachers match your search') : t('teachers.empty_msg', 'No teachers yet')}</p>
+                      {!search && <p className="text-sm">{t('teachers.empty_hint', 'Add your first teacher to get started')}</p>}
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredTeachers.map((teacher) => (
+                pagedTeachers.map((teacher) => (
                   <TableRow key={teacher.id}>
                     <TableCell>
                       <button
                         onClick={() => navigate(`/teachers/${teacher.id}`)}
-                        className="font-medium text-blue-600 hover:underline"
+                        className="font-medium text-primary hover:underline"
                       >
                         {teacher.first_name} {teacher.last_name}
                       </button>
@@ -285,6 +346,23 @@ export function Teachers() {
               )}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <span className="text-sm text-muted-foreground">
+            {t('common.showing', 'Showing')} {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredTeachers.length)} {t('common.of', 'of')} {filteredTeachers.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(page - 1)} disabled={page === 1}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm px-3">{page} / {totalPages}</span>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(page + 1)} disabled={page === totalPages}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 

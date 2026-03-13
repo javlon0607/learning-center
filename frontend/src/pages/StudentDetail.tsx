@@ -46,17 +46,17 @@ import {
 import { formatDate, formatDateTime, formatCurrency, calculateAge, parseAmountFromInput, cn } from '@/lib/utils'
 
 const statusConfig = {
-  active: { label: 'Active', color: 'success' as const, className: 'bg-green-100 text-green-700' },
+  active: { label: 'Active', color: 'success' as const, className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
   inactive: { label: 'Inactive', color: 'secondary' as const, className: 'bg-gray-100 text-gray-700' },
-  graduated: { label: 'Graduated', color: 'default' as const, className: 'bg-blue-100 text-blue-700' },
-  suspended: { label: 'Suspended', color: 'destructive' as const, className: 'bg-red-100 text-red-700' },
+  graduated: { label: 'Graduated', color: 'default' as const, className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
+  suspended: { label: 'Suspended', color: 'destructive' as const, className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
 } as const
 
 const attendanceStatusConfig = {
-  present: { label: 'Present', className: 'bg-green-100 text-green-700' },
-  absent: { label: 'Absent', className: 'bg-red-100 text-red-700' },
-  late: { label: 'Late', className: 'bg-amber-100 text-amber-700' },
-  excused: { label: 'Excused', className: 'bg-blue-100 text-blue-700' },
+  present: { label: 'Present', className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+  absent: { label: 'Absent', className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
+  late: { label: 'Late', className: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
+  excused: { label: 'Excused', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' },
 } as const
 
 const PAYMENTS_PER_PAGE = 10
@@ -696,7 +696,7 @@ export function StudentDetail() {
                             <TableCell>
                               <button
                                 onClick={() => navigate(`/groups/${enrollment.group_id}`)}
-                                className="text-blue-600 hover:underline font-medium"
+                                className="text-primary hover:underline font-medium"
                               >
                                 {enrollment.group_name}
                               </button>
@@ -791,7 +791,7 @@ export function StudentDetail() {
                         <TableCell>
                           <button
                             onClick={() => navigate(`/groups/${tr.from_group_id}`)}
-                            className="text-blue-600 hover:underline font-medium"
+                            className="text-primary hover:underline font-medium"
                           >
                             {tr.from_group_name}
                           </button>
@@ -805,7 +805,7 @@ export function StudentDetail() {
                         <TableCell>
                           <button
                             onClick={() => navigate(`/groups/${tr.to_group_id}`)}
-                            className="text-blue-600 hover:underline"
+                            className="text-primary hover:underline"
                           >
                             {tr.to_group_name}
                           </button>
@@ -954,7 +954,7 @@ export function StudentDetail() {
                           <TableCell>
                             <button
                               onClick={() => navigate(`/groups/${record.group_id}`)}
-                              className="text-blue-600 hover:underline"
+                              className="text-primary hover:underline"
                             >
                               {record.group_name}
                             </button>
@@ -1087,11 +1087,11 @@ export function StudentDetail() {
                         <TableCell className="text-right font-mono">{formatCurrency(issue.total_price)}</TableCell>
                         <TableCell>
                           {issue.is_paid ? (
-                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700">
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                               {t('books.paid', 'Paid')}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700">
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
                               {t('books.unpaid', 'Unpaid')}
                             </span>
                           )}

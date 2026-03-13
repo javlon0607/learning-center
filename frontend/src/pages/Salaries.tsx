@@ -159,7 +159,7 @@ export function Salaries() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('salaries.title', 'Salaries')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('salaries.title', 'Salaries')}</h1>
           <p className="text-muted-foreground">{t('salaries.description', 'Monthly salary calculation and payment tracking')}</p>
         </div>
       </div>
@@ -188,7 +188,7 @@ export function Salaries() {
             variant="outline"
             onClick={() => markAllPaidMutation.mutate()}
             disabled={markAllPaidMutation.isPending}
-            className="text-green-700 border-green-300 hover:bg-green-50"
+            className="text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
           >
             {markAllPaidMutation.isPending
               ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -290,7 +290,7 @@ export function Salaries() {
                                 disabled={rec.paid}
                                 value={edit?.bonus ?? String(rec.bonus)}
                                 onChange={e => setEdit(rec.id, 'bonus', e.target.value)}
-                                className="h-7 w-28 text-right text-xs tabular-nums text-green-700"
+                                className="h-7 w-28 text-right text-xs tabular-nums text-green-700 dark:text-green-400"
                               />
                               <Input
                                 disabled={rec.paid}
@@ -310,7 +310,7 @@ export function Salaries() {
                                 disabled={rec.paid}
                                 value={edit?.deduction ?? String(rec.deduction)}
                                 onChange={e => setEdit(rec.id, 'deduction', e.target.value)}
-                                className="h-7 w-28 text-right text-xs tabular-nums text-red-700"
+                                className="h-7 w-28 text-right text-xs tabular-nums text-red-700 dark:text-red-400"
                               />
                               <Input
                                 disabled={rec.paid}
@@ -329,7 +329,7 @@ export function Salaries() {
                           <td className="px-3 py-3">
                             <div className="flex flex-col items-center gap-1.5">
                               {rec.paid ? (
-                                <Badge className="bg-green-100 text-green-800 border-0 text-xs">
+                                <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-0 text-xs">
                                   <CheckCircle2 className="mr-1 h-3 w-3" />{t('salaries.paid', 'Paid')}
                                 </Badge>
                               ) : (

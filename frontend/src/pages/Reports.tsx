@@ -116,7 +116,7 @@ export function Reports() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('reports.title', 'Reports')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('reports.title', 'Reports')}</h1>
           <p className="text-muted-foreground">{t('reports.description', 'Financial reports and analytics')}</p>
         </div>
       </div>
@@ -285,7 +285,7 @@ export function Reports() {
 
           {monthlyLoading ? (
             <div className="flex justify-center py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : monthlyReport ? (
             <>
@@ -390,7 +390,7 @@ export function Reports() {
                             {monthlyReport.groups.map((group) => (
                               <TableRow key={group.group_id}>
                                 <TableCell
-                                  className="font-medium text-blue-600 hover:underline cursor-pointer"
+                                  className="font-medium text-primary hover:underline cursor-pointer"
                                   onClick={() => setDebtorGroup({ id: group.group_id, name: group.group_name })}
                                 >
                                   {group.group_name}
@@ -446,7 +446,7 @@ export function Reports() {
             <CardContent className="p-0">
               {paymentsLoading ? (
                 <div className="flex justify-center py-8">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -477,12 +477,12 @@ export function Reports() {
                           <TableCell className="capitalize">{payment.method}</TableCell>
                           <TableCell>
                             {payment.is_approved ? (
-                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                              <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 text-xs">
                                 <ShieldCheck className="mr-1 h-3 w-3" />
                                 {t('payments.approved', 'Approved')}
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                              <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-xs">
                                 <Clock className="mr-1 h-3 w-3" />
                                 {t('payments.pending', 'Pending')}
                               </Badge>
@@ -510,7 +510,7 @@ export function Reports() {
             <CardContent className="p-0">
               {expensesLoading ? (
                 <div className="flex justify-center py-8">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : (
                 <div className="overflow-x-auto">

@@ -423,7 +423,7 @@ export function GroupDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{group.name}</h1>
           <p className="text-muted-foreground">{group.subject || 'No subject'}</p>
         </div>
         <Badge variant={statusColors[group.status]} className="ml-auto">
@@ -516,7 +516,7 @@ export function GroupDetail() {
                       <TableCell>
                         <button
                           onClick={() => navigate(`/students/${enrollment.student_id}`)}
-                          className="text-blue-600 hover:underline"
+                          className="text-primary hover:underline"
                         >
                           {enrollment.student_name}
                         </button>
@@ -545,7 +545,7 @@ export function GroupDetail() {
                               setTransferDialogOpen(true)
                             }}
                             title="Transfer to another group"
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-primary hover:text-primary/80"
                           >
                             <ArrowRightLeft className="h-4 w-4" />
                           </Button>
@@ -606,8 +606,8 @@ export function GroupDetail() {
                         onClick={() => setSelectedStudentId(student.id.toString())}
                         className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                           selectedStudentId === student.id.toString()
-                            ? 'bg-blue-100 text-blue-900'
-                            : 'hover:bg-slate-100'
+                            ? 'bg-primary/10 text-primary'
+                            : 'hover:bg-muted'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -626,7 +626,7 @@ export function GroupDetail() {
                 )}
               </ScrollArea>
               {selectedStudentId && (
-                <p className="text-sm text-blue-600">
+                <p className="text-sm text-primary">
                   Selected: {filteredStudents.find(s => s.id.toString() === selectedStudentId)?.first_name} {filteredStudents.find(s => s.id.toString() === selectedStudentId)?.last_name}
                 </p>
               )}

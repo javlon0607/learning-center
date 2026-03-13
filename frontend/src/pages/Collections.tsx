@@ -281,7 +281,7 @@ export function Collections() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('collections.title', 'Collections')}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('collections.title', 'Collections')}</h1>
         <p className="text-muted-foreground">{t('collections.description', 'Students with outstanding debt')} {t('col.for_month', 'for')} {monthLabel}</p>
       </div>
 
@@ -290,8 +290,8 @@ export function Collections() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-red-100 p-2">
-                <Users className="h-5 w-5 text-red-600" />
+              <div className="rounded-lg bg-red-100 dark:bg-red-900/20 p-2">
+                <Users className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('collections.stat_debtors', 'Students with Debt')}</p>
@@ -303,8 +303,8 @@ export function Collections() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-100 p-2">
-                <DollarSign className="h-5 w-5 text-amber-600" />
+              <div className="rounded-lg bg-amber-100 dark:bg-amber-900/20 p-2">
+                <DollarSign className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('collections.stat_total', 'Total Outstanding')}</p>
@@ -316,8 +316,8 @@ export function Collections() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <PhoneCall className="h-5 w-5 text-blue-600" />
+              <div className="rounded-lg bg-blue-100 dark:bg-blue-900/20 p-2">
+                <PhoneCall className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">{t('collections.stat_calls', 'Calls Made')}</p>
@@ -376,7 +376,7 @@ export function Collections() {
 
       {/* Students Tab */}
       {activeTab === 'students' && (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
@@ -416,7 +416,7 @@ export function Collections() {
                         {d.phone && (
                           <a
                             href={`tel:${d.phone}`}
-                            className="text-blue-600 hover:underline block"
+                            className="text-primary hover:underline block"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {d.phone}
@@ -425,7 +425,7 @@ export function Collections() {
                         {d.parent_phone && d.parent_phone !== d.phone && (
                           <a
                             href={`tel:${d.parent_phone}`}
-                            className="text-blue-600 hover:underline block text-xs"
+                            className="text-primary hover:underline block text-xs"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {d.parent_phone} <span className="text-muted-foreground">({t('collections.detail_parent', 'Parent')})</span>
@@ -478,7 +478,7 @@ export function Collections() {
 
       {/* By Group Tab */}
       {activeTab === 'by-group' && !selectedGroupId && (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
           {groupsLoading ? (
             <div className="flex items-center justify-center p-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -530,7 +530,7 @@ export function Collections() {
           <Button variant="ghost" size="sm" onClick={() => setSelectedGroupId(null)}>
             <ArrowLeft className="h-4 w-4 mr-1" /> {t('col.back_to_groups', 'Back to groups')}
           </Button>
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
             {groupDebtorsLoading ? (
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -587,10 +587,10 @@ export function Collections() {
                       <td className="p-3">
                         <div className="space-y-0.5">
                           {d.phone && (
-                            <a href={`tel:${d.phone}`} className="text-blue-600 hover:underline block">{d.phone}</a>
+                            <a href={`tel:${d.phone}`} className="text-primary hover:underline block">{d.phone}</a>
                           )}
                           {d.parent_phone && d.parent_phone !== d.phone && (
-                            <a href={`tel:${d.parent_phone}`} className="text-blue-600 hover:underline block text-xs">
+                            <a href={`tel:${d.parent_phone}`} className="text-primary hover:underline block text-xs">
                               {d.parent_phone} <span className="text-muted-foreground">({t('collections.detail_parent', 'Parent')})</span>
                             </a>
                           )}
@@ -655,7 +655,7 @@ export function Collections() {
                   <p className="text-xs text-muted-foreground">{t('collections.detail_paid', 'Paid')}</p>
                   <p className="text-lg font-bold text-green-600">{formatCurrency(detailStudent.paid)}</p>
                 </div>
-                <div className="rounded-lg bg-red-50 p-3 text-center">
+                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-3 text-center">
                   <p className="text-xs text-muted-foreground">{t('collections.detail_debt', 'Debt')}</p>
                   <p className="text-lg font-bold text-red-600">{formatCurrency(detailStudent.debt)}</p>
                 </div>
@@ -667,7 +667,7 @@ export function Collections() {
                 {detailStudent.phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
-                    <a href={`tel:${detailStudent.phone}`} className="text-blue-600 hover:underline">{detailStudent.phone}</a>
+                    <a href={`tel:${detailStudent.phone}`} className="text-primary hover:underline">{detailStudent.phone}</a>
                   </div>
                 )}
                 {(detailStudent.parent_name || detailStudent.parent_phone) && (
@@ -675,7 +675,7 @@ export function Collections() {
                     <Phone className="h-4 w-4 text-muted-foreground" />
                     <div>
                       {detailStudent.parent_phone ? (
-                        <a href={`tel:${detailStudent.parent_phone}`} className="text-blue-600 hover:underline">{detailStudent.parent_phone}</a>
+                        <a href={`tel:${detailStudent.parent_phone}`} className="text-primary hover:underline">{detailStudent.parent_phone}</a>
                       ) : null}
                       <span className="text-xs text-muted-foreground ml-1">
                         ({t('collections.detail_parent', 'Parent')}{detailStudent.parent_name ? `: ${detailStudent.parent_name}` : ''})
@@ -722,7 +722,7 @@ export function Collections() {
                 ) : (
                   <div className="space-y-2">
                     {studentPayments.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between p-2 rounded bg-green-50">
+                      <div key={p.id} className="flex items-center justify-between p-2 rounded bg-green-50 dark:bg-green-900/20">
                         <div>
                           <p className="text-sm font-medium">{formatCurrency(p.month_amount)}</p>
                           <p className="text-xs text-muted-foreground">

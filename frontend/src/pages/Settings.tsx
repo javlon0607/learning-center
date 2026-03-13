@@ -211,7 +211,7 @@ export function Settings() {
   if (loadingSettings) {
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -219,7 +219,7 @@ export function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('settings.title', 'Settings')}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('settings.title', 'Settings')}</h1>
         <p className="text-muted-foreground">{t('settings.description', 'Manage your application settings')}</p>
       </div>
 
@@ -227,11 +227,11 @@ export function Settings() {
         {/* User Management - Admin only */}
         {hasRole('admin') && (
           <Link to="/settings/users">
-            <Card className="h-full cursor-pointer transition-all hover:bg-slate-50 hover:shadow-md">
+            <Card className="h-full cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                    <Users className="h-5 w-5 text-blue-600" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/20">
+                    <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
                     <CardTitle className="text-lg">{t('settings.user_management', 'User Management')}</CardTitle>
@@ -247,8 +247,8 @@ export function Settings() {
         {/* Profile Settings */}
         <Card>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-              <User className="h-5 w-5 text-slate-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <User className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <CardTitle className="text-lg">{t('settings.profile', 'Profile')}</CardTitle>
@@ -278,7 +278,7 @@ export function Settings() {
               </div>
               <div className="space-y-2">
                 <Label>{t('settings.form_username', 'Username')}</Label>
-                <Input value={user?.username || ''} disabled className="bg-slate-50" />
+                <Input value={user?.username || ''} disabled className="bg-muted/50" />
                 <p className="text-xs text-muted-foreground">{t('settings.username_readonly', 'Username cannot be changed')}</p>
               </div>
               <Button onClick={handleSaveProfile} disabled={updateProfileMutation.isPending}>
@@ -293,8 +293,8 @@ export function Settings() {
         {hasRole('admin') && (
           <Card>
             <CardHeader className="flex flex-row items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100">
-                <Building className="h-5 w-5 text-purple-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/20">
+                <Building className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
                 <CardTitle className="text-lg">{t('settings.organization', 'Organization')}</CardTitle>
@@ -343,8 +343,8 @@ export function Settings() {
         {hasRole('admin') && (
           <Card>
             <CardHeader className="flex flex-row items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100">
-                <Bell className="h-5 w-5 text-yellow-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/20">
+                <Bell className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div>
                 <CardTitle className="text-lg">{t('settings.notifications', 'Notifications')}</CardTitle>
@@ -471,7 +471,7 @@ export function Settings() {
                     onCheckedChange={setPaymentApprovalAlerts}
                   />
                 </div>
-                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
                   {t('settings.notif_email_note', 'Note: Email notifications require email service configuration.')}
                 </p>
                 <Button
@@ -490,8 +490,8 @@ export function Settings() {
         {/* Security Settings */}
         <Card>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
-              <Shield className="h-5 w-5 text-green-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/20">
+              <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
               <CardTitle className="text-lg">{t('settings.security', 'Security')}</CardTitle>
@@ -535,8 +535,8 @@ export function Settings() {
         {hasRole('admin') && (
           <Card>
             <CardHeader className="flex flex-row items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100">
-                <Database className="h-5 w-5 text-red-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/20">
+                <Database className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
                 <CardTitle className="text-lg">{t('settings.data_management', 'Data Management')}</CardTitle>

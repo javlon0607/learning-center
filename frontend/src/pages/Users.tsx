@@ -169,7 +169,7 @@ export function Users() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{t('users.title', 'User Management')}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t('users.title', 'User Management')}</h1>
             <p className="text-muted-foreground">{t('users.description', 'Manage system users and permissions')}</p>
           </div>
         </div>
@@ -193,10 +193,10 @@ export function Users() {
 
       {isLoading ? (
         <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
           <Table className="min-w-[700px]">
             <TableHeader>
               <TableRow>

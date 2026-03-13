@@ -68,14 +68,14 @@ export function Leads() {
   const { t } = useTranslation()
 
   const statusConfig = useMemo(() => ({
-    new: { label: t('leads.status_new', 'New'), color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Plus },
-    contacted: { label: t('leads.status_contacted', 'Contacted'), color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Phone },
-    interested: { label: t('leads.status_interested', 'Interested'), color: 'bg-cyan-100 text-cyan-800 border-cyan-200', icon: Target },
-    trial_scheduled: { label: t('leads.status_trial_scheduled', 'Trial Scheduled'), color: 'bg-amber-100 text-amber-800 border-amber-200', icon: CalendarCheck },
-    trial_completed: { label: t('leads.status_trial_done', 'Trial Done'), color: 'bg-orange-100 text-orange-800 border-orange-200', icon: CheckCircle2 },
-    negotiating: { label: t('leads.status_negotiating', 'Negotiating'), color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: MessageSquare },
-    enrolled: { label: t('leads.status_enrolled', 'Enrolled'), color: 'bg-green-100 text-green-800 border-green-200', icon: UserPlus },
-    lost: { label: t('leads.status_lost', 'Lost'), color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+    new: { label: t('leads.status_new', 'New'), color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: Plus },
+    contacted: { label: t('leads.status_contacted', 'Contacted'), color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 border-purple-200 dark:border-purple-800', icon: Phone },
+    interested: { label: t('leads.status_interested', 'Interested'), color: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-800 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800', icon: Target },
+    trial_scheduled: { label: t('leads.status_trial_scheduled', 'Trial Scheduled'), color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800', icon: CalendarCheck },
+    trial_completed: { label: t('leads.status_trial_done', 'Trial Done'), color: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400 border-orange-200 dark:border-orange-800', icon: CheckCircle2 },
+    negotiating: { label: t('leads.status_negotiating', 'Negotiating'), color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800', icon: MessageSquare },
+    enrolled: { label: t('leads.status_enrolled', 'Enrolled'), color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 border-green-200 dark:border-green-800', icon: UserPlus },
+    lost: { label: t('leads.status_lost', 'Lost'), color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 border-red-200 dark:border-red-800', icon: XCircle },
     postponed: { label: t('leads.status_postponed', 'Postponed'), color: 'bg-gray-100 text-gray-800 border-gray-200', icon: Clock },
   }), [t])
 
@@ -336,8 +336,8 @@ export function Leads() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{activeLeads}</p>
@@ -352,8 +352,8 @@ export function Leads() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg">
-                <Flame className="h-5 w-5 text-red-600" />
+              <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-lg">
+                <Flame className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.hot_leads || 0}</p>
@@ -365,8 +365,8 @@ export function Leads() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className={cn("p-2 rounded-lg", (stats?.follow_ups_overdue || 0) > 0 ? "bg-red-100" : "bg-amber-100")}>
-                <AlertTriangle className={cn("h-5 w-5", (stats?.follow_ups_overdue || 0) > 0 ? "text-red-600" : "text-amber-600")} />
+              <div className={cn("p-2 rounded-lg", (stats?.follow_ups_overdue || 0) > 0 ? "bg-red-100 dark:bg-red-900/20" : "bg-amber-100 dark:bg-amber-900/20")}>
+                <AlertTriangle className={cn("h-5 w-5", (stats?.follow_ups_overdue || 0) > 0 ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400")} />
               </div>
               <div>
                 <p className="text-2xl font-bold">{(stats?.follow_ups_today || 0) + (stats?.follow_ups_overdue || 0)}</p>
@@ -381,8 +381,8 @@ export function Leads() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <CalendarCheck className="h-5 w-5 text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                <CalendarCheck className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.trials_scheduled || 0}</p>
@@ -397,8 +397,8 @@ export function Leads() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats?.conversions_this_month || 0}</p>
@@ -508,8 +508,8 @@ export function Leads() {
                 variant="outline"
                 className={cn(
                   "text-xs h-5",
-                  followUpOverdue && "bg-red-100 text-red-700 border-red-200",
-                  followUpToday && !followUpOverdue && "bg-amber-100 text-amber-700 border-amber-200"
+                  followUpOverdue && "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800",
+                  followUpToday && !followUpOverdue && "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
                 )}
               >
                 <Calendar className="h-3 w-3 mr-1" />
@@ -519,7 +519,7 @@ export function Leads() {
             {lead.trial_date && (
               <Badge
                 variant="outline"
-                className={cn("text-xs h-5", trialToday && "bg-purple-100 text-purple-700 border-purple-200")}
+                className={cn("text-xs h-5", trialToday && "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800")}
               >
                 <CalendarCheck className="h-3 w-3 mr-1" />
                 {t('leads.card_trial', 'Trial')}: {formatDate(lead.trial_date)}
@@ -657,13 +657,13 @@ export function Leads() {
               {detailLead.phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a href={`tel:${detailLead.phone}`} className="text-blue-600 hover:underline">{detailLead.phone}</a>
+                  <a href={`tel:${detailLead.phone}`} className="text-primary hover:underline">{detailLead.phone}</a>
                 </div>
               )}
               {detailLead.email && (
                 <div className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <a href={`mailto:${detailLead.email}`} className="text-blue-600 hover:underline">{detailLead.email}</a>
+                  <a href={`mailto:${detailLead.email}`} className="text-primary hover:underline">{detailLead.email}</a>
                 </div>
               )}
               {detailLead.parent_name && (
@@ -718,8 +718,8 @@ export function Leads() {
                 {detailLead.follow_up_date && (
                   <div className={cn(
                     "flex items-center gap-2 p-2 rounded",
-                    isOverdue(detailLead.follow_up_date) && "bg-red-100 text-red-800",
-                    isToday(detailLead.follow_up_date) && !isOverdue(detailLead.follow_up_date) && "bg-amber-100 text-amber-800"
+                    isOverdue(detailLead.follow_up_date) && "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400",
+                    isToday(detailLead.follow_up_date) && !isOverdue(detailLead.follow_up_date) && "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400"
                   )}>
                     <Calendar className="h-4 w-4" />
                     <span>{t('leads.detail_follow_up', 'Follow-up')}: {formatDate(detailLead.follow_up_date)}</span>
@@ -730,7 +730,7 @@ export function Leads() {
                 {detailLead.trial_date && (
                   <div className={cn(
                     "flex items-center gap-2 p-2 rounded",
-                    isToday(detailLead.trial_date) && "bg-purple-100 text-purple-800"
+                    isToday(detailLead.trial_date) && "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400"
                   )}>
                     <CalendarCheck className="h-4 w-4" />
                     <span>{t('leads.detail_trial', 'Trial')}: {formatDate(detailLead.trial_date)}</span>
@@ -807,7 +807,7 @@ export function Leads() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('leads.title', 'Leads')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('leads.title', 'Leads')}</h1>
           <p className="text-muted-foreground">{t('leads.description', 'Manage prospects and convert them to students')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
@@ -867,7 +867,7 @@ export function Leads() {
       {/* Content */}
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <Tabs defaultValue="pipeline">

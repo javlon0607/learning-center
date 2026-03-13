@@ -472,7 +472,7 @@ function UnknownContactsBadge() {
       <UserX className="h-4 w-4" />
       Unknown
       {data.length > 0 && (
-        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-xs px-1.5 py-0">{data.length}</Badge>
+        <Badge className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 text-xs px-1.5 py-0">{data.length}</Badge>
       )}
     </span>
   )

@@ -2508,9 +2508,10 @@ try {
                     GROUP BY cc.student_id
                 ) cc_agg ON cc_agg.student_id = s.id
                 WHERE e.group_id = ? AND s.status = 'active' AND s.deleted_at IS NULL
+                  AND e.enrolled_at::date < (?::date + INTERVAL '1 month')
                 ORDER BY s.first_name, s.last_name
             ");
-            $stmt->execute([$monthStart, $monthStart, $monthStart, $groupId]);
+            $stmt->execute([$monthStart, $monthStart, $monthStart, $groupId, $monthStart]);
             $rows = $stmt->fetchAll();
             $result = [];
             foreach ($rows as $row) {
@@ -2600,6 +2601,7 @@ try {
                                 WHERE pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE AND ecur.id IS NULL
                                 GROUP BY p.student_id
                             ) tc ON tc.student_id = e.student_id
+                            WHERE e.enrolled_at::date < (?::date + INTERVAL '1 month')
                             GROUP BY e.student_id
                         ) t WHERE expected > paid
                     ) debt ON debt.student_id = s.id
@@ -2615,7 +2617,7 @@ try {
                     WHERE s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY debt.expected - debt.paid DESC
                 ");
-                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth]);
+                $stmt->execute([$currentMonth, $currentMonth, $currentMonth, $currentMonth, $currentMonth]);
                 $rows = $stmt->fetchAll();
                 foreach ($rows as &$row) {
                     $row['enrollments'] = json_decode($row['enrollments_json'], true) ?: [];
@@ -2738,6 +2740,7 @@ try {
                 JOIN groups g ON e.group_id = g.id
                 JOIN students s ON e.student_id = s.id
                 WHERE s.status = 'active' AND s.deleted_at IS NULL
+                  AND e.enrolled_at::date < (?::date + INTERVAL '1 month')
                 GROUP BY g.id, g.name
                 HAVING COUNT(DISTINCT CASE WHEN
                     GREATEST(0,
@@ -2750,7 +2753,7 @@ try {
                     ) > 0 THEN e.student_id END) > 0
                 ORDER BY total_debt DESC
             ");
-            $stmt->execute([$monthStart, $monthStart, $monthStart, $monthStart, $monthStart, $monthStart]);
+            $stmt->execute([$monthStart, $monthStart, $monthStart, $monthStart, $monthStart, $monthStart, $monthStart]);
             $rows = $stmt->fetchAll();
             foreach ($rows as &$row) {
                 $row['id'] = (int)$row['id'];

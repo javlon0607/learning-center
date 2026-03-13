@@ -373,7 +373,7 @@ export function Expenses() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('expenses.title', 'Expenses')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('expenses.title', 'Expenses')}</h1>
           <p className="text-muted-foreground">{t('expenses.description', 'Track business expenses')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
@@ -458,10 +458,10 @@ export function Expenses() {
 
       {isLoading ? (
         <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
           <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
@@ -678,22 +678,22 @@ export function Expenses() {
                     </div>
                   )}
                   {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'per_student' && (
-                    <div className="rounded-md bg-blue-50 p-3 text-sm space-y-1">
-                      <p className="font-medium text-blue-900">{t('expenses.salary_per_student', 'Per-Student Salary Calculation')}</p>
-                      <p className="text-blue-700">
+                    <div className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 text-sm space-y-1">
+                      <p className="font-medium text-blue-900 dark:text-blue-300">{t('expenses.salary_per_student', 'Per-Student Salary Calculation')}</p>
+                      <p className="text-blue-700 dark:text-blue-400">
                         {t('expenses.salary_collected', 'Collected payments')}: <span className="font-semibold">{formatCurrency(salaryPreview.collected_amount)}</span>
                       </p>
-                      <p className="text-blue-700">
+                      <p className="text-blue-700 dark:text-blue-400">
                         {t('expenses.salary_teacher_rate', 'Teacher rate')}: <span className="font-semibold">{salaryPreview.salary_percentage}%</span>
                       </p>
-                      <p className="text-blue-700">
+                      <p className="text-blue-700 dark:text-blue-400">
                         {t('expenses.salary_calculated_base', 'Calculated base')}: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
                       </p>
                     </div>
                   )}
                   {salaryPreview && !loadingPreview && salaryPreview.salary_type === 'fixed' && (
-                    <div className="rounded-md bg-green-50 p-3 text-sm">
-                      <p className="text-green-700">
+                    <div className="rounded-md bg-green-50 dark:bg-green-900/20 p-3 text-sm">
+                      <p className="text-green-700 dark:text-green-400">
                         {t('expenses.salary_fixed', 'Fixed salary')}: <span className="font-semibold">{formatCurrency(salaryPreview.base_amount)}</span>
                       </p>
                     </div>

@@ -30,8 +30,10 @@ import { Timetable } from './Timetable'
 import {
   LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu,
   Cake, PartyPopper, DollarSign, Clock, UserPlus, UserMinus, CheckCheck, ClipboardCheck,
+  Sun, Moon,
 } from 'lucide-react'
 import { calculateAge } from '@/lib/utils'
+import { useTheme } from '@/contexts/ThemeContext'
 
 function timeAgo(dateStr: string): string {
   const now = new Date()
@@ -75,6 +77,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { t } = useTranslation()
+  const { theme, toggleTheme } = useTheme()
   const [timetableOpen, setTimetableOpen] = useState(false)
 
   const { data: settings } = useQuery({
@@ -163,6 +166,28 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Right side - Actions */}
       <div className="flex items-center gap-2">
+        {/* Theme Toggle */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-lg"
+                onClick={toggleTheme}
+              >
+                {theme === 'dark'
+                  ? <Sun className="h-5 w-5 text-muted-foreground" />
+                  : <Moon className="h-5 w-5 text-muted-foreground" />
+                }
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{theme === 'dark' ? t('header.light_mode', 'Light mode') : t('header.dark_mode', 'Dark mode')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         {/* Timetable */}
         <TooltipProvider>
           <Tooltip>

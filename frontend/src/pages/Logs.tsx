@@ -28,6 +28,7 @@ import {
   ChevronRight,
   ScrollText,
   X,
+  Loader2,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
@@ -40,13 +41,13 @@ function formatAuditValues(obj: Record<string, unknown> | null): string {
 }
 
 const actionColors: Record<string, string> = {
-  create: 'bg-green-100 text-green-700 border-green-200',
-  update: 'bg-blue-100 text-blue-700 border-blue-200',
-  delete: 'bg-red-100 text-red-700 border-red-200',
-  soft_delete: 'bg-orange-100 text-orange-700 border-orange-200',
-  login: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  logout: 'bg-gray-100 text-gray-700 border-gray-200',
-  lead_convert: 'bg-purple-100 text-purple-700 border-purple-200',
+  create: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+  update: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+  delete: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+  soft_delete: 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+  login: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  logout: 'bg-muted text-muted-foreground border-border',
+  lead_convert: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800',
 }
 
 const PAGE_SIZE = 50
@@ -130,7 +131,7 @@ export function Logs() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('logs.title', 'Audit Logs')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('logs.title', 'Audit Logs')}</h1>
           <p className="text-muted-foreground">
             {t('logs.description', 'Track all system changes and activities')}
           </p>
@@ -223,10 +224,10 @@ export function Logs() {
       {/* Table */}
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-x-auto shadow-soft">
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>

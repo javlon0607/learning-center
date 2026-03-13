@@ -72,10 +72,10 @@ export function Students() {
   const hasDashboard = hasFeature('dashboard')
 
   const statusConfig = useMemo(() => ({
-    active: { label: t('common.status_active', 'Active'), className: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
+    active: { label: t('common.status_active', 'Active'), className: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800', icon: CheckCircle2 },
     inactive: { label: t('common.status_inactive', 'Inactive'), className: 'bg-gray-100 text-gray-700 border-gray-200', icon: XCircle },
-    graduated: { label: t('common.status_graduated', 'Graduated'), className: 'bg-blue-100 text-blue-700 border-blue-200', icon: GraduationCap },
-    suspended: { label: t('common.status_suspended', 'Suspended'), className: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle },
+    graduated: { label: t('common.status_graduated', 'Graduated'), className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800', icon: GraduationCap },
+    suspended: { label: t('common.status_suspended', 'Suspended'), className: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800', icon: AlertCircle },
   }), [t])
 
   // Filters
@@ -326,8 +326,8 @@ export function Students() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="h-5 w-5 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.total}</p>
@@ -342,8 +342,8 @@ export function Students() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.active}</p>
@@ -358,7 +358,7 @@ export function Students() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className={cn("p-2 rounded-lg", stats.withDebt > 0 ? "bg-red-100" : "bg-gray-100")}>
+              <div className={cn("p-2 rounded-lg", stats.withDebt > 0 ? "bg-red-100 dark:bg-red-900/20" : "bg-gray-100 dark:bg-gray-800")}>
                 <AlertCircle className={cn("h-5 w-5", stats.withDebt > 0 ? "text-red-600" : "text-gray-400")} />
               </div>
               <div>
@@ -374,7 +374,7 @@ export function Students() {
         >
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className={cn("p-2 rounded-lg", stats.totalDebt > 0 ? "bg-amber-100" : "bg-gray-100")}>
+              <div className={cn("p-2 rounded-lg", stats.totalDebt > 0 ? "bg-amber-100 dark:bg-amber-900/20" : "bg-gray-100 dark:bg-gray-800")}>
                 <AlertCircle className={cn("h-5 w-5", stats.totalDebt > 0 ? "text-amber-600" : "text-gray-400")} />
               </div>
               <div>

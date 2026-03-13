@@ -59,17 +59,17 @@ function formatWeekRange(days: Date[]) {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending:   'bg-amber-50 border border-amber-300 text-amber-800 hover:bg-amber-100',
-  confirmed: 'bg-green-50 border border-green-300 text-green-800 hover:bg-green-100',
-  completed: 'bg-blue-50 border border-blue-300 text-blue-800 hover:bg-blue-100',
-  cancelled: 'bg-gray-50 border border-gray-200 text-gray-400 line-through cursor-default',
+  pending:   'bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30',
+  confirmed: 'bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/30',
+  completed: 'bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30',
+  cancelled: 'bg-muted border border-border text-muted-foreground line-through cursor-default',
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  pending:   'bg-amber-100 text-amber-700 border-amber-300',
-  confirmed: 'bg-green-100 text-green-700 border-green-300',
-  completed: 'bg-blue-100 text-blue-700 border-blue-300',
-  cancelled: 'bg-gray-100 text-gray-500 border-gray-300',
+  pending:   'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700',
+  confirmed: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700',
+  completed: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-700',
+  cancelled: 'bg-muted text-muted-foreground border-border',
 }
 
 export function SupportRequests() {

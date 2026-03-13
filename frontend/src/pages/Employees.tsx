@@ -13,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Pencil, Trash2, Loader2, Phone, Lock } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Phone, Lock, Search } from 'lucide-react'
 import { useTranslation } from '@/contexts/I18nContext'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PhoneInput } from '@/components/ui/phone-input'
@@ -38,12 +38,12 @@ const DEPT_LABEL_FALLBACK: Record<string, string> = {
 }
 
 const DEPT_COLOR: Record<string, string> = {
-  management: 'bg-purple-100 text-purple-800',
-  academic: 'bg-blue-100 text-blue-800',
-  student_support: 'bg-green-100 text-green-800',
-  operations: 'bg-orange-100 text-orange-800',
-  marketing: 'bg-pink-100 text-pink-800',
-  technical: 'bg-slate-100 text-slate-700',
+  management: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
+  academic: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+  student_support: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+  operations: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300',
+  marketing: 'bg-pink-100 dark:bg-pink-900/30 text-pink-800 dark:text-pink-300',
+  technical: 'bg-muted text-muted-foreground',
 }
 
 const STATUSES = ['active', 'inactive', 'fired'] as const
@@ -152,8 +152,8 @@ export function Employees() {
   }
 
   const statusBadge = (s: string) => {
-    if (s === 'active') return <Badge className="bg-green-100 text-green-800 border-0">{t('employees.status_active', 'Active')}</Badge>
-    if (s === 'fired') return <Badge className="bg-red-100 text-red-800 border-0">{t('employees.status_fired', 'Fired')}</Badge>
+    if (s === 'active') return <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-0">{t('employees.status_active', 'Active')}</Badge>
+    if (s === 'fired') return <Badge className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-0">{t('employees.status_fired', 'Fired')}</Badge>
     return <Badge variant="secondary">{t('employees.status_inactive', 'Inactive')}</Badge>
   }
 
@@ -161,7 +161,7 @@ export function Employees() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('employees.title', 'Employees')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('employees.title', 'Employees')}</h1>
           <p className="text-muted-foreground">{t('employees.description', 'Manage staff and their salaries')}</p>
         </div>
         <Button onClick={openAdd}>
@@ -173,15 +173,13 @@ export function Employees() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t('common.search', 'Search') + '...'}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-9"
           />
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-          </span>
         </div>
         <Select value={deptFilter} onValueChange={setDeptFilter}>
           <SelectTrigger className="w-full sm:w-[220px]">

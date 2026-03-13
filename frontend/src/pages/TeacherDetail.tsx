@@ -59,7 +59,7 @@ export function TeacherDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">
+          <h1 className="text-2xl font-bold text-foreground">
             {teacher.first_name} {teacher.last_name}
           </h1>
           <p className="text-muted-foreground">Teacher Profile</p>
@@ -158,7 +158,7 @@ export function TeacherDetail() {
                     <TableCell>
                       <button
                         onClick={() => navigate(`/groups/${group.id}`)}
-                        className="text-blue-600 hover:underline"
+                        className="text-primary hover:underline"
                       >
                         {group.name}
                       </button>

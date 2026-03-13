@@ -32,7 +32,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Plus, Search, Loader2, AlertCircle, CheckCircle2, Trash2, ChevronLeft, ChevronRight, Clock, ShieldCheck } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DateInput } from '@/components/ui/date-input'
-import { formatCurrency, formatDateTime, parseAmountFromInput } from '@/lib/utils'
+import { formatCurrency, formatDateTime, parseAmountFromInput, cn } from '@/lib/utils'
 import { useAmountInput } from '@/hooks/useAmountInput'
 import { usePermissions } from '@/contexts/PermissionsContext'
 import { useTranslation } from '@/contexts/I18nContext'
@@ -355,7 +355,7 @@ export function Payments() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('payments.title', 'Payments')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('payments.title', 'Payments')}</h1>
           <p className="text-muted-foreground">{t('payments.description', 'Track student payments')}</p>
         </div>
         <Button onClick={() => setFormOpen(true)}>
@@ -447,10 +447,10 @@ export function Payments() {
 
       {isLoading ? (
         <div className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
+        <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
           <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
@@ -671,17 +671,16 @@ export function Payments() {
                         return (
                           <label
                             key={value}
-                            className={`
-                              flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all
-                              ${isSelected
-                                ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
-                                : isFullyPaid
-                                  ? 'border-green-300 bg-green-50 text-green-700'
-                                  : isCurrentMonth
-                                    ? 'border-blue-300 bg-blue-50/50'
-                                    : 'border-gray-200 hover:border-gray-300'
-                              }
-                            `}
+                            className={cn(
+                            'flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all',
+                            isSelected
+                              ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary'
+                              : isFullyPaid
+                                ? 'border-green-300 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                : isCurrentMonth
+                                  ? 'border-primary/40 bg-primary/5'
+                                  : 'border-border hover:border-border/80 hover:bg-muted/30'
+                          )}
                           >
                             <Checkbox
                               checked={isSelected}

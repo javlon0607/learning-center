@@ -647,9 +647,9 @@ function IssuesTable({ bookId, studentId }: IssuesTableProps) {
                   <td className="py-2 pr-4 text-right font-mono">{formatCurrency(issue.total_price)}</td>
                   <td className="py-2 pr-4">
                     {issue.is_paid ? (
-                      <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{t('books.paid', 'Paid')}</Badge>
+                      <Badge className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30">{t('books.paid', 'Paid')}</Badge>
                     ) : (
-                      <Badge className="bg-red-100 text-red-700 hover:bg-red-100">{t('books.unpaid', 'Unpaid')}</Badge>
+                      <Badge className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30">{t('books.unpaid', 'Unpaid')}</Badge>
                     )}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap">{formatDate(issue.issued_at)}</td>
@@ -880,7 +880,7 @@ export function Books() {
             <ShoppingCart className="mr-2 h-4 w-4" />
             {t('books.tab_issues', 'All Issues')}
             {stats.unpaidCount > 0 && (
-              <Badge className="ml-2 bg-red-100 text-red-700 hover:bg-red-100 text-xs px-1.5 py-0">
+              <Badge className="ml-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 text-xs px-1.5 py-0">
                 {stats.unpaidCount}
               </Badge>
             )}
