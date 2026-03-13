@@ -34,3 +34,8 @@ postgres_data/
 
 # Temporary files
 *.tmp
+
+# SSL certificates (generated per-server, not committed)
+nginx/ssl/*.crt
+nginx/ssl/*.key
+backend/telegram.crt

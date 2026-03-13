@@ -3598,14 +3598,21 @@ try {
                     if (!$webhookUrl) { jsonError('url is required'); break; }
                     if (!filter_var($webhookUrl, FILTER_VALIDATE_URL)) { jsonError('Invalid URL'); break; }
                     $apiBase = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN;
+                    $certPath = __DIR__ . '/telegram.crt';
                     $ch = curl_init($apiBase . '/setWebhook');
-                    curl_setopt_array($ch, [
-                        CURLOPT_POST => true,
-                        CURLOPT_POSTFIELDS => json_encode(['url' => $webhookUrl]),
-                        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                        CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_TIMEOUT => 10,
-                    ]);
+                    if (file_exists($certPath)) {
+                        // Self-signed cert: upload it so Telegram can verify the webhook
+                        $postFields = ['url' => $webhookUrl, 'certificate' => new CURLFile($certPath, 'application/x-pem-file', 'telegram.crt')];
+                        curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $postFields, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+                    } else {
+                        curl_setopt_array($ch, [
+                            CURLOPT_POST => true,
+                            CURLOPT_POSTFIELDS => json_encode(['url' => $webhookUrl]),
+                            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+                            CURLOPT_RETURNTRANSFER => true,
+                            CURLOPT_TIMEOUT => 10,
+                        ]);
+                    }
                     $result = json_decode(curl_exec($ch), true);
                     curl_close($ch);
                     if (!empty($result['ok'])) {
