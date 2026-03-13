@@ -57,8 +57,20 @@ function db() {
     return getDB();
 }
 
-// Initialize database schema
+// Initialize database — only establishes the connection (fast, runs on every request)
 function initDB() {
+    getDB(); // ensure connection is established
+}
+
+// Run all schema migrations — call explicitly via /api/run-migrations (admin only)
+// Short-circuits immediately if all 34 migrations are already applied.
+function runMigrations() {
+    // Fast short-circuit: if all migrations already applied, skip all checks
+    try {
+        $applied = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations")->fetchColumn();
+        if ($applied >= 34) return;
+    } catch (PDOException $e) { /* db_migrations table may not exist yet — continue */ }
+
     // Create role_permissions table if not exists
     try {
         getDB()->exec("

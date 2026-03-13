@@ -39,6 +39,12 @@ function jsonError($msg, $code = 400) {
 
 try {
     switch ($resource) {
+        case 'run-migrations':
+            requireRole(['admin', 'developer']);
+            runMigrations();
+            jsonResponse(['ok' => true, 'message' => 'Migrations complete']);
+            break;
+
 	case 'login':
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
             $stmt = db()->prepare("SELECT id, username, password, name, role, is_active FROM users WHERE username = ?");
@@ -2349,6 +2355,91 @@ try {
                 'monthly_debt' => round($monthlyDebt, 2),
                 'paid_amount' => round($paidAmount, 2),
                 'remaining_debt' => round($remainingDebt, 2)
+            ]);
+            break;
+
+        case 'student-debt-batch':
+            requireRole(['admin', 'manager', 'teacher', 'accountant']);
+            if ($method !== 'GET') { jsonError('Method not allowed', 405); break; }
+            $studentId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : null;
+            $groupId   = isset($_GET['group_id'])   ? (int)$_GET['group_id']   : null;
+            $monthsRaw = trim($_GET['months'] ?? '');
+            if (!$studentId || !$groupId || !$monthsRaw) {
+                jsonError('student_id, group_id and months required');
+                break;
+            }
+            $months = array_filter(array_map('trim', explode(',', $monthsRaw)));
+            if (empty($months)) { jsonError('months must be a non-empty comma-separated list'); break; }
+
+            // Get enrollment info once (shared across all months)
+            $enrollStmt = db()->prepare("
+                SELECT e.discount_percentage, e.enrolled_at, g.price AS group_price
+                FROM enrollments e
+                JOIN groups g ON e.group_id = g.id
+                WHERE e.student_id = ? AND e.group_id = ?
+            ");
+            $enrollStmt->execute([$studentId, $groupId]);
+            $enrollment = $enrollStmt->fetch();
+            if (!$enrollment) {
+                jsonError('Student not enrolled in this group', 404);
+                break;
+            }
+            $groupPrice  = (float)$enrollment['group_price'];
+            $discountPct = (float)$enrollment['discount_percentage'];
+            $afterEnrollmentDiscount = $groupPrice * (1 - $discountPct / 100);
+
+            $monthResults = [];
+            foreach ($months as $month) {
+                $monthStart = $month . '-01';
+
+                // Monthly discount for this student+group+month
+                $mdStmt = db()->prepare("
+                    SELECT COALESCE(SUM(amount), 0) FROM monthly_discounts
+                    WHERE student_id = ? AND group_id = ? AND for_month = ? AND deleted_at IS NULL
+                ");
+                $mdStmt->execute([$studentId, $groupId, $monthStart]);
+                $monthlyDiscountAmount = (float)$mdStmt->fetchColumn();
+                $monthlyDebt = max(0, $afterEnrollmentDiscount - $monthlyDiscountAmount);
+
+                // Paid amount for this month
+                $paidStmt = db()->prepare("
+                    SELECT COALESCE(SUM(pm.amount), 0) AS paid
+                    FROM payment_months pm
+                    JOIN payments p ON pm.payment_id = p.id
+                    WHERE p.student_id = ? AND p.group_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                ");
+                $paidStmt->execute([$studentId, $groupId, $monthStart]);
+                $paidAmount = (float)$paidStmt->fetchColumn();
+
+                // Transfer credit from unenrolled groups
+                $tcStmt = db()->prepare("
+                    SELECT COALESCE(SUM(pm.amount), 0)
+                    FROM payment_months pm
+                    JOIN payments p ON pm.payment_id = p.id
+                    LEFT JOIN enrollments ecur ON ecur.student_id = p.student_id AND ecur.group_id = p.group_id
+                    WHERE p.student_id = ? AND pm.for_month = ? AND p.deleted_at IS NULL AND p.is_approved = TRUE
+                      AND ecur.id IS NULL AND p.group_id != ?
+                ");
+                $tcStmt->execute([$studentId, $monthStart, $groupId]);
+                $transferCredit = (float)$tcStmt->fetchColumn();
+
+                $remainingDebt = max(0, $monthlyDebt - $paidAmount - $transferCredit);
+
+                $monthResults[] = [
+                    'month'               => $month,
+                    'group_price'         => $groupPrice,
+                    'discount_percentage' => $discountPct,
+                    'monthly_discount'    => round($monthlyDiscountAmount, 2),
+                    'monthly_debt'        => round($monthlyDebt, 2),
+                    'paid_amount'         => round($paidAmount, 2),
+                    'remaining_debt'      => round($remainingDebt, 2),
+                ];
+            }
+
+            jsonResponse([
+                'student_id' => $studentId,
+                'group_id'   => $groupId,
+                'months'     => $monthResults,
             ]);
             break;
 

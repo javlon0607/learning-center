@@ -152,15 +152,15 @@ export function Payments() {
         setAllMonthsStatus({})
         return
       }
-
       setLoadingMonthsStatus(true)
       try {
+        const allMonths = monthOptions.map(m => m.value)
+        const result = await studentDebtApi.getBatch(Number(selectedStudentId), Number(selectedGroupId), allMonths)
         const status: Record<string, { remaining: number; fullyPaid: boolean }> = {}
-        for (const { value: month } of monthOptions) {
-          const debt = await studentDebtApi.get(Number(selectedStudentId), Number(selectedGroupId), month)
-          status[month] = {
-            remaining: debt.remaining_debt,
-            fullyPaid: debt.remaining_debt === 0
+        for (const item of result.months) {
+          status[item.month] = {
+            remaining: item.remaining_debt,
+            fullyPaid: item.remaining_debt === 0
           }
         }
         setAllMonthsStatus(status)
@@ -181,9 +181,9 @@ export function Payments() {
         setDebtInfo(null)
         return
       }
-
       setLoadingDebt(true)
       try {
+        const result = await studentDebtApi.getBatch(Number(selectedStudentId), Number(selectedGroupId), selectedMonths)
         const monthDebts: { month: string; debt: number; paid: number; remaining: number }[] = []
         let totalRemaining = 0
         let groupPrice = 0
@@ -191,21 +191,19 @@ export function Payments() {
         let monthlyDiscount = 0
         let monthlyDebt = 0
 
-        for (const month of selectedMonths) {
-          const debt = await studentDebtApi.get(Number(selectedStudentId), Number(selectedGroupId), month)
-          groupPrice = debt.group_price
-          discountPercentage = debt.discount_percentage
-          monthlyDiscount = debt.monthly_discount || 0
-          monthlyDebt = debt.monthly_debt
+        for (const item of result.months) {
+          groupPrice = item.group_price
+          discountPercentage = item.discount_percentage
+          monthlyDiscount = item.monthly_discount || 0
+          monthlyDebt = item.monthly_debt
           monthDebts.push({
-            month,
-            debt: debt.monthly_debt,
-            paid: debt.paid_amount,
-            remaining: debt.remaining_debt
+            month: item.month,
+            debt: item.monthly_debt,
+            paid: item.paid_amount,
+            remaining: item.remaining_debt
           })
-          totalRemaining += debt.remaining_debt
+          totalRemaining += item.remaining_debt
         }
-
         setDebtInfo({ groupPrice, discountPercentage, monthlyDiscount, monthlyDebt, monthDebts, totalRemaining })
       } catch (err) {
         console.error('Failed to fetch debt info:', err)

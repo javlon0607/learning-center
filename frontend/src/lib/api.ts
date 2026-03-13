@@ -285,6 +285,12 @@ export const paymentsApi = {
 export const studentDebtApi = {
   get: (studentId: number, groupId: number, month: string) =>
     api.get<StudentDebt>('/student-debt', { student_id: String(studentId), group_id: String(groupId), month }),
+  getBatch: (studentId: number, groupId: number, months: string[]) =>
+    api.get<{ student_id: number; group_id: number; months: (StudentDebt & { month: string })[] }>('/student-debt-batch', {
+      student_id: String(studentId),
+      group_id: String(groupId),
+      months: months.join(','),
+    }),
 }
 
 // Monthly Discounts API
