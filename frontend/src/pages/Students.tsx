@@ -52,7 +52,7 @@ import { usePermissions } from '@/contexts/PermissionsContext'
 import {
   Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Phone, User,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
-  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, Download
+  Users, AlertCircle, CheckCircle2, GraduationCap, XCircle, Download, Send
 } from 'lucide-react'
 import { formatDate, formatCurrency, calculateAge, cn } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
@@ -516,12 +516,18 @@ export function Students() {
                             <div className="flex items-center gap-2 text-sm">
                               <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               {student.phone}
+                              {student.has_telegram && (!student.telegram_linked_phone || student.telegram_linked_phone === student.phone) && (
+                                <span title="Linked to Telegram"><Send className="h-3 w-3 text-[#229ED9] shrink-0" /></span>
+                              )}
                             </div>
                           )}
                           {student.phone2 && (
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Phone className="h-3.5 w-3.5 shrink-0" />
                               {student.phone2}
+                              {student.has_telegram && student.telegram_linked_phone === student.phone2 && (
+                                <span title="Linked to Telegram"><Send className="h-3 w-3 text-[#229ED9] shrink-0" /></span>
+                              )}
                             </div>
                           )}
                           {!student.phone && !student.phone2 && <span className="text-muted-foreground text-sm">-</span>}

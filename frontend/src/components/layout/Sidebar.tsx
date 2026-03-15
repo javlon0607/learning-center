@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { usePermissions } from '@/contexts/PermissionsContext'
 import { useTranslation } from '@/contexts/I18nContext'
@@ -51,8 +51,9 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { hasFeature } = usePermissions()
-  const { t, lang, setLang } = useTranslation()
+  const { t } = useTranslation()
 
   const filteredNavigation = navigation.filter(item => item.feature === null || hasFeature(item.feature))
 
@@ -63,8 +64,9 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         <img
           src="/logo-full.jpg"
           alt="Legacy Academy"
-          className="h-14 w-auto rounded-lg"
+          className="h-14 w-auto rounded-lg cursor-pointer"
           draggable={false}
+          onClick={() => { navigate('/'); onNavigate?.() }}
         />
       </div>
 
@@ -104,40 +106,6 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         </div>
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-white/10 space-y-3">
-        {/* Language Switcher */}
-        <div className="flex items-center justify-center gap-1 px-2">
-          <button
-            onClick={() => setLang('en')}
-            className={cn(
-              'flex-1 py-1 text-xs rounded font-medium transition-colors',
-              lang === 'en'
-                ? 'bg-white/20 text-white'
-                : 'text-white/40 hover:text-white/70'
-            )}
-          >
-            EN
-          </button>
-          <div className="w-px h-4 bg-white/20" />
-          <button
-            onClick={() => setLang('uz')}
-            className={cn(
-              'flex-1 py-1 text-xs rounded font-medium transition-colors',
-              lang === 'uz'
-                ? 'bg-white/20 text-white'
-                : 'text-white/40 hover:text-white/70'
-            )}
-          >
-            UZ
-          </button>
-        </div>
-        {/* System status */}
-        <div className="flex items-center gap-3 px-2">
-          <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs text-white/50">{t('nav.system_online', 'System Online')}</span>
-        </div>
-      </div>
     </div>
   )
 }

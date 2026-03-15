@@ -7,6 +7,7 @@ import {
   leadsApi,
   studentsApi,
   teachersApi,
+  usersApi,
   groupsApi,
   TelegramLink,
   TelegramLogEntry,
@@ -270,6 +271,11 @@ function LinkedAccountsTab({
     queryFn: () => leadsApi.getAll(),
     enabled: entityType === 'lead',
   })
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => usersApi.getAll(),
+    enabled: entityType === 'user',
+  })
 
   const [generatedLink, setGeneratedLink] = useState('')
 
@@ -321,6 +327,12 @@ function LinkedAccountsTab({
         .slice(0, 50)
         .map(l => ({ id: l.id, label: `${l.first_name} ${l.last_name}` }))
     }
+    if (entityType === 'user') {
+      return (users || [])
+        .filter(u => (u.name || u.username).toLowerCase().includes(q))
+        .slice(0, 50)
+        .map(u => ({ id: u.id, label: u.name || u.username }))
+    }
     return []
   }
 
@@ -363,6 +375,7 @@ function LinkedAccountsTab({
                   <SelectContent>
                     <SelectItem value="student">Student</SelectItem>
                     <SelectItem value="teacher">Teacher</SelectItem>
+                    <SelectItem value="user">Employee / User</SelectItem>
                     <SelectItem value="lead">Lead</SelectItem>
                   </SelectContent>
                 </Select>
@@ -414,6 +427,7 @@ function LinkedAccountsTab({
           <TableRow>
             <TableHead>Type</TableHead>
             <TableHead>Name</TableHead>
+            <TableHead>Phone</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Link</TableHead>
             <TableHead>Actions</TableHead>
@@ -422,13 +436,14 @@ function LinkedAccountsTab({
         <TableBody>
           {links.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">No linked accounts</TableCell>
+              <TableCell colSpan={6} className="text-center text-muted-foreground">No linked accounts</TableCell>
             </TableRow>
           ) : (
             links.map((link: TelegramLink) => (
               <TableRow key={link.id}>
                 <TableCell className="capitalize">{link.entity_type}</TableCell>
                 <TableCell>{link.entity_name || `#${link.entity_id}`}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{link.entity_phone || '—'}</TableCell>
                 <TableCell>
                   {link.linked_at ? (
                     <Badge variant="default" className="bg-green-600">Linked</Badge>

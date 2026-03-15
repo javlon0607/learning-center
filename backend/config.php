@@ -68,7 +68,7 @@ function runMigrations() {
     // Fast short-circuit: if all migrations already applied, skip all checks
     try {
         $applied = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations")->fetchColumn();
-        if ($applied >= 39) return;
+        if ($applied >= 41) return;
     } catch (PDOException $e) { /* db_migrations table may not exist yet — continue */ }
 
     // Create role_permissions table if not exists
@@ -184,7 +184,7 @@ function runMigrations() {
                 ['en','nav.groups','Groups'], ['uz','nav.groups','Guruhlar'],
                 ['en','nav.teachers','Teachers'], ['uz','nav.teachers',"O'qituvchilar"],
                 ['en','nav.leads','Leads'], ['uz','nav.leads','Potentsial mijozlar'],
-                ['en','nav.attendance','Attendance'], ['uz','nav.attendance','Davomat'],
+                ['en','nav.attendance','Attendance & Marks'], ['uz','nav.attendance','Davomat & Baholar'],
                 ['en','nav.payments','Payments'], ['uz','nav.payments',"To'lovlar"],
                 ['en','nav.expenses','Expenses'], ['uz','nav.expenses','Xarajatlar'],
                 ['en','nav.collections','Collections'], ['uz','nav.collections','Qarzdorlar'],
@@ -1979,6 +1979,27 @@ function runMigrations() {
             getDB()->exec("CREATE INDEX IF NOT EXISTS idx_attendance_group_date ON attendance(group_id, attendance_date)");
             getDB()->exec("CREATE INDEX IF NOT EXISTS idx_group_notif_log_group_date ON group_notification_log(group_id, notification_date)");
             getDB()->exec("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date) WHERE deleted_at IS NULL");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: rename Attendance → Attendance & Marks in nav translations
+    try {
+        $m = 'nav_attendance_rename_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("UPDATE translations SET value = 'Attendance & Marks' WHERE lang = 'en' AND key = 'nav.attendance' AND value = 'Attendance'");
+            getDB()->exec("UPDATE translations SET value = 'Davomat & Baholar' WHERE lang = 'uz' AND key = 'nav.attendance' AND value = 'Davomat'");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: store which phone was used when linking student to Telegram
+    try {
+        $m = 'telegram_links_linked_phone_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE telegram_links ADD COLUMN IF NOT EXISTS linked_phone VARCHAR(30)");
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }

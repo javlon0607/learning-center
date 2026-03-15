@@ -49,7 +49,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Users, UserCheck, UserX, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, Users, UserCheck, UserX, ChevronLeft, ChevronRight, Send } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 
@@ -287,7 +287,14 @@ export function Teachers() {
                         {teacher.first_name} {teacher.last_name}
                       </button>
                     </TableCell>
-                    <TableCell>{teacher.phone || '-'}</TableCell>
+                    <TableCell>
+                      {teacher.phone ? (
+                        <div className="flex items-center gap-2">
+                          {teacher.phone}
+                          {teacher.has_telegram && <span title="Linked to Telegram"><Send className="h-3 w-3 text-[#229ED9] shrink-0" /></span>}
+                        </div>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>{teacher.email || '-'}</TableCell>
                     <TableCell>{teacher.subjects || '-'}</TableCell>
                     <TableCell>

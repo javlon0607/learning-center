@@ -756,6 +756,7 @@ export interface User {
   phone?: string
   is_active?: boolean
   last_login?: string
+  has_telegram?: boolean
 }
 
 export interface StudentEnrollment {
@@ -798,6 +799,8 @@ export interface Student {
   current_month_debt?: number
   current_month_expected?: number
   current_month_paid?: number
+  has_telegram?: boolean
+  telegram_linked_phone?: string | null
 }
 
 export interface Teacher {
@@ -812,6 +815,7 @@ export interface Teacher {
   salary_amount: number
   status: 'active' | 'inactive'
   created_at: string
+  has_telegram?: boolean
 }
 
 export interface Group {
@@ -1108,6 +1112,7 @@ export interface TelegramLink {
   linked_at: string | null
   created_at: string
   entity_name: string | null
+  entity_phone: string | null
   bot_link: string
 }
 

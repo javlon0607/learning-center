@@ -167,9 +167,12 @@ try {
                         COALESCE(
                             (SELECT json_agg(json_build_object('group_id', g.id, 'group_name', g.name, 'price', g.price, 'discount', e.discount_percentage))
                              FROM enrollments e JOIN groups g ON e.group_id = g.id WHERE e.student_id = s.id), '[]'
-                        ) AS enrollments_json
+                        ) AS enrollments_json,
+                        CASE WHEN tl.id IS NOT NULL THEN true ELSE false END AS has_telegram,
+                        tl.linked_phone AS telegram_linked_phone
                     FROM students s
                     LEFT JOIN users cb ON s.created_by = cb.id
+                    LEFT JOIN telegram_links tl ON tl.entity_type = 'student' AND tl.entity_id = s.id AND tl.linked_at IS NOT NULL
                     WHERE s.id = ? AND s.deleted_at IS NULL
                 ";
                 $stmt = db()->prepare($q);
@@ -260,9 +263,12 @@ try {
                              JOIN groups g ON e.group_id = g.id
                              WHERE e.student_id = s.id),
                             '[]'
-                        ) AS enrollments_json
+                        ) AS enrollments_json,
+                        CASE WHEN tl.id IS NOT NULL THEN true ELSE false END AS has_telegram,
+                        tl.linked_phone AS telegram_linked_phone
                     FROM students s
                     LEFT JOIN users cb ON s.created_by = cb.id
+                    LEFT JOIN telegram_links tl ON tl.entity_type = 'student' AND tl.entity_id = s.id AND tl.linked_at IS NOT NULL
                     $whereClause
                     ORDER BY s.created_at DESC
                 ";
@@ -400,13 +406,13 @@ try {
         case 'teachers':
             requireRole(['admin', 'manager', 'accountant']);
             if ($id && $method === 'GET') {
-                $stmt = db()->prepare("SELECT * FROM teachers WHERE id = ?");
+                $stmt = db()->prepare("SELECT t.*, CASE WHEN tl.id IS NOT NULL THEN true ELSE false END AS has_telegram FROM teachers t LEFT JOIN telegram_links tl ON tl.entity_type = 'teacher' AND tl.entity_id = t.id AND tl.linked_at IS NOT NULL WHERE t.id = ?");
                 $stmt->execute([$id]);
                 $row = $stmt->fetch();
                 if (!$row) { jsonError('Teacher not found', 404); break; }
                 jsonResponse($row);
             } elseif ($method === 'GET') {
-                $stmt = db()->query("SELECT * FROM teachers ORDER BY created_at DESC");
+                $stmt = db()->query("SELECT t.*, CASE WHEN tl.id IS NOT NULL THEN true ELSE false END AS has_telegram FROM teachers t LEFT JOIN telegram_links tl ON tl.entity_type = 'teacher' AND tl.entity_id = t.id AND tl.linked_at IS NOT NULL ORDER BY t.created_at DESC");
                 jsonResponse($stmt->fetchAll());
             } elseif ($method === 'POST') {
                 $userId = isset($input['user_id']) ? (int)$input['user_id'] : null;
@@ -1998,7 +2004,7 @@ try {
             if ($method === 'GET') {
                 requireRole(['admin', 'manager', 'accountant']);
                 try {
-                    $stmt = db()->query("SELECT u.id, u.username, u.name, u.role, u.teacher_id, u.email, u.phone, u.is_active, u.last_login, u.created_at, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name FROM users u LEFT JOIN teachers t ON u.teacher_id = t.id ORDER BY u.created_at DESC");
+                    $stmt = db()->query("SELECT u.id, u.username, u.name, u.role, u.teacher_id, u.email, u.phone, u.is_active, u.last_login, u.created_at, TRIM(COALESCE(t.first_name, '') || ' ' || COALESCE(t.last_name, '')) AS teacher_name, CASE WHEN tl.id IS NOT NULL THEN true ELSE false END AS has_telegram FROM users u LEFT JOIN teachers t ON u.teacher_id = t.id LEFT JOIN telegram_links tl ON tl.entity_type = 'user' AND tl.entity_id = u.id AND tl.linked_at IS NOT NULL ORDER BY u.created_at DESC");
                 } catch (PDOException $e) {
                     $stmt = db()->query("SELECT id, username, name, role, email, phone, is_active, last_login, created_at FROM users ORDER BY created_at DESC");
                 }
@@ -3200,9 +3206,18 @@ try {
                     $norm9 = $normalizedPhone;
                     $phoneExpr = "RIGHT(regexp_replace(COALESCE(%s,''),'[^0-9]','','g'),9)";
                     // student by phone or phone2
-                    $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM students WHERE (" . sprintf($phoneExpr,'phone') . " = ? OR " . sprintf($phoneExpr,'phone2') . " = ?) AND deleted_at IS NULL LIMIT 1");
+                    $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name, phone, phone2 FROM students WHERE (" . sprintf($phoneExpr,'phone') . " = ? OR " . sprintf($phoneExpr,'phone2') . " = ?) AND deleted_at IS NULL LIMIT 1");
                     $s->execute([$norm9, $norm9]); $row = $s->fetch();
-                    if ($row) $found = ['type' => 'student', 'id' => $row['id'], 'name' => $row['full_name']];
+                    if ($row) {
+                        $linkedPhone = null;
+                        foreach (['phone', 'phone2'] as $pf) {
+                            if (!empty($row[$pf])) {
+                                $pn = preg_replace('/[^0-9]/', '', $row[$pf]);
+                                if (strlen($pn) >= 9 && substr($pn, -9) === $norm9) { $linkedPhone = $row[$pf]; break; }
+                            }
+                        }
+                        $found = ['type' => 'student', 'id' => $row['id'], 'name' => $row['full_name'], 'linked_phone' => $linkedPhone];
+                    }
                     // teacher
                     if (!$found) { $s = db()->prepare("SELECT id, first_name || ' ' || last_name AS full_name FROM teachers WHERE " . sprintf($phoneExpr,'phone') . " = ? LIMIT 1"); $s->execute([$norm9]); $row = $s->fetch(); if ($row) $found = ['type' => 'teacher', 'id' => $row['id'], 'name' => $row['full_name']]; }
                     // lead (non-closed)
@@ -3226,13 +3241,14 @@ try {
                     }
 
                     if ($found) {
+                        $linkedPhone = $found['linked_phone'] ?? null;
                         $existing = db()->prepare("SELECT id FROM telegram_links WHERE entity_type = ? AND entity_id = ?");
                         $existing->execute([$found['type'], $found['id']]);
                         $existingRow = $existing->fetch();
                         if ($existingRow) {
-                            db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL WHERE id = ?")->execute([$chatId, $existingRow['id']]);
+                            db()->prepare("UPDATE telegram_links SET chat_id = ?, linked_at = NOW(), link_code = NULL, linked_phone = ? WHERE id = ?")->execute([$chatId, $linkedPhone, $existingRow['id']]);
                         } else {
-                            db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at) VALUES (?, ?, ?, NOW())")->execute([$found['type'], $found['id'], $chatId]);
+                            db()->prepare("INSERT INTO telegram_links (entity_type, entity_id, chat_id, linked_at, linked_phone) VALUES (?, ?, ?, NOW(), ?)")->execute([$found['type'], $found['id'], $chatId, $linkedPhone]);
                         }
                         if ($found['type'] === 'student') {
                             // Ask language first
@@ -3708,7 +3724,14 @@ try {
                             WHEN tl.entity_type = 'student' THEN (SELECT first_name || ' ' || last_name FROM students WHERE id = tl.entity_id)
                             WHEN tl.entity_type = 'teacher' THEN (SELECT first_name || ' ' || last_name FROM teachers WHERE id = tl.entity_id)
                             WHEN tl.entity_type = 'lead' THEN (SELECT first_name || ' ' || last_name FROM leads WHERE id = tl.entity_id)
-                        END AS entity_name
+                            WHEN tl.entity_type = 'user' THEN (SELECT name FROM users WHERE id = tl.entity_id)
+                        END AS entity_name,
+                        CASE
+                            WHEN tl.entity_type = 'student' THEN COALESCE(tl.linked_phone, (SELECT phone FROM students WHERE id = tl.entity_id))
+                            WHEN tl.entity_type = 'teacher' THEN (SELECT phone FROM teachers WHERE id = tl.entity_id)
+                            WHEN tl.entity_type = 'user' THEN (SELECT phone FROM users WHERE id = tl.entity_id)
+                            ELSE NULL
+                        END AS entity_phone
                     FROM telegram_links tl
                     ORDER BY tl.created_at DESC
                 ");

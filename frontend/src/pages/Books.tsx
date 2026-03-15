@@ -361,7 +361,7 @@ function IssueDialog({ open, onOpenChange, book }: IssueDialogProps) {
           {groupId && (
             <div className="border rounded-lg overflow-hidden">
               {/* Header */}
-              <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 border-b">
+              <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-muted/50 border-b">
                 <input
                   type="checkbox"
                   checked={allChecked}
@@ -391,7 +391,7 @@ function IssueDialog({ open, onOpenChange, book }: IssueDialogProps) {
                   rows.map(row => (
                     <div
                       key={row.studentId}
-                      className={`flex items-center gap-3 px-3 py-2 border-b last:border-0 hover:bg-gray-50 cursor-pointer transition-colors ${row.checked ? '' : 'opacity-50'}`}
+                      className={`flex items-center gap-3 px-3 py-2 border-b last:border-0 hover:bg-gray-50 dark:hover:bg-muted/40 cursor-pointer transition-colors ${row.checked ? '' : 'opacity-50'}`}
                       onClick={() => toggleRow(row.studentId)}
                     >
                       <input
@@ -423,7 +423,7 @@ function IssueDialog({ open, onOpenChange, book }: IssueDialogProps) {
 
           {/* Summary */}
           {selectedRows.length > 0 && (
-            <div className="rounded-lg bg-gray-50 border px-4 py-3 flex justify-between items-center">
+            <div className="rounded-lg bg-gray-50 dark:bg-muted/50 border px-4 py-3 flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
                 {selectedRows.length} {t('books.students', 'students')} · {totalBooks} {t('books.books_count', 'books')}
               </span>
@@ -640,7 +640,7 @@ function IssuesTable({ bookId, studentId }: IssuesTableProps) {
             </thead>
             <tbody>
               {issues.map(issue => (
-                <tr key={issue.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={issue.id} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-muted/40">
                   {!bookId    && <td className="py-2 pr-4 font-medium">{issue.book_title}</td>}
                   {!studentId && <td className="py-2 pr-4">{issue.student_name}</td>}
                   <td className="py-2 pr-4 text-right">{issue.quantity}</td>
@@ -757,7 +757,7 @@ function MonthlyReport() {
         </thead>
         <tbody>
           {(stats as BookMonthStat[]).map(row => (
-            <tr key={row.month} className="border-b last:border-0 hover:bg-gray-50">
+            <tr key={row.month} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-muted/40">
               <td className="py-2 pr-4 font-medium">{fmtMonth(row.month)}</td>
               <td className="py-2 pr-4 text-right">{row.issues_count}</td>
               <td className="py-2 pr-4 text-right">{row.books_count}</td>
@@ -862,7 +862,7 @@ export function Books() {
           { label: t('books.stat_revenue',   'Total Revenue'),  value: formatCurrency(totalRevenue), icon: DollarSign, raw: true },
           { label: t('books.stat_unpaid',    'Unpaid'),         value: stats.unpaidAmount > 0 ? `${stats.unpaidCount} · ${formatCurrency(stats.unpaidAmount)}` : '0', icon: Clock, raw: true, warn: stats.unpaidAmount > 0 },
         ].map(s => (
-          <div key={s.label} className={`bg-white rounded-xl border shadow-sm px-4 py-3 ${s.warn ? 'border-red-200 bg-red-50' : 'border-gray-100'}`}>
+          <div key={s.label} className={`bg-white dark:bg-card rounded-xl border shadow-sm px-4 py-3 ${s.warn ? 'border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20' : 'border-gray-100 dark:border-border'}`}>
             <p className={`text-xs ${s.warn ? 'text-red-500' : 'text-muted-foreground'}`}>{s.label}</p>
             <p className={`text-xl font-bold mt-1 ${s.warn ? 'text-red-600' : ''}`}>{s.value}</p>
           </div>
@@ -908,14 +908,14 @@ export function Books() {
               )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-sm overflow-hidden">
               {isLoading ? (
                 <div className="text-center py-12 text-muted-foreground">{t('common.loading', 'Loading...')}</div>
               ) : filtered.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">{t('books.empty', 'No books found')}</div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
+                  <thead className="bg-gray-50 dark:bg-muted/50 border-b">
                     <tr>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground">{t('books.col_title', 'Title')}</th>
                       <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">{t('books.col_author', 'Author')}</th>
@@ -929,9 +929,9 @@ export function Books() {
                   </thead>
                   <tbody>
                     {filtered.map(book => (
-                      <tr key={book.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
+                      <tr key={book.id} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-muted/40 transition-colors">
                         <td className="px-4 py-3">
-                          <div className="font-medium text-gray-900">{book.title}</div>
+                          <div className="font-medium text-gray-900 dark:text-foreground">{book.title}</div>
                           {book.isbn && <div className="text-xs text-muted-foreground mt-0.5">ISBN: {book.isbn}</div>}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{book.author ?? '—'}</td>
@@ -1012,14 +1012,14 @@ export function Books() {
 
         {/* ── All Issues Tab ── */}
         <TabsContent value="issues" className="mt-4">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-sm p-4">
             <IssuesTable />
           </div>
         </TabsContent>
 
         {/* ── Monthly Report Tab ── */}
         <TabsContent value="report" className="mt-4">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="bg-white dark:bg-card rounded-xl border border-gray-100 dark:border-border shadow-sm p-4">
             <h3 className="font-semibold mb-4">{t('books.tab_report', 'Monthly Report')} (last 24 months)</h3>
             <MonthlyReport />
           </div>

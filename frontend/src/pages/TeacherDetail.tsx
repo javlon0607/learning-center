@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { ArrowLeft, Mail, Phone, BookOpen, DollarSign, GraduationCap } from 'lucide-react'
+import { ArrowLeft, Mail, Phone, BookOpen, DollarSign, GraduationCap, Send } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export function TeacherDetail() {
@@ -79,6 +79,7 @@ export function TeacherDetail() {
               <div className="flex items-center gap-3">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <span>{teacher.phone}</span>
+                {teacher.has_telegram && <span title="Linked to Telegram"><Send className="h-3.5 w-3.5 text-[#229ED9]" /></span>}
               </div>
             )}
             {teacher.email && (

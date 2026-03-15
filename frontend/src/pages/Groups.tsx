@@ -48,7 +48,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, BookOpen, Users, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, BookOpen, Users, ChevronLeft, ChevronRight, Send } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
 import { useAmountInput } from '@/hooks/useAmountInput'
@@ -313,12 +313,17 @@ export function Groups() {
                   return (
                   <TableRow key={group.id}>
                     <TableCell>
-                      <button
-                        onClick={() => navigate(`/groups/${group.id}`)}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {group.name}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate(`/groups/${group.id}`)}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {group.name}
+                        </button>
+                        {group.telegram_group_chat_id && (
+                          <span title="Telegram group linked"><Send className="h-3.5 w-3.5 text-[#229ED9] shrink-0" /></span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{group.subject || '-'}</TableCell>
                     <TableCell>{group.teacher_name || '-'}</TableCell>

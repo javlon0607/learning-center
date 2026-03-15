@@ -41,7 +41,7 @@ import {
   ArrowLeft, Mail, Phone, User, Calendar, BookOpen, Info,
   Pencil, Trash2, GraduationCap, AlertCircle, CheckCircle2,
   ChevronLeft, ChevronRight, Cake, CreditCard, UserPlus,
-  ChevronDown, Plus, Loader2, ClipboardList, MessageSquare, ShoppingBag,
+  ChevronDown, Plus, Loader2, ClipboardList, MessageSquare, ShoppingBag, Send,
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency, calculateAge, parseAmountFromInput, cn } from '@/lib/utils'
 
@@ -528,10 +528,15 @@ export function StudentDetail() {
           </CardHeader>
           <CardContent className="space-y-3">
             {student.phone && (
-              <a href={`tel:${student.phone}`} className="flex items-center gap-3 text-sm hover:text-primary">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                {student.phone}
-              </a>
+              <div className="flex items-center gap-2">
+                <a href={`tel:${student.phone}`} className="flex items-center gap-3 text-sm hover:text-primary">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  {student.phone}
+                </a>
+                {student.has_telegram && (!student.telegram_linked_phone || student.telegram_linked_phone === student.phone) && (
+                  <span title="Linked to Telegram"><Send className="h-3.5 w-3.5 text-[#229ED9]" /></span>
+                )}
+              </div>
             )}
             {student.email && (
               <a href={`mailto:${student.email}`} className="flex items-center gap-3 text-sm hover:text-primary">

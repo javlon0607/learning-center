@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ArrowLeft, Plus, Search, Loader2, Pencil, UserX, UserCheck } from 'lucide-react'
+import { ArrowLeft, Plus, Search, Loader2, Pencil, UserX, UserCheck, Send } from 'lucide-react'
 import { useTranslation } from '@/contexts/I18nContext'
 
 //interface UserWithPassword extends User {
@@ -222,7 +222,14 @@ export function Users() {
                     <TableCell className="font-medium">{user.username}</TableCell>
                     <TableCell>{user.name}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{user.email || '-'}</TableCell>
-                    <TableCell className="hidden md:table-cell">{user.phone || '-'}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {user.phone ? (
+                        <div className="flex items-center gap-2">
+                          {user.phone}
+                          {user.has_telegram && <span title="Linked to Telegram"><Send className="h-3 w-3 text-[#229ED9] shrink-0" /></span>}
+                        </div>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {(user.role || 'user').split(',').map((r) => r.trim()).filter(Boolean).map((r) => (

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
-import { useTranslation } from '@/contexts/I18nContext'
+import { useTranslation, Lang } from '@/contexts/I18nContext'
 import { birthdaysApi, settingsApi, notificationsApi, BirthdayStudent, Notification } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -76,7 +76,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { t } = useTranslation()
+  const { t, lang, setLang } = useTranslation()
   const { theme, toggleTheme } = useTheme()
   const [timetableOpen, setTimetableOpen] = useState(false)
 
@@ -112,7 +112,12 @@ export function Header({ onMenuClick }: HeaderProps) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
-  const unreadCount = dbNotifications.filter((n: Notification) => !n.is_read).length
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+  const recentNotifications = dbNotifications.filter(
+    (n: Notification) => new Date(n.created_at) >= twoDaysAgo
+  )
+
+  const unreadCount = recentNotifications.filter((n: Notification) => !n.is_read).length
 
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.is_read) {
@@ -207,6 +212,35 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Tooltip>
         </TooltipProvider>
 
+        {/* Language Switcher */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-lg">
+              <img
+                src={lang === 'en' ? 'https://flagcdn.com/w40/us.png' : 'https://flagcdn.com/w40/uz.png'}
+                alt={lang === 'en' ? 'EN' : 'UZ'}
+                className="h-[18px] w-[27px] rounded-sm object-cover"
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem
+              onClick={() => setLang('en' as Lang)}
+              className={`cursor-pointer gap-2 ${lang === 'en' ? 'font-semibold text-primary' : ''}`}
+            >
+              <img src="https://flagcdn.com/w40/us.png" alt="US" className="h-[18px] w-[27px] rounded-sm object-cover" />
+              English
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setLang('uz' as Lang)}
+              className={`cursor-pointer gap-2 ${lang === 'uz' ? 'font-semibold text-primary' : ''}`}
+            >
+              <img src="https://flagcdn.com/w40/uz.png" alt="UZ" className="h-[18px] w-[27px] rounded-sm object-cover" />
+              O'zbek
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
@@ -274,12 +308,12 @@ export function Header({ onMenuClick }: HeaderProps) {
               )}
 
               {/* DB Notifications Section */}
-              {dbNotifications.length > 0 && (
+              {recentNotifications.length > 0 && (
                 <div className="p-2">
                   {hasBirthdays && (
                     <div className="border-t my-1" />
                   )}
-                  {dbNotifications.map((notification: Notification) => {
+                  {recentNotifications.map((notification: Notification) => {
                     const { icon: Icon, bg, color } = getNotificationIcon(notification.type)
                     return (
                       <button
@@ -315,7 +349,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               )}
 
               {/* Empty state */}
-              {!hasBirthdays && dbNotifications.length === 0 && (
+              {!hasBirthdays && recentNotifications.length === 0 && (
                 <div className="py-8 text-center">
                   <Bell className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">{t('header.no_notifications', 'No notifications')}</p>
