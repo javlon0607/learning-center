@@ -941,12 +941,13 @@ export function StudentDetail() {
                     <TableHead>{t('sd.col_date', 'Date')}</TableHead>
                     <TableHead>{t('sd.col_group', 'Group')}</TableHead>
                     <TableHead>{t('sd.col_status', 'Status')}</TableHead>
+                    <TableHead>{t('sd.col_mark', 'Mark')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {attendanceRecords.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                         {t('sd.no_attendance', 'No attendance records')}
                       </TableCell>
                     </TableRow>
@@ -968,6 +969,20 @@ export function StudentDetail() {
                             <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium', config.className)}>
                               {config.label}
                             </span>
+                          </TableCell>
+                          <TableCell>
+                            {record.mark_score != null ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="font-medium">{record.mark_score}</span>
+                                {record.mark_topic && (
+                                  <span className="text-xs text-muted-foreground truncate max-w-[120px]" title={record.mark_topic}>
+                                    · {record.mark_topic}
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       )

@@ -38,12 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
+
 import { Card, CardContent } from '@/components/ui/card'
 import { StudentForm } from '@/components/students/StudentForm'
 import { useToast } from '@/components/ui/use-toast'
@@ -470,16 +465,14 @@ export function Students() {
         <>
           {/* Table */}
           <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-soft overflow-x-auto">
-            <Table className="min-w-[900px]">
+            <Table className="min-w-[700px]">
               <TableHeader>
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <SortableHeader field="name" className="font-semibold">{t('students.col_name', 'Name')}</SortableHeader>
                   <SortableHeader field="phone" className="font-semibold">{t('students.col_phone', 'Phone')}</SortableHeader>
                   <TableHead className="font-semibold">{t('students.col_parent', 'Parent/Guardian')}</TableHead>
                   <SortableHeader field="groups" className="font-semibold">{t('students.col_groups', 'Groups')}</SortableHeader>
-                  <SortableHeader field="debt" className="font-semibold">{t('students.col_debt', 'Debt')}</SortableHeader>
                   <SortableHeader field="status" className="font-semibold">{t('common.col_status', 'Status')}</SortableHeader>
-                  <SortableHeader field="source" className="font-semibold">{t('students.col_source', 'Source')}</SortableHeader>
                   <SortableHeader field="created_at" className="font-semibold">{t('students.col_registered', 'Registered')}</SortableHeader>
                   <TableHead className="w-[70px]"></TableHead>
                 </TableRow>
@@ -487,7 +480,6 @@ export function Students() {
               <TableBody>
                 {paginatedStudents.map((student, index) => {
                   const StatusIcon = statusConfig[student.status]?.icon || CheckCircle2
-                  const hasDebt = (student.current_month_debt || 0) > 0
                   return (
                     <TableRow
                       key={student.id}
@@ -498,16 +490,11 @@ export function Students() {
                       onClick={() => navigate(`/students/${student.id}`)}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-navy-100 flex items-center justify-center text-navy-700 font-medium text-sm shrink-0">
-                            {student.first_name[0]}{student.last_name[0]}
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">{student.first_name} {student.last_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {student.dob ? `${calculateAge(student.dob)} y/o` : `ID: ${student.id}`}
-                            </p>
-                          </div>
+                        <div>
+                          <p className="font-medium text-foreground">{student.first_name} {student.last_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {student.dob ? `${calculateAge(student.dob)} y/o` : `ID: ${student.id}`}
+                          </p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -544,6 +531,9 @@ export function Students() {
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Phone className="h-3.5 w-3.5" />
                                 {student.parent_phone}
+                                {student.has_telegram && student.telegram_linked_phone === student.parent_phone && (
+                                  <span title="Linked to Telegram"><Send className="h-3 w-3 text-[#229ED9] shrink-0" /></span>
+                                )}
                               </div>
                             )}
                           </div>
@@ -566,38 +556,6 @@ export function Students() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {student.enrollments && student.enrollments.length > 0 ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className={cn("text-sm", hasDebt ? "text-red-600 font-medium" : "text-green-600")}>
-                                  {hasDebt ? (
-                                    <div className="flex items-center gap-1">
-                                      <AlertCircle className="h-4 w-4" />
-                                      {hasDashboard ? formatCurrency(student.current_month_debt || 0) : '***'}
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center gap-1">
-                                      <CheckCircle2 className="h-4 w-4" />
-                                      {t('students.paid', 'Paid')}
-                                    </div>
-                                  )}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom">
-                                <div className="text-sm space-y-1">
-                                  <p>{t('students.tooltip_expected', 'Expected')}: {hasDashboard ? formatCurrency(student.current_month_expected || 0) : '***'}</p>
-                                  <p>{t('students.tooltip_paid', 'Paid')}: {hasDashboard ? formatCurrency(student.current_month_paid || 0) : '***'}</p>
-                                  <p>{t('students.tooltip_remaining', 'Remaining')}: {hasDashboard ? formatCurrency(student.current_month_debt || 0) : '***'}</p>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <span className={cn(
                           'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border',
                           statusConfig[student.status]?.className
@@ -605,11 +563,6 @@ export function Students() {
                           <StatusIcon className="h-3 w-3" />
                           {statusConfig[student.status]?.label}
                         </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs font-normal">
-                          {sourceOptions.find(s => s.value === student.source)?.label || student.source || t('students.source_walkin', 'Walk-in')}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">{formatDate(student.created_at)}</span>

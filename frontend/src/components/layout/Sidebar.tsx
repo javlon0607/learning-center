@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils'
 import { usePermissions } from '@/contexts/PermissionsContext'
 import { useTranslation } from '@/contexts/I18nContext'
 import {
-  LayoutDashboard,
   Users,
   GraduationCap,
   UserCog,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react'
 
 const navigation = [
-  { key: 'nav.dashboard',    href: '/',            icon: LayoutDashboard, feature: null },
   { key: 'nav.students',     href: '/students',     icon: Users,           feature: 'students' },
   { key: 'nav.groups',       href: '/groups',       icon: GraduationCap,   feature: 'groups' },
   { key: 'nav.teachers',     href: '/teachers',     icon: UserCog,         feature: 'teachers' },

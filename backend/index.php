@@ -2501,9 +2501,11 @@ try {
                 if (!$studentId) { jsonError('student_id required'); break; }
                 $limit = isset($_GET['limit']) ? min((int)$_GET['limit'], 200) : 60;
                 $stmt = db()->prepare("
-                    SELECT a.attendance_date, a.status, g.name AS group_name, g.id AS group_id
+                    SELECT a.attendance_date, a.status, g.name AS group_name, g.id AS group_id,
+                           m.score AS mark_score, m.topic AS mark_topic
                     FROM attendance a
                     JOIN groups g ON a.group_id = g.id
+                    LEFT JOIN marks m ON m.student_id = a.student_id AND m.group_id = a.group_id AND m.mark_date = a.attendance_date
                     WHERE a.student_id = ?
                     ORDER BY a.attendance_date DESC, g.name
                     LIMIT ?

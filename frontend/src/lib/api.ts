@@ -486,6 +486,8 @@ export interface StudentAttendanceRecord {
   status: 'present' | 'absent' | 'late' | 'excused'
   group_name: string
   group_id: number
+  mark_score?: number | null
+  mark_topic?: string | null
 }
 
 export const studentAttendanceApi = {
