@@ -39,3 +39,9 @@ postgres_data/
 nginx/ssl/*.crt
 nginx/ssl/*.key
 backend/telegram.crt
+
+# Docker files (differ between local and server)
+docker-compose.yml
+backend/Dockerfile
+frontend/Dockerfile
+cron/
