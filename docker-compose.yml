@@ -51,6 +51,7 @@ services:
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-1800}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-604800}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      CRON_SECRET: ${CRON_SECRET:-change_me_cron_secret_64chars}
 
   # Frontend Build
   frontend:
@@ -79,6 +80,22 @@ services:
     depends_on:
       - backend
       - frontend
+    networks:
+      - learning_center_network
+
+  # Cron Scheduler — triggers periodic API calls
+  cron:
+    image: alpine:3.18
+    container_name: learning_center_cron
+    restart: always
+    depends_on:
+      - nginx
+    volumes:
+      - ./cron/crontab:/etc/cron/crontab.template:ro
+      - ./cron/entrypoint.sh:/entrypoint.sh:ro
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-change_me_cron_secret_64chars}
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks:
       - learning_center_network
 

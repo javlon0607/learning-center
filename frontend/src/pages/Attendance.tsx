@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { attendanceApi, groupsApi } from '@/lib/api'
-import type { StudentAttendanceHistory, UnmarkedGroup } from '@/lib/api'
+import { attendanceApi, groupsApi, marksApi } from '@/lib/api'
+import type { StudentAttendanceHistory, StudentMarkHistory, UnmarkedGroup } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { DateInput } from '@/components/ui/date-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,12 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/contexts/PermissionsContext'
 
 const statusOptions = [
   { value: 'present', icon: Check, color: 'bg-green-500' },
@@ -42,24 +45,16 @@ type SortDir = 'asc' | 'desc'
 const today = () => new Date().toISOString().split('T')[0]
 
 export function Attendance() {
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
   const { t } = useTranslation()
-  const { user } = useAuth()
+  const { hasFeature } = usePermissions()
+  const [activeTab, setActiveTab] = useState('attendance')
   const [selectedGroup, setSelectedGroup] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState(today())
-  const [attendanceData, setAttendanceData] = useState<Record<number, string>>({})
-  const [initialData, setInitialData] = useState<Record<number, string>>({})
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const { user } = useAuth()
 
   const userRoles = useMemo(() => (user?.role || 'user').split(',').map(r => r.trim()), [user])
   const isTeacherOnly = useMemo(
     () => userRoles.includes('teacher') && !userRoles.some(r => ['admin', 'manager', 'owner', 'developer'].includes(r)),
-    [userRoles]
-  )
-  const isAdminRole = useMemo(
-    () => userRoles.some(r => ['admin', 'owner', 'developer'].includes(r)),
     [userRoles]
   )
 
@@ -89,6 +84,111 @@ export function Attendance() {
     }
   }, [selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const showMarksTab = hasFeature('marks')
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">{t('attendance.title', 'Attendance')}</h1>
+        <p className="text-muted-foreground">{t('attendance.description', 'Mark daily attendance for groups')}</p>
+      </div>
+
+      {/* Group & date selectors — shared between tabs */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+        <div className="space-y-2 w-full sm:w-auto">
+          <Label>{t('attendance.form_group', 'Group')}</Label>
+          <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+            <SelectTrigger className="w-full sm:w-[250px]">
+              <SelectValue placeholder={t('attendance.select_group', 'Select a group')} />
+            </SelectTrigger>
+            <SelectContent>
+              {activeGroups.map((group) => (
+                <SelectItem key={group.id} value={group.id.toString()}>
+                  {group.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>{t('attendance.form_date', 'Date')}</Label>
+          <DateInput
+            value={selectedDate}
+            onChange={setSelectedDate}
+            className={cn("w-[140px]", selectedDate > today() && "border-red-300 focus-visible:ring-red-500")}
+          />
+          {selectedDate > today() && (
+            <p className="text-xs text-red-500">{t('attendance.future_date_error', 'Cannot mark attendance for future dates')}</p>
+          )}
+        </div>
+      </div>
+
+      {showMarksTab ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="attendance">{t('attendance.tab_attendance', 'Attendance')}</TabsTrigger>
+            <TabsTrigger value="marks">{t('attendance.tab_marks', 'Marks')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="attendance" className="mt-4">
+            <AttendanceTab
+              selectedGroup={selectedGroup}
+              selectedDate={selectedDate}
+              setSelectedGroup={setSelectedGroup}
+              setSelectedDate={setSelectedDate}
+              groups={groups}
+            />
+          </TabsContent>
+          <TabsContent value="marks" className="mt-4">
+            <MarksTab
+              selectedGroup={selectedGroup}
+              selectedDate={selectedDate}
+              groups={groups}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <AttendanceTab
+          selectedGroup={selectedGroup}
+          selectedDate={selectedDate}
+          setSelectedGroup={setSelectedGroup}
+          setSelectedDate={setSelectedDate}
+          groups={groups}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Attendance Tab ──────────────────────────────────────────────────────
+
+interface AttendanceTabProps {
+  selectedGroup: string
+  selectedDate: string
+  setSelectedGroup: (g: string) => void
+  setSelectedDate: (d: string) => void
+  groups: { id: number; name: string; schedule_days?: string; teacher_id?: number; status: string }[]
+}
+
+function AttendanceTab({ selectedGroup, selectedDate, setSelectedGroup, setSelectedDate, groups }: AttendanceTabProps) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const { t } = useTranslation()
+  const { user } = useAuth()
+  const [attendanceData, setAttendanceData] = useState<Record<number, string>>({})
+  const [initialData, setInitialData] = useState<Record<number, string>>({})
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  const userRoles = useMemo(() => (user?.role || 'user').split(',').map(r => r.trim()), [user])
+  const isTeacherOnly = useMemo(
+    () => userRoles.includes('teacher') && !userRoles.some(r => ['admin', 'manager', 'owner', 'developer'].includes(r)),
+    [userRoles]
+  )
+  const isAdminRole = useMemo(
+    () => userRoles.some(r => ['admin', 'owner', 'developer'].includes(r)),
+    [userRoles]
+  )
+
   const { data: attendance, isLoading: attendanceLoading } = useQuery({
     queryKey: ['attendance', selectedGroup, selectedDate],
     queryFn: () => attendanceApi.get(Number(selectedGroup), selectedDate),
@@ -106,8 +206,6 @@ export function Attendance() {
     queryFn: attendanceApi.getUnmarked,
   })
 
-  // Banner: filter unmarked groups by teacher if teacher-only
-  // PHP returns teacher_id as string, so use == (loose) comparison
   const filteredUnmarked: UnmarkedGroup[] = useMemo(() => {
     if (isTeacherOnly && user?.teacher_id) {
       // eslint-disable-next-line eqeqeq
@@ -266,12 +364,7 @@ export function Attendance() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{t('attendance.title', 'Attendance')}</h1>
-        <p className="text-muted-foreground">{t('attendance.description', 'Mark daily attendance for groups')}</p>
-      </div>
-
+    <div className="space-y-4">
       {/* Unmarked groups banner */}
       {filteredUnmarked.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
@@ -293,35 +386,6 @@ export function Attendance() {
           ))}
         </div>
       )}
-
-      <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-        <div className="space-y-2 w-full sm:w-auto">
-          <Label>{t('attendance.form_group', 'Group')}</Label>
-          <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-            <SelectTrigger className="w-full sm:w-[250px]">
-              <SelectValue placeholder={t('attendance.select_group', 'Select a group')} />
-            </SelectTrigger>
-            <SelectContent>
-              {activeGroups.map((group) => (
-                <SelectItem key={group.id} value={group.id.toString()}>
-                  {group.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>{t('attendance.form_date', 'Date')}</Label>
-          <DateInput
-            value={selectedDate}
-            onChange={setSelectedDate}
-            className={cn("w-[140px]", isFutureDate && "border-red-300 focus-visible:ring-red-500")}
-          />
-          {isFutureDate && (
-            <p className="text-xs text-red-500">{t('attendance.future_date_error', 'Cannot mark attendance for future dates')}</p>
-          )}
-        </div>
-      </div>
 
       {selectedGroup && isNonClassDay && (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -549,6 +613,260 @@ export function Attendance() {
           </CardContent>
         </Card>
       ) : null}
+    </div>
+  )
+}
+
+// ── Marks Tab ───────────────────────────────────────────────────────────
+
+const scoreColors: Record<number, string> = {
+  1: 'bg-red-500',
+  2: 'bg-orange-500',
+  3: 'bg-yellow-500',
+  4: 'bg-lime-500',
+  5: 'bg-green-500',
+}
+
+const scoreDotColor: Record<number, string> = {
+  1: 'bg-red-500',
+  2: 'bg-orange-500',
+  3: 'bg-yellow-500',
+  4: 'bg-lime-500',
+  5: 'bg-green-500',
+}
+
+interface MarksTabProps {
+  selectedGroup: string
+  selectedDate: string
+  groups: { id: number; name: string }[]
+}
+
+function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
+  const { t } = useTranslation()
+  const [marksData, setMarksData] = useState<Record<number, number | null>>({})
+  const [initialMarks, setInitialMarks] = useState<Record<number, number | null>>({})
+  const [topic, setTopic] = useState('')
+  const [initialTopic, setInitialTopic] = useState('')
+
+  const isFutureDate = selectedDate > today()
+
+  const { data: marks, isLoading } = useQuery({
+    queryKey: ['marks', selectedGroup, selectedDate],
+    queryFn: () => marksApi.get(Number(selectedGroup), selectedDate),
+    enabled: !!selectedGroup && !!selectedDate,
+  })
+
+  const { data: markHistory } = useQuery({
+    queryKey: ['marks-history', selectedGroup],
+    queryFn: () => marksApi.getHistory(Number(selectedGroup)),
+    enabled: !!selectedGroup,
+  })
+
+  const historyMap = useMemo(() => {
+    const map: Record<number, StudentMarkHistory> = {}
+    if (markHistory) {
+      for (const h of markHistory) map[h.student_id] = h
+    }
+    return map
+  }, [markHistory])
+
+  useEffect(() => {
+    if (marks?.rows) {
+      const data: Record<number, number | null> = {}
+      let savedTopic = ''
+      marks.rows.forEach(row => {
+        data[row.student_id] = row.score ?? null
+        if (row.topic && !savedTopic) savedTopic = row.topic
+      })
+      setMarksData(data)
+      setInitialMarks(data)
+      setTopic(savedTopic)
+      setInitialTopic(savedTopic)
+    }
+  }, [marks])
+
+  const isDirty = useMemo(() => {
+    if (topic !== initialTopic) return true
+    const keys = new Set([...Object.keys(marksData), ...Object.keys(initialMarks)])
+    for (const k of keys) {
+      if (marksData[Number(k)] !== initialMarks[Number(k)]) return true
+    }
+    return false
+  }, [marksData, initialMarks, topic, initialTopic])
+
+  const saveMarks = useMutation({
+    mutationFn: () => {
+      const rows = Object.entries(marksData).map(([studentId, score]) => ({
+        student_id: Number(studentId),
+        score,
+      }))
+      return marksApi.save(Number(selectedGroup), selectedDate, topic, rows)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marks'] })
+      queryClient.invalidateQueries({ queryKey: ['marks-history', selectedGroup] })
+      setInitialMarks(marksData)
+      setInitialTopic(topic)
+      toast({ title: t('marks.toast_saved', 'Marks saved successfully') })
+    },
+    onError: (err: Error) => {
+      toast({ title: t('marks.toast_save_error', 'Failed to save marks'), description: err.message, variant: 'destructive' })
+    },
+  })
+
+  function handleScoreChange(studentId: number, score: number) {
+    if (isFutureDate) return
+    setMarksData(prev => ({
+      ...prev,
+      [studentId]: prev[studentId] === score ? null : score, // toggle off if same
+    }))
+  }
+
+  const selectedGroupObj = groups.find(g => g.id === Number(selectedGroup))
+
+  if (!selectedGroup) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          {t('marks.empty_no_group', 'Select a group to mark grades')}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (isLoading) return <AttendanceSkeleton />
+
+  if (!marks?.rows?.length) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          {t('marks.empty_no_students', 'No students enrolled in this group')}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <CardTitle>
+              {t('marks.title_for_group', 'Marks for {group}').replace('{group}', selectedGroupObj?.name || '')}
+            </CardTitle>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Label className="text-sm shrink-0">{t('marks.topic', 'Topic')}:</Label>
+              <Input
+                value={topic}
+                onChange={e => setTopic(e.target.value)}
+                placeholder={t('marks.topic_placeholder', 'e.g. Unit 3 Test')}
+                className="h-8 text-sm max-w-[200px]"
+                disabled={isFutureDate}
+              />
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {marks.rows.map((row) => {
+              const currentScore = marksData[row.student_id]
+              const history = historyMap[row.student_id]
+              return (
+                <div
+                  key={row.student_id}
+                  className="grid items-center gap-3 px-4 py-3"
+                  style={{ gridTemplateColumns: '1fr auto' }}
+                >
+                  {/* Student name + avg badge + history dots */}
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{row.student_name}</span>
+                      {history && history.total > 0 && (
+                        <span className={cn(
+                          "text-xs font-semibold px-1.5 py-0.5 rounded-full text-white shrink-0",
+                          history.average >= 4 ? 'bg-green-500' :
+                          history.average >= 3 ? 'bg-yellow-500' : 'bg-red-500'
+                        )}>
+                          {history.average}
+                        </span>
+                      )}
+                    </div>
+                    {history && history.history.length > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        {history.history.map((h, idx) => (
+                          <div
+                            key={idx}
+                            title={`${h.date}: ${h.score}`}
+                            className={cn("h-2 w-2 rounded-full shrink-0", scoreDotColor[h.score] || 'bg-gray-300')}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Score buttons (1-5) */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {[1, 2, 3, 4, 5].map((score) => {
+                      const isSelected = currentScore === score
+                      return (
+                        <button
+                          key={score}
+                          onClick={() => handleScoreChange(row.student_id, score)}
+                          disabled={isFutureDate}
+                          title={`Score ${score}`}
+                          className={cn(
+                            "flex items-center justify-center rounded-lg w-9 h-9 text-sm font-bold transition-colors",
+                            isSelected
+                              ? `${scoreColors[score]} text-white`
+                              : "bg-muted text-muted-foreground hover:bg-muted/70",
+                            isFutureDate && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          {score}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="border-t px-4 py-4 flex items-center justify-end gap-3">
+            {isDirty && (
+              <span className="text-sm text-amber-600">{t('marks.unsaved_changes', 'You have unsaved changes')}</span>
+            )}
+            <Button
+              onClick={() => saveMarks.mutate()}
+              disabled={saveMarks.isPending || !isDirty || isFutureDate}
+            >
+              {saveMarks.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Star className="mr-2 h-4 w-4" />
+              {t('marks.save', 'Save Marks')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Legend */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{t('marks.legend_title', 'Score Legend')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            {[1, 2, 3, 4, 5].map(score => (
+              <div key={score} className="flex items-center gap-2">
+                <div className={cn("h-4 w-4 rounded", scoreColors[score])} />
+                <span className="text-sm">{score}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

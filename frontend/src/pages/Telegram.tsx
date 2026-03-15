@@ -622,6 +622,8 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
   const queryClient = useQueryClient()
   const [webhookUrl, setWebhookUrl] = useState('')
   const [contactInfo, setContactInfo] = useState('')
+  const [backupChatId, setBackupChatId] = useState('')
+  const [reportChatId, setReportChatId] = useState('')
   const contactInfoInitialized = useRef(false)
 
   const { data: settings } = useQuery({
@@ -635,11 +637,17 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
     if (!contactInfoInitialized.current && settings !== undefined) {
       contactInfoInitialized.current = true
       setContactInfo(settings.contact_info ?? '')
+      setBackupChatId(settings.backup_channel_chat_id ?? '')
+      setReportChatId(settings.report_channel_chat_id ?? '')
     }
   }, [settings])
 
   const saveSettingsMutation = useMutation({
-    mutationFn: () => telegramSettingsApi.save({ contact_info: contactInfo }),
+    mutationFn: () => telegramSettingsApi.save({
+      contact_info: contactInfo,
+      backup_channel_chat_id: backupChatId,
+      report_channel_chat_id: reportChatId,
+    }),
     onSuccess: () => {
       toast({ title: 'Contact info saved' })
       queryClient.invalidateQueries({ queryKey: ['telegram-settings'] })
@@ -789,6 +797,44 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
         >
           {saveSettingsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
           Save Contact Info
+        </Button>
+      </div>
+
+      {/* Telegram Channel Settings */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-base">Notification Channels</h3>
+        <p className="text-sm text-muted-foreground">
+          Configure Telegram channel/group chat IDs for automated notifications.
+          Add the bot to the channel as admin, then use the chat ID (negative number).
+        </p>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Backup Channel Chat ID</Label>
+            <Input
+              value={backupChatId}
+              onChange={e => setBackupChatId(e.target.value)}
+              placeholder="-1001234567890"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">Weekly DB backups will be sent here (Sundays 9 AM)</p>
+          </div>
+          <div className="space-y-2">
+            <Label>Daily Report Channel Chat ID</Label>
+            <Input
+              value={reportChatId}
+              onChange={e => setReportChatId(e.target.value)}
+              placeholder="-1001234567890"
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">Daily income summaries will be sent here (7 PM)</p>
+          </div>
+        </div>
+        <Button
+          onClick={() => saveSettingsMutation.mutate()}
+          disabled={saveSettingsMutation.isPending}
+        >
+          {saveSettingsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Save Channel Settings
         </Button>
       </div>
 

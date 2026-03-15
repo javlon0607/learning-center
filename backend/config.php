@@ -68,7 +68,7 @@ function runMigrations() {
     // Fast short-circuit: if all migrations already applied, skip all checks
     try {
         $applied = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations")->fetchColumn();
-        if ($applied >= 34) return;
+        if ($applied >= 39) return;
     } catch (PDOException $e) { /* db_migrations table may not exist yet — continue */ }
 
     // Create role_permissions table if not exists
@@ -1174,6 +1174,30 @@ function runMigrations() {
         foreach ($supKeys as [$lang, $key, $value]) { $stmt->execute([$lang, $key, $value]); }
     } catch (PDOException $e) { /* ignore */ }
 
+    // Marks/grading translation keys
+    try {
+        $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?,?,?) ON CONFLICT DO NOTHING");
+        $marksKeys = [
+            ['en','attendance.tab_attendance','Attendance'], ['uz','attendance.tab_attendance','Davomat'],
+            ['en','attendance.tab_marks','Marks'], ['uz','attendance.tab_marks','Baholar'],
+            ['en','marks.title_for_group','Marks for {group}'], ['uz','marks.title_for_group','{group} uchun baholar'],
+            ['en','marks.topic','Topic'], ['uz','marks.topic','Mavzu'],
+            ['en','marks.topic_placeholder','e.g. Unit 3 Test'], ['uz','marks.topic_placeholder','masalan: 3-bo\'lim testi'],
+            ['en','marks.save','Save Marks'], ['uz','marks.save','Baholarni saqlash'],
+            ['en','marks.toast_saved','Marks saved successfully'], ['uz','marks.toast_saved','Baholar saqlandi'],
+            ['en','marks.toast_save_error','Failed to save marks'], ['uz','marks.toast_save_error','Baholarni saqlashda xatolik'],
+            ['en','marks.unsaved_changes','You have unsaved changes'], ['uz','marks.unsaved_changes','Saqlanmagan o\'zgarishlar mavjud'],
+            ['en','marks.empty_no_group','Select a group to mark grades'], ['uz','marks.empty_no_group','Baho qo\'yish uchun guruhni tanlang'],
+            ['en','marks.empty_no_students','No students enrolled in this group'], ['uz','marks.empty_no_students','Bu guruhda o\'quvchilar yo\'q'],
+            ['en','marks.legend_title','Score Legend'], ['uz','marks.legend_title','Baho izohi'],
+            ['en','groups.form_tg_chat_id','Telegram Group Chat ID'], ['uz','groups.form_tg_chat_id','Telegram guruh chat ID'],
+            ['en','groups.form_tg_chat_id_hint','Use /register in the TG group to auto-link'], ['uz','groups.form_tg_chat_id_hint','Avtomatik ulash uchun TG guruhda /register yuboring'],
+            ['en','groups.form_tg_chat_id_help','Add the bot to a Telegram group and send /register GroupName to link automatically.'],
+            ['uz','groups.form_tg_chat_id_help','Botni Telegram guruhga qo\'shing va avtomatik ulash uchun /register GuruhNomi yuboring.'],
+        ];
+        foreach ($marksKeys as [$lang, $key, $value]) { $stmt->execute([$lang, $key, $value]); }
+    } catch (PDOException $e) { /* ignore */ }
+
     // Migration: Add created_by to payments
     try {
         $m = 'add_payment_created_by';
@@ -1883,6 +1907,81 @@ function runMigrations() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: marks table for student grading
+    try {
+        $m = 'marks_table_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE TABLE IF NOT EXISTS marks (
+                id SERIAL PRIMARY KEY,
+                student_id INT NOT NULL REFERENCES students(id),
+                group_id INT NOT NULL REFERENCES groups(id),
+                mark_date DATE NOT NULL,
+                score INT NOT NULL CHECK (score BETWEEN 1 AND 5),
+                topic VARCHAR(255),
+                notes TEXT,
+                marked_by INT REFERENCES users(id),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(student_id, group_id, mark_date)
+            )");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: telegram_group_chat_id on groups table
+    try {
+        $m = 'groups_telegram_chat_id_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("ALTER TABLE groups ADD COLUMN IF NOT EXISTS telegram_group_chat_id BIGINT");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: group_notification_log to track sent attendance+marks notifications
+    try {
+        $m = 'group_notification_log_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE TABLE IF NOT EXISTS group_notification_log (
+                id SERIAL PRIMARY KEY,
+                group_id INT NOT NULL REFERENCES groups(id),
+                notification_date DATE NOT NULL,
+                sent_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(group_id, notification_date)
+            )");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: add 'marks' to default permissions for relevant roles
+    try {
+        $m = 'marks_permissions_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO role_permissions (role, feature) VALUES (?, ?) ON CONFLICT DO NOTHING");
+            foreach ([
+                ['admin', 'marks'], ['owner', 'marks'], ['teacher', 'marks'], ['manager', 'marks'],
+            ] as [$role, $feature]) {
+                $stmt->execute([$role, $feature]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: performance indexes for marks, attendance, cron queries
+    try {
+        $m = 'perf_indexes_marks_cron_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_marks_group_date ON marks(group_id, mark_date)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_attendance_group_date ON attendance(group_id, attendance_date)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_group_notif_log_group_date ON group_notification_log(group_id, notification_date)");
+            getDB()->exec("CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date) WHERE deleted_at IS NULL");
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────
@@ -2264,6 +2363,36 @@ function telegramSendWithReplyMarkup(int $chatId, string $text, array $replyMark
     curl_close($ch);
     $result = json_decode($response, true);
     return ['ok' => !empty($result['ok']), 'error' => $result['description'] ?? ''];
+}
+
+function telegramSendDocument(int $chatId, string $filePath, string $caption = '', string $triggerType = 'backup'): array {
+    if (!TELEGRAM_BOT_TOKEN) return ['ok' => false, 'error' => 'Bot token not configured'];
+    $url = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendDocument';
+    $postData = [
+        'chat_id' => $chatId,
+        'document' => new \CURLFile($filePath),
+        'caption' => $caption,
+    ];
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $postData,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 120,
+    ]);
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    if ($curlError) return ['ok' => false, 'error' => 'cURL: ' . $curlError];
+    $result = json_decode($response, true);
+    $ok = !empty($result['ok']);
+    // Log
+    try {
+        $db = getDB();
+        $stmt = $db->prepare("INSERT INTO telegram_log (chat_id, direction, message_text, trigger_type, status, error_text) VALUES (?,?,?,?,?,?)");
+        $stmt->execute([$chatId, 'out', $caption ?: 'DB backup', $triggerType, $ok ? 'sent' : 'failed', $ok ? null : ($result['description'] ?? 'Unknown error')]);
+    } catch (PDOException $e) { error_log("telegramSendDocument log failed: " . $e->getMessage()); }
+    return ['ok' => $ok, 'error' => $result['description'] ?? ''];
 }
 
 // Returns false if phone is free, or ['type'=>'Student','name'=>'John Doe','id'=>5] if already taken.

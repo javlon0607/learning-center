@@ -3,6 +3,7 @@ FROM php:8.1-fpm-alpine
 # Install system dependencies
 RUN apk add --no-cache \
     postgresql-dev \
+    postgresql-client \
     zip \
     unzip \
     git \

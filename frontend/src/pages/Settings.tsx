@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
-import { settingsApi, profileApi, cronNotificationsApi, SystemSettings } from '@/lib/api'
+import { settingsApi, profileApi, cronNotificationsApi, migrationsApi, SystemSettings } from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -165,6 +165,16 @@ export function Settings() {
     },
     onError: (err: Error) => {
       toast({ title: t('settings.toast_check_failed', 'Check failed'), description: err.message, variant: 'destructive' })
+    },
+  })
+
+  const migrationsMutation = useMutation({
+    mutationFn: () => migrationsApi.run(),
+    onSuccess: () => {
+      toast({ title: 'Migrations applied', description: 'Database schema is up to date.' })
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Migration failed', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -545,6 +555,17 @@ export function Settings() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => migrationsMutation.mutate()}
+                  disabled={migrationsMutation.isPending}
+                >
+                  {migrationsMutation.isPending
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    : <Database className="mr-2 h-4 w-4" />}
+                  Run Database Migrations
+                </Button>
                 <Button
                   variant="outline"
                   className="w-full justify-start"

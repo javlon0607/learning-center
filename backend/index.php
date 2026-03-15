@@ -556,12 +556,14 @@ try {
                     'capacity' => $input['capacity'] ?? $oldRow['capacity'],
                     'price' => $input['price'] ?? $oldRow['price'], 'status' => $input['status'] ?? $oldRow['status']
                 ];
-                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=?, room=? WHERE id=?");
+                $tgChatId = array_key_exists('telegram_group_chat_id', $input) ? ($input['telegram_group_chat_id'] ?: null) : ($oldRow['telegram_group_chat_id'] ?? null);
+                $stmt = db()->prepare("UPDATE groups SET name=?, subject=?, teacher_id=?, capacity=?, price=?, status=?, schedule_days=?, schedule_time_start=?, schedule_time_end=?, room=?, telegram_group_chat_id=? WHERE id=?");
                 $stmt->execute([
                     $newValues['name'], $newValues['subject'], $newValues['teacher_id'],
                     $newValues['capacity'], $newValues['price'], $newValues['status'],
                     $input['schedule_days'] ?? $oldRow['schedule_days'], $input['schedule_time_start'] ?? $oldRow['schedule_time_start'],
-                    $input['schedule_time_end'] ?? $oldRow['schedule_time_end'], $input['room'] ?? $oldRow['room'], $id
+                    $input['schedule_time_end'] ?? $oldRow['schedule_time_end'], $input['room'] ?? $oldRow['room'],
+                    $tgChatId, $id
                 ]);
                 auditLog('update', 'group', $id, $oldRow ?: null, $newValues);
 
@@ -3462,6 +3464,43 @@ try {
                         }
                     }
 
+                } elseif ($command === '/register') {
+                    // Register this Telegram group chat to a learning group
+                    // Usage: /register GroupName   (in a group chat)
+                    $chatType = $msg['chat']['type'] ?? 'private';
+                    if ($chatType === 'private') {
+                        telegramSend($chatId, "❌ This command only works in group chats. Add the bot to a Telegram group and use /register GroupName there.", 'custom');
+                    } else {
+                        $groupArg = trim(substr($text, strlen('/register')));
+                        $groupArg = preg_replace('/@\S+\s*/', '', $groupArg); // strip @botname
+                        $groupArg = trim($groupArg);
+                        if (!$groupArg) {
+                            telegramSend($chatId, "Usage: /register <b>GroupName</b>\n\nExample: /register English B1", 'custom');
+                        } else {
+                            $gs = db()->prepare("SELECT id, name FROM groups WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL");
+                            $gs->execute([$groupArg]);
+                            $foundGroup = $gs->fetch();
+                            if (!$foundGroup) {
+                                // Try partial match
+                                $gs2 = db()->prepare("SELECT id, name FROM groups WHERE LOWER(name) LIKE LOWER(?) AND deleted_at IS NULL LIMIT 5");
+                                $gs2->execute(['%' . $groupArg . '%']);
+                                $matches = $gs2->fetchAll();
+                                if (count($matches) === 1) {
+                                    $foundGroup = $matches[0];
+                                } elseif (count($matches) > 1) {
+                                    $list = implode("\n", array_map(fn($g) => "• " . $g['name'], $matches));
+                                    telegramSend($chatId, "Multiple groups found. Please be more specific:\n\n{$list}", 'custom');
+                                } else {
+                                    telegramSend($chatId, "❌ Group not found: <b>{$groupArg}</b>", 'custom');
+                                }
+                            }
+                            if ($foundGroup) {
+                                db()->prepare("UPDATE groups SET telegram_group_chat_id = ? WHERE id = ?")->execute([$chatId, (int)$foundGroup['id']]);
+                                telegramSend($chatId, "✅ This chat is now linked to group: <b>{$foundGroup['name']}</b>\n\nAttendance and marks will be sent here daily at 6 PM.", 'custom');
+                            }
+                        }
+                    }
+
                 } elseif ($command === '/help' || $text === '❓ Help' || $text === '❓ Yordam') {
                     telegramSendWithReplyMarkup($chatId, $T['help_text'], $studentKeyboard);
 
@@ -3630,7 +3669,7 @@ try {
                 jsonResponse($map);
             } elseif ($method === 'PUT') {
                 $stmt = db()->prepare("INSERT INTO telegram_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value");
-                foreach (['contact_info'] as $allowed) {
+                foreach (['contact_info', 'backup_channel_chat_id', 'report_channel_chat_id'] as $allowed) {
                     if (isset($input[$allowed])) $stmt->execute([$allowed, (string)$input[$allowed]]);
                 }
                 jsonResponse(['ok' => true]);
@@ -4459,6 +4498,317 @@ try {
             } else {
                 jsonError('Method not allowed', 405);
             }
+            break;
+
+        // ── Marks (grading) endpoints ─────────────────────────────────────
+        case 'marks':
+            requireFeature('marks');
+            if ($method === 'GET' && !$id) {
+                $date = $_GET['date'] ?? date('Y-m-d');
+                $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+                if (!$group) { jsonError('group_id required'); break; }
+                $stmt = db()->prepare("
+                    SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
+                           m.id AS mark_id, m.score, m.topic, m.notes AS mark_notes
+                    FROM enrollments e
+                    JOIN students s ON e.student_id = s.id
+                    LEFT JOIN marks m ON m.student_id = e.student_id AND m.group_id = e.group_id AND m.mark_date = ?
+                    WHERE e.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
+                    ORDER BY s.last_name, s.first_name
+                ");
+                $stmt->execute([$date, $group]);
+                jsonResponse(['date' => $date, 'group_id' => $group, 'rows' => $stmt->fetchAll()]);
+            } elseif ($method === 'POST') {
+                $date = $input['date'] ?? date('Y-m-d');
+                if ($date > date('Y-m-d')) { jsonError('Cannot save marks for future dates'); break; }
+                $group = (int)($input['group_id'] ?? 0);
+                $topic = trim($input['topic'] ?? '');
+                $rows = $input['rows'] ?? [];
+                $markedBy = $GLOBALS['jwt_user']['id'] ?? null;
+                if (!$group) { jsonError('group_id required'); break; }
+
+                $upsert = db()->prepare("INSERT INTO marks (student_id, group_id, mark_date, score, topic, notes, marked_by) VALUES (?,?,?,?,?,?,?) ON CONFLICT (student_id, group_id, mark_date) DO UPDATE SET score = EXCLUDED.score, topic = EXCLUDED.topic, notes = EXCLUDED.notes, marked_by = EXCLUDED.marked_by");
+                $deleteStmt = db()->prepare("DELETE FROM marks WHERE student_id = ? AND group_id = ? AND mark_date = ?");
+                foreach ($rows as $r) {
+                    $sid = (int)($r['student_id'] ?? 0);
+                    $score = isset($r['score']) ? (int)$r['score'] : null;
+                    if (!$sid) continue;
+                    if ($score === null || $score === 0) {
+                        // Remove mark if score cleared
+                        $deleteStmt->execute([$sid, $group, $date]);
+                    } else {
+                        $notes = trim($r['notes'] ?? '');
+                        $upsert->execute([$sid, $group, $date, $score, $topic, $notes, $markedBy]);
+                    }
+                }
+                auditLog('update', 'marks', $group, null, ['group_id' => $group, 'date' => $date, 'count' => count($rows)]);
+                jsonResponse(['ok' => true]);
+            } else { jsonError('Not found', 404); }
+            break;
+
+        case 'marks-history':
+            requireFeature('marks');
+            if ($method === 'GET') {
+                $group = isset($_GET['group_id']) ? (int)$_GET['group_id'] : null;
+                if (!$group) { jsonError('group_id required'); break; }
+                // Use window function to limit to last 10 marks per student efficiently
+                $stmt = db()->prepare("
+                    SELECT student_id, mark_date, score FROM (
+                        SELECT m.student_id, m.mark_date, m.score,
+                               ROW_NUMBER() OVER (PARTITION BY m.student_id ORDER BY m.mark_date DESC) AS rn
+                        FROM marks m
+                        JOIN enrollments e ON m.student_id = e.student_id AND m.group_id = e.group_id
+                        JOIN students s ON m.student_id = s.id
+                        WHERE m.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
+                    ) sub WHERE rn <= 10
+                    ORDER BY student_id, mark_date ASC
+                ");
+                $stmt->execute([$group]);
+                $allRows = $stmt->fetchAll();
+                $byStudent = [];
+                foreach ($allRows as $r) {
+                    $sid = (int)$r['student_id'];
+                    if (!isset($byStudent[$sid])) $byStudent[$sid] = ['history' => [], 'sum' => 0];
+                    $byStudent[$sid]['history'][] = ['date' => $r['mark_date'], 'score' => (int)$r['score']];
+                    $byStudent[$sid]['sum'] += (int)$r['score'];
+                }
+                $result = [];
+                foreach ($byStudent as $sid => $data) {
+                    $total = count($data['history']);
+                    $result[] = [
+                        'student_id' => $sid,
+                        'total' => $total,
+                        'average' => $total > 0 ? round($data['sum'] / $total, 1) : 0,
+                        'history' => $data['history'],
+                    ];
+                }
+                jsonResponse($result);
+            } else { jsonError('Method not allowed', 405); }
+            break;
+
+        // ── Cron: Daily attendance+marks notification (6 PM) ─────────────
+        case 'cron-group-notifications':
+            // Accept cron token OR admin JWT
+            $cronToken = getenv('CRON_SECRET') ?: '';
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            $providedToken = str_replace('Bearer ', '', $authHeader);
+            if ($cronToken && $providedToken === $cronToken) { /* cron auth OK */ }
+            else { requireRole(['admin']); }
+
+            if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+
+            $today = date('Y-m-d');
+            $sent = 0;
+
+            // Find groups that have attendance or marks today, AND have a telegram_group_chat_id, AND haven't been notified yet today
+            $groupsStmt = db()->prepare("
+                SELECT g.id, g.name, g.telegram_group_chat_id
+                FROM groups g
+                WHERE g.telegram_group_chat_id IS NOT NULL
+                  AND g.deleted_at IS NULL
+                  AND (
+                      EXISTS (SELECT 1 FROM attendance a WHERE a.group_id = g.id AND a.attendance_date = ?)
+                      OR EXISTS (SELECT 1 FROM marks m WHERE m.group_id = g.id AND m.mark_date = ?)
+                  )
+                  AND NOT EXISTS (SELECT 1 FROM group_notification_log gnl WHERE gnl.group_id = g.id AND gnl.notification_date = ?)
+            ");
+            $groupsStmt->execute([$today, $today, $today]);
+            $groupsToNotify = $groupsStmt->fetchAll();
+
+            if (!empty($groupsToNotify)) {
+                // Batch: load ALL attendance + marks for today for these groups (2 queries total, not N+1)
+                $gids = array_map(fn($g) => (int)$g['id'], $groupsToNotify);
+                $placeholders = implode(',', array_fill(0, count($gids), '?'));
+
+                $attStmt = db()->prepare("
+                    SELECT a.group_id, s.first_name || ' ' || s.last_name AS name, a.status
+                    FROM attendance a JOIN students s ON a.student_id = s.id
+                    WHERE a.group_id IN ({$placeholders}) AND a.attendance_date = ?
+                    ORDER BY a.group_id, s.last_name, s.first_name
+                ");
+                $attStmt->execute([...$gids, $today]);
+                $allAtt = $attStmt->fetchAll();
+                $attByGroup = [];
+                foreach ($allAtt as $r) $attByGroup[(int)$r['group_id']][] = $r;
+
+                $marksStmt = db()->prepare("
+                    SELECT m.group_id, s.first_name || ' ' || s.last_name AS name, m.score
+                    FROM marks m JOIN students s ON m.student_id = s.id
+                    WHERE m.group_id IN ({$placeholders}) AND m.mark_date = ?
+                    ORDER BY m.group_id, s.last_name, s.first_name
+                ");
+                $marksStmt->execute([...$gids, $today]);
+                $allMarks = $marksStmt->fetchAll();
+                $marksByGroup = [];
+                foreach ($allMarks as $r) $marksByGroup[(int)$r['group_id']][] = $r;
+
+                $statusEmoji = ['present' => '✅', 'absent' => '❌', 'late' => '🕐', 'excused' => 'ℹ️'];
+                $scoreStars = function(int $s): string { return str_repeat('⭐', $s); };
+
+                foreach ($groupsToNotify as $grp) {
+                    $chatId = (int)$grp['telegram_group_chat_id'];
+                    $groupName = $grp['name'];
+                    $gid = (int)$grp['id'];
+                    $attRows = $attByGroup[$gid] ?? [];
+                    $marksRows = $marksByGroup[$gid] ?? [];
+
+                    $marksByName = [];
+                    foreach ($marksRows as $mr) $marksByName[$mr['name']] = (int)$mr['score'];
+
+                    $studentNames = [];
+                    $attByName = [];
+                    foreach ($attRows as $ar) { $attByName[$ar['name']] = $ar['status']; $studentNames[$ar['name']] = true; }
+                    foreach ($marksRows as $mr) $studentNames[$mr['name']] = true;
+                    ksort($studentNames);
+
+                    $msg = "📋 <b>{$groupName}</b> — {$today}\n\n";
+                    foreach ($studentNames as $name => $_) {
+                        $att = isset($attByName[$name]) ? ($statusEmoji[$attByName[$name]] ?? $attByName[$name]) : '—';
+                        $mark = isset($marksByName[$name]) ? $scoreStars($marksByName[$name]) : '';
+                        $line = "{$att} {$name}";
+                        if ($mark) $line .= "  |  {$mark}";
+                        $msg .= $line . "\n";
+                    }
+
+                    if (!empty($attRows)) {
+                        $present = count(array_filter($attRows, fn($r) => $r['status'] === 'present'));
+                        $absent = count(array_filter($attRows, fn($r) => $r['status'] === 'absent'));
+                        $late = count(array_filter($attRows, fn($r) => $r['status'] === 'late'));
+                        $msg .= "\n📊 ✅ {$present}  ❌ {$absent}";
+                        if ($late > 0) $msg .= "  🕐 {$late}";
+                    }
+
+                    $result = telegramSend($chatId, $msg, 'group_daily_report', $gid);
+                    if ($result['ok']) {
+                        db()->prepare("INSERT INTO group_notification_log (group_id, notification_date) VALUES (?, ?) ON CONFLICT DO NOTHING")->execute([$gid, $today]);
+                        $sent++;
+                    }
+                }
+            }
+
+            jsonResponse(['ok' => true, 'sent' => $sent]);
+            break;
+
+        // ── Cron: Daily income summary (7 PM) ───────────────────────────
+        case 'cron-daily-summary':
+            $cronToken = getenv('CRON_SECRET') ?: '';
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            $providedToken = str_replace('Bearer ', '', $authHeader);
+            if ($cronToken && $providedToken === $cronToken) { /* cron auth OK */ }
+            else { requireRole(['admin']); }
+
+            if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+
+            $today = date('Y-m-d');
+
+            // Get backup channel chat ID
+            try { db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)"); } catch (PDOException $e) {}
+            $chatIdStmt = db()->prepare("SELECT value FROM telegram_settings WHERE key = 'report_channel_chat_id'");
+            $chatIdStmt->execute();
+            $reportChatId = $chatIdStmt->fetchColumn();
+            if (!$reportChatId) { jsonError('report_channel_chat_id not configured in telegram settings'); break; }
+
+            // Today's payments
+            $stmt = db()->prepare("
+                SELECT method, status,
+                       COUNT(*) AS cnt,
+                       SUM(amount) AS total
+                FROM payments
+                WHERE payment_date = ? AND deleted_at IS NULL
+                GROUP BY method, status
+                ORDER BY method, status
+            ");
+            $stmt->execute([$today]);
+            $rows = $stmt->fetchAll();
+
+            $byMethod = [];
+            $pendingCount = 0;
+            $pendingAmount = 0;
+            $grandTotal = 0;
+            $grandCount = 0;
+
+            foreach ($rows as $r) {
+                $m = $r['method'] ?: 'other';
+                if ($r['status'] !== 'completed') {
+                    $pendingCount += (int)$r['cnt'];
+                    $pendingAmount += (float)$r['total'];
+                    continue;
+                }
+                if (!isset($byMethod[$m])) $byMethod[$m] = ['count' => 0, 'total' => 0];
+                $byMethod[$m]['count'] += (int)$r['cnt'];
+                $byMethod[$m]['total'] += (float)$r['total'];
+                $grandTotal += (float)$r['total'];
+                $grandCount += (int)$r['cnt'];
+            }
+
+            $methodLabels = ['cash' => 'Cash', 'card' => 'Card', 'transfer' => 'Transfer', 'other' => 'Other'];
+            $msg = "💰 <b>Income Report — {$today}</b>\n\n";
+
+            if (empty($byMethod) && $pendingCount === 0) {
+                $msg .= "No payments recorded today.\n";
+            } else {
+                foreach ($byMethod as $m => $data) {
+                    $label = $methodLabels[$m] ?? ucfirst($m);
+                    $msg .= "{$label}: {$data['count']} payments — " . number_format($data['total'], 0, '.', ',') . " UZS\n";
+                }
+                $msg .= "─────────────────\n";
+                $msg .= "Total: {$grandCount} payments — " . number_format($grandTotal, 0, '.', ',') . " UZS\n";
+
+                if ($pendingCount > 0) {
+                    $msg .= "\n⚠️ {$pendingCount} payments pending confirmation (" . number_format($pendingAmount, 0, '.', ',') . " UZS)";
+                }
+            }
+
+            $result = telegramSend((int)$reportChatId, $msg, 'daily_income_summary');
+            jsonResponse(['ok' => $result['ok'], 'error' => $result['error'] ?? null]);
+            break;
+
+        // ── Cron: Weekly DB backup (Sunday 9 AM) ────────────────────────
+        case 'cron-backup':
+            $cronToken = getenv('CRON_SECRET') ?: '';
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            $providedToken = str_replace('Bearer ', '', $authHeader);
+            if ($cronToken && $providedToken === $cronToken) { /* cron auth OK */ }
+            else { requireRole(['admin']); }
+
+            if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+
+            try { db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)"); } catch (PDOException $e) {}
+            $chatIdStmt = db()->prepare("SELECT value FROM telegram_settings WHERE key = 'backup_channel_chat_id'");
+            $chatIdStmt->execute();
+            $backupChatId = $chatIdStmt->fetchColumn();
+            if (!$backupChatId) { jsonError('backup_channel_chat_id not configured in telegram settings'); break; }
+
+            $tmpFile = tempnam(sys_get_temp_dir(), 'db_backup_') . '.sql.gz';
+            $dbHost = DB_HOST;
+            $dbPort = DB_PORT;
+            $dbName = DB_NAME;
+            $dbUser = DB_USER;
+
+            // pg_dump piped through gzip
+            putenv('PGPASSWORD=' . DB_PASS);
+            $cmd = "pg_dump -h {$dbHost} -p {$dbPort} -U {$dbUser} {$dbName} 2>&1 | gzip > {$tmpFile}";
+            exec($cmd, $output, $exitCode);
+            putenv('PGPASSWORD=');
+
+            if ($exitCode !== 0 || !file_exists($tmpFile) || filesize($tmpFile) < 100) {
+                @unlink($tmpFile);
+                jsonError('pg_dump failed: ' . implode("\n", $output));
+                break;
+            }
+
+            $date = date('Y-m-d_H-i');
+            $sizeKB = round(filesize($tmpFile) / 1024);
+            $caption = "🗄 DB Backup — {$date}\nSize: {$sizeKB} KB\nDatabase: {$dbName}";
+
+            // Rename temp file so Telegram shows a nice filename
+            $namedFile = sys_get_temp_dir() . "/learning_center_backup_{$date}.sql.gz";
+            rename($tmpFile, $namedFile);
+
+            $result = telegramSendDocument((int)$backupChatId, $namedFile, $caption);
+            @unlink($namedFile);
+
+            jsonResponse(['ok' => $result['ok'], 'error' => $result['error'] ?? null]);
             break;
 
         default:

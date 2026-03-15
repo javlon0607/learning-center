@@ -75,6 +75,7 @@ export function Groups() {
   const [formTimeStart, setFormTimeStart] = useState<string>('')
   const [formTimeEnd, setFormTimeEnd] = useState<string>('')
   const [formRoom, setFormRoom] = useState<string>('')
+  const [formTgChatId, setFormTgChatId] = useState<string>('')
   const price = useAmountInput()
 
   const DAYS_OF_WEEK = [
@@ -183,6 +184,7 @@ export function Groups() {
       schedule_time_start: formTimeStart || undefined,
       schedule_time_end: formTimeEnd || undefined,
       room: formRoom || undefined,
+      telegram_group_chat_id: formTgChatId ? Number(formTgChatId) : undefined,
       student_count: 0,
     }
 
@@ -352,6 +354,7 @@ export function Groups() {
                             setFormTimeStart(group.schedule_time_start || '')
                             setFormTimeEnd(group.schedule_time_end || '')
                             setFormRoom(group.room || '')
+                            setFormTgChatId(group.telegram_group_chat_id ? String(group.telegram_group_chat_id) : '')
                             price.setFromNumber(group.price || 0)
                             setFormOpen(true)
                           }}>
@@ -406,6 +409,7 @@ export function Groups() {
           setFormTimeStart('')
           setFormTimeEnd('')
           setFormRoom('')
+          setFormTgChatId('')
           price.reset()
         } else if (!selectedGroup) {
           setFormTeacherId('')
@@ -413,6 +417,7 @@ export function Groups() {
           setFormTimeStart('')
           setFormTimeEnd('')
           setFormRoom('')
+          setFormTgChatId('')
           price.reset()
         }
       }}>
@@ -563,6 +568,17 @@ export function Groups() {
                     <p className="text-xs text-red-500">{t('groups.toast_time_error', 'End time must be after start time')}</p>
                   )}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tg_chat_id">{t('groups.form_tg_chat_id', 'Telegram Group Chat ID')}</Label>
+                <Input
+                  id="tg_chat_id"
+                  value={formTgChatId}
+                  onChange={e => setFormTgChatId(e.target.value)}
+                  placeholder={t('groups.form_tg_chat_id_hint', 'Use /register in the TG group to auto-link')}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">{t('groups.form_tg_chat_id_help', 'Add the bot to a Telegram group and send /register GroupName to link automatically.')}</p>
               </div>
             </div>
             <DialogFooter>

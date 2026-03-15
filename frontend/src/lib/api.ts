@@ -362,6 +362,21 @@ export const attendanceApi = {
     api.get<UnmarkedGroup[]>('/attendance-unmarked'),
 }
 
+// Marks (grading) API
+export const marksApi = {
+  get: (groupId: number, date: string) =>
+    api.get<{ date: string; group_id: number; rows: MarkRow[] }>('/marks', {
+      group_id: String(groupId),
+      date,
+    }),
+
+  save: (groupId: number, date: string, topic: string, rows: { student_id: number; score: number | null; notes?: string }[]) =>
+    api.post<{ ok: boolean }>('/marks', { group_id: groupId, date, topic, rows }),
+
+  getHistory: (groupId: number) =>
+    api.get<StudentMarkHistory[]>('/marks-history', { group_id: String(groupId) }),
+}
+
 // Salary Slips API
 export const salarySlipsApi = {
   getAll: () => api.get<SalarySlip[]>('/salary-slips'),
@@ -643,6 +658,10 @@ export const cronNotificationsApi = {
   run: () => api.post<{ ok: boolean; notifications_created: number }>('/cron-notifications'),
 }
 
+export const migrationsApi = {
+  run: () => api.post<{ ok: boolean }>('/run-migrations'),
+}
+
 // Books API
 export interface Book {
   id: number
@@ -812,6 +831,7 @@ export interface Group {
   schedule_time_start?: string
   schedule_time_end?: string
   room?: string
+  telegram_group_chat_id?: string | number
   status: 'active' | 'inactive' | 'completed'
   created_at: string
 }
@@ -1019,6 +1039,22 @@ export interface UnmarkedGroup {
   schedule_time_start?: string
 }
 
+export interface MarkRow {
+  student_id: number
+  student_name: string
+  mark_id?: number
+  score?: number
+  topic?: string
+  mark_notes?: string
+}
+
+export interface StudentMarkHistory {
+  student_id: number
+  total: number
+  average: number
+  history: { date: string; score: number }[]
+}
+
 export interface SalarySlip {
   id: number
   teacher_id: number
@@ -1120,8 +1156,8 @@ export const telegramApi = {
 }
 
 export const telegramSettingsApi = {
-  get: () => api.get<{ contact_info?: string }>('/telegram-settings'),
-  save: (data: { contact_info: string }) => api.put<{ ok: boolean }>('/telegram-settings', data),
+  get: () => api.get<{ contact_info?: string; backup_channel_chat_id?: string; report_channel_chat_id?: string }>('/telegram-settings'),
+  save: (data: Record<string, string>) => api.put<{ ok: boolean }>('/telegram-settings', data),
 }
 
 export interface SupportRequest {
