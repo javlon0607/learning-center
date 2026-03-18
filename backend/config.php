@@ -2065,23 +2065,31 @@ function generateTokenPair(array $user): array {
 
 // ── Refresh-token cookie helpers ─────────────────────────────────────────
 
+function isHttps(): bool {
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+        || (($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on');
+}
+
 function setRefreshTokenCookie(string $token): void {
+    $secure = isHttps();
     setcookie('refresh_token', $token, [
         'expires'  => time() + JWT_REFRESH_TTL,
         'path'     => '/api',
         'httponly'  => true,
-        'samesite' => 'Lax',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'samesite' => $secure ? 'None' : 'Lax',
+        'secure'   => $secure,
     ]);
 }
 
 function clearRefreshTokenCookie(): void {
+    $secure = isHttps();
     setcookie('refresh_token', '', [
         'expires'  => 1,
         'path'     => '/api',
         'httponly'  => true,
-        'samesite' => 'Lax',
-        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        'samesite' => $secure ? 'None' : 'Lax',
+        'secure'   => $secure,
     ]);
 }
 
