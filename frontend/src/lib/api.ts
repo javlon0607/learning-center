@@ -58,10 +58,9 @@ export async function refreshAccessToken(): Promise<boolean> {
     } catch {
       clearTokens()
       return false
-    } finally {
-      refreshPromise = null
     }
   })()
+  refreshPromise.finally(() => { refreshPromise = null })
   return refreshPromise
 }
 
@@ -81,11 +80,11 @@ async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Respo
   let response = await fetch(url, { ...init, headers, credentials: 'include' })
 
   // On 401, try refresh once and retry
-  if (response.status === 401 && accessToken) {
+  if (response.status === 401) {
     const ok = await refreshAccessToken()
     if (ok) {
       const retryHeaders = new Headers(init.headers)
-      retryHeaders.set('Authorization', `Bearer ${accessToken}`)
+      if (accessToken) retryHeaders.set('Authorization', `Bearer ${accessToken}`)
       response = await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' })
     }
   }
