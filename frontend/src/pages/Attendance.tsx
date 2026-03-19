@@ -357,6 +357,14 @@ function AttendanceTab({ selectedGroup, selectedDate, setSelectedGroup, setSelec
     return null
   }, [attendance])
 
+  const savedAt = useMemo(() => {
+    if (!attendance?.rows) return null
+    for (const row of attendance.rows) {
+      if (row.saved_at) return row.saved_at
+    }
+    return null
+  }, [attendance])
+
   const stats = useMemo(() => {
     if (!attendance?.rows?.length) return null
     const counts = { present: 0, absent: 0, late: 0, excused: 0, unmarked: 0 }
@@ -609,7 +617,14 @@ function AttendanceTab({ selectedGroup, selectedDate, setSelectedGroup, setSelec
             <div className="border-t px-4 py-4 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 {markedByName && (
-                  <span>{t('attendance.last_saved_by', 'Last saved by {name}').replace('{name}', markedByName)}</span>
+                  <span>
+                    {t('attendance.last_saved_by', 'Last saved by {name}').replace('{name}', markedByName)}
+                    {savedAt && (
+                      <span className="ml-1">
+                        — {new Date(savedAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </span>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -738,6 +753,22 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
     }
     return false
   }, [marksData, initialMarks, topic, initialTopic])
+
+  const marksSavedBy = useMemo(() => {
+    if (!marks?.rows) return null
+    for (const row of marks.rows) {
+      if (row.marked_by_name) return row.marked_by_name
+    }
+    return null
+  }, [marks])
+
+  const marksSavedAt = useMemo(() => {
+    if (!marks?.rows) return null
+    for (const row of marks.rows) {
+      if (row.saved_at) return row.saved_at
+    }
+    return null
+  }, [marks])
 
   const saveMarks = useMutation({
     mutationFn: () => {
@@ -899,18 +930,32 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
             })}
           </div>
 
-          <div className="border-t px-4 py-4 flex items-center justify-end gap-3">
-            {isDirty && (
-              <span className="text-sm text-amber-600">{t('marks.unsaved_changes', 'You have unsaved changes')}</span>
-            )}
-            <Button
-              onClick={() => saveMarks.mutate()}
-              disabled={saveMarks.isPending || !isDirty || isFutureDate}
-            >
-              {saveMarks.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <Star className="mr-2 h-4 w-4" />
-              {t('marks.save', 'Save Marks')}
-            </Button>
+          <div className="border-t px-4 py-4 flex items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              {marksSavedBy && (
+                <span>
+                  {t('attendance.last_saved_by', 'Last saved by {name}').replace('{name}', marksSavedBy)}
+                  {marksSavedAt && (
+                    <span className="ml-1">
+                      — {new Date(marksSavedAt).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              {isDirty && (
+                <span className="text-sm text-amber-600">{t('marks.unsaved_changes', 'You have unsaved changes')}</span>
+              )}
+              <Button
+                onClick={() => saveMarks.mutate()}
+                disabled={saveMarks.isPending || !isDirty || isFutureDate}
+              >
+                {saveMarks.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Star className="mr-2 h-4 w-4" />
+                {t('marks.save', 'Save Marks')}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

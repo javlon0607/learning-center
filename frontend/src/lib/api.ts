@@ -1026,6 +1026,7 @@ export interface AttendanceRow {
   attendance_id?: number
   attendance_status?: 'present' | 'absent' | 'late' | 'excused'
   marked_by_name?: string
+  saved_at?: string | null
 }
 
 export interface StudentAttendanceHistory {
@@ -1052,6 +1053,8 @@ export interface MarkRow {
   topic?: string
   mark_notes?: string
   attendance_status?: string | null
+  marked_by_name?: string | null
+  saved_at?: string | null
 }
 
 export interface StudentMarkHistory {

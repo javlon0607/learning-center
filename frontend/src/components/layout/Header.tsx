@@ -30,7 +30,7 @@ import { Timetable } from './Timetable'
 import {
   LogOut, User, Bell, Search, ChevronDown, CalendarDays, Menu,
   Cake, PartyPopper, DollarSign, Clock, UserPlus, UserMinus, CheckCheck, ClipboardCheck,
-  Sun, Moon,
+  Sun, Moon, HeadphonesIcon,
 } from 'lucide-react'
 import { calculateAge } from '@/lib/utils'
 import { useTheme } from '@/contexts/ThemeContext'
@@ -63,6 +63,8 @@ function getNotificationIcon(type: string) {
       return { icon: CalendarDays, bg: 'bg-blue-100', color: 'text-blue-600' }
     case 'payment_approval':
       return { icon: ClipboardCheck, bg: 'bg-amber-100', color: 'text-amber-600' }
+    case 'support_request':
+      return { icon: HeadphonesIcon, bg: 'bg-blue-100', color: 'text-blue-600' }
     default:
       return { icon: Bell, bg: 'bg-gray-100', color: 'text-gray-600' }
   }

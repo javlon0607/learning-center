@@ -1424,7 +1424,8 @@ try {
                     SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
                            s.phone, s.parent_phone,
                            a.id AS attendance_id, a.status AS attendance_status,
-                           u.name AS marked_by_name
+                           u.name AS marked_by_name,
+                           a.updated_at AS saved_at
                     FROM enrollments e
                     JOIN students s ON e.student_id = s.id
                     LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?
@@ -1460,7 +1461,7 @@ try {
                     if (!$sid || !$group) continue;
                     $fetchOld->execute([$sid, $group, $date]);
                     $oldRow = $fetchOld->fetch();
-                    db()->prepare("INSERT INTO attendance (student_id, group_id, attendance_date, status, marked_by) VALUES (?,?,?,?,?) ON CONFLICT (student_id, group_id, attendance_date) DO UPDATE SET status = ?, marked_by = ?")
+                    db()->prepare("INSERT INTO attendance (student_id, group_id, attendance_date, status, marked_by, updated_at) VALUES (?,?,?,?,?,NOW()) ON CONFLICT (student_id, group_id, attendance_date) DO UPDATE SET status = ?, marked_by = ?, updated_at = NOW()")
                         ->execute([$sid, $group, $date, $status, $markedBy, $status, $markedBy]);
                     $oldStatus = $oldRow ? $oldRow['status'] : null;
                     if ($oldStatus !== $status) {
@@ -3555,6 +3556,22 @@ try {
                                     db()->prepare("INSERT INTO support_requests (student_id, scheduled_date, scheduled_time, source, topic) VALUES (?,?,?,'bot',?)")->execute([$studentId2, $reqDate, $reqTime, $topic]);
                                     $dateStr2 = date('d/m/Y', strtotime($reqDate));
                                     telegramSendWithReplyMarkup($chatId, sprintf($T['support_booked'], $dateStr2, $reqTime), $studentKeyboard);
+                                    // Notify admin/owner users via system notifications
+                                    try {
+                                        $stNameRow = db()->prepare("SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?");
+                                        $stNameRow->execute([$studentId2]);
+                                        $stName = $stNameRow->fetchColumn() ?: "O'quvchi #{$studentId2}";
+                                        $admins = db()->query("SELECT id FROM users WHERE role = 'admin' AND is_active = true")->fetchAll();
+                                        foreach ($admins as $adm) {
+                                            createNotification(
+                                                (int)$adm['id'],
+                                                'support_request',
+                                                "Yangi support so'rovi: {$stName}",
+                                                "{$dateStr2} soat {$reqTime} — mavzu: {$topic}",
+                                                '/support-requests'
+                                            );
+                                        }
+                                    } catch (Exception $e) { /* ignore */ }
                                 }
                             }
                         }
@@ -4535,10 +4552,12 @@ try {
                 $stmt = db()->prepare("
                     SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
                            m.id AS mark_id, m.score, m.topic, m.notes AS mark_notes,
+                           m.updated_at AS saved_at, u.name AS marked_by_name,
                            a.status AS attendance_status
                     FROM enrollments e
                     JOIN students s ON e.student_id = s.id
                     LEFT JOIN marks m ON m.student_id = e.student_id AND m.group_id = e.group_id AND m.mark_date = ?
+                    LEFT JOIN users u ON m.marked_by = u.id
                     LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?
                     WHERE e.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY s.last_name, s.first_name
@@ -4554,7 +4573,7 @@ try {
                 $markedBy = $GLOBALS['jwt_user']['id'] ?? null;
                 if (!$group) { jsonError('group_id required'); break; }
 
-                $upsert = db()->prepare("INSERT INTO marks (student_id, group_id, mark_date, score, topic, notes, marked_by) VALUES (?,?,?,?,?,?,?) ON CONFLICT (student_id, group_id, mark_date) DO UPDATE SET score = EXCLUDED.score, topic = EXCLUDED.topic, notes = EXCLUDED.notes, marked_by = EXCLUDED.marked_by");
+                $upsert = db()->prepare("INSERT INTO marks (student_id, group_id, mark_date, score, topic, notes, marked_by, updated_at) VALUES (?,?,?,?,?,?,?,NOW()) ON CONFLICT (student_id, group_id, mark_date) DO UPDATE SET score = EXCLUDED.score, topic = EXCLUDED.topic, notes = EXCLUDED.notes, marked_by = EXCLUDED.marked_by, updated_at = NOW()");
                 $deleteStmt = db()->prepare("DELETE FROM marks WHERE student_id = ? AND group_id = ? AND mark_date = ?");
                 foreach ($rows as $r) {
                     $sid = (int)($r['student_id'] ?? 0);
