@@ -6,18 +6,12 @@ import { Button } from '@/components/ui/button'
 import { DateInput } from '@/components/ui/date-input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AttendanceSkeleton } from '@/components/skeletons'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
-import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Star } from 'lucide-react'
+import { Check, X, Clock, AlertCircle, Loader2, Lock, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Star, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/contexts/I18nContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -50,6 +44,8 @@ export function Attendance() {
   const [activeTab, setActiveTab] = useState('attendance')
   const [selectedGroup, setSelectedGroup] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState(today())
+  const [groupOpen, setGroupOpen] = useState(false)
+  const [groupSearch, setGroupSearch] = useState('')
   const { user } = useAuth()
 
   const userRoles = useMemo(() => (user?.role || 'user').split(',').map(r => r.trim()), [user])
@@ -97,18 +93,56 @@ export function Attendance() {
       <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
         <div className="space-y-2 w-full sm:w-auto">
           <Label>{t('attendance.form_group', 'Group')}</Label>
-          <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-            <SelectTrigger className="w-full sm:w-[250px]">
-              <SelectValue placeholder={t('attendance.select_group', 'Select a group')} />
-            </SelectTrigger>
-            <SelectContent>
-              {activeGroups.map((group) => (
-                <SelectItem key={group.id} value={group.id.toString()}>
-                  {group.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={groupOpen} onOpenChange={(o) => { setGroupOpen(o); if (!o) setGroupSearch('') }}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "flex h-10 w-full sm:w-[250px] items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                  !selectedGroup && "text-muted-foreground"
+                )}
+              >
+                <span className="truncate">
+                  {selectedGroup
+                    ? activeGroups.find(g => g.id === Number(selectedGroup))?.name ?? t('attendance.select_group', 'Select a group')
+                    : t('attendance.select_group', 'Select a group')}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[250px] p-0" align="start">
+              <div className="p-2 border-b">
+                <Input
+                  autoFocus
+                  placeholder={t('attendance.search_group', 'Search group...')}
+                  value={groupSearch}
+                  onChange={e => setGroupSearch(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="max-h-[200px] overflow-y-auto py-1">
+                {activeGroups
+                  .filter(g => g.name.toLowerCase().includes(groupSearch.toLowerCase()))
+                  .map(group => (
+                    <button
+                      key={group.id}
+                      type="button"
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2",
+                        selectedGroup === group.id.toString() && "bg-accent font-medium"
+                      )}
+                      onClick={() => { setSelectedGroup(group.id.toString()); setGroupOpen(false); setGroupSearch('') }}
+                    >
+                      {selectedGroup === group.id.toString() && <Check className="h-3.5 w-3.5 shrink-0" />}
+                      <span className={cn(selectedGroup !== group.id.toString() && "pl-[22px]")}>{group.name}</span>
+                    </button>
+                  ))}
+                {activeGroups.filter(g => g.name.toLowerCase().includes(groupSearch.toLowerCase())).length === 0 && (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">{t('attendance.no_groups_found', 'No groups found')}</p>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="space-y-2">
           <Label>{t('attendance.form_date', 'Date')}</Label>
@@ -649,6 +683,7 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
   const [initialMarks, setInitialMarks] = useState<Record<number, number | null>>({})
   const [topic, setTopic] = useState('')
   const [initialTopic, setInitialTopic] = useState('')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   const isFutureDate = selectedDate > today()
 
@@ -671,6 +706,14 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
     }
     return map
   }, [markHistory])
+
+  const sortedRows = useMemo(() => {
+    if (!marks?.rows) return []
+    return [...marks.rows].sort((a, b) => {
+      const cmp = a.student_name.localeCompare(b.student_name)
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [marks?.rows, sortDir])
 
   useEffect(() => {
     if (marks?.rows) {
@@ -770,14 +813,29 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
         </CardHeader>
 
         <CardContent className="p-0">
+          <div className="flex items-center gap-1 border-b px-4 py-2">
+            <span className="text-xs text-muted-foreground mr-1">{t('attendance.sort_by', 'Sort by:')}</span>
+            <button
+              onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-muted font-medium text-foreground transition-colors"
+            >
+              {t('attendance.col_student', 'Name')}
+              {sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+            </button>
+          </div>
           <div className="divide-y">
-            {marks.rows.map((row) => {
+            {sortedRows.map((row) => {
               const currentScore = marksData[row.student_id]
               const history = historyMap[row.student_id]
+              const attStatus = row.attendance_status ?? null
+              const isBlocked = attStatus === 'absent' || attStatus === 'excused'
               return (
                 <div
                   key={row.student_id}
-                  className="grid items-center gap-3 px-4 py-3"
+                  className={cn(
+                    "grid items-center gap-3 px-4 py-3",
+                    isBlocked && "opacity-60 bg-muted/30"
+                  )}
                   style={{ gridTemplateColumns: '1fr auto' }}
                 >
                   {/* Student name + avg badge + history dots */}
@@ -791,6 +849,11 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
                           history.average >= 3 ? 'bg-yellow-500' : 'bg-red-500'
                         )}>
                           {history.average}
+                        </span>
+                      )}
+                      {isBlocked && (
+                        <span className="text-xs text-muted-foreground italic">
+                          {attStatus === 'absent' ? t('marks.blocked_absent', 'Kelmagan') : t('marks.blocked_excused', 'Sababli')}
                         </span>
                       )}
                     </div>
@@ -811,18 +874,19 @@ function MarksTab({ selectedGroup, selectedDate, groups }: MarksTabProps) {
                   <div className="flex items-center gap-1.5 shrink-0">
                     {[1, 2, 3, 4, 5].map((score) => {
                       const isSelected = currentScore === score
+                      const isDisabled = isFutureDate || isBlocked
                       return (
                         <button
                           key={score}
                           onClick={() => handleScoreChange(row.student_id, score)}
-                          disabled={isFutureDate}
+                          disabled={isDisabled}
                           title={`Score ${score}`}
                           className={cn(
                             "flex items-center justify-center rounded-lg w-9 h-9 text-sm font-bold transition-colors",
                             isSelected
                               ? `${scoreColors[score]} text-white`
                               : "bg-muted text-muted-foreground hover:bg-muted/70",
-                            isFutureDate && "opacity-50 cursor-not-allowed"
+                            isDisabled && "opacity-50 cursor-not-allowed"
                           )}
                         >
                           {score}

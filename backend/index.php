@@ -4534,14 +4534,16 @@ try {
                 if (!$group) { jsonError('group_id required'); break; }
                 $stmt = db()->prepare("
                     SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
-                           m.id AS mark_id, m.score, m.topic, m.notes AS mark_notes
+                           m.id AS mark_id, m.score, m.topic, m.notes AS mark_notes,
+                           a.status AS attendance_status
                     FROM enrollments e
                     JOIN students s ON e.student_id = s.id
                     LEFT JOIN marks m ON m.student_id = e.student_id AND m.group_id = e.group_id AND m.mark_date = ?
+                    LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?
                     WHERE e.group_id = ? AND s.deleted_at IS NULL AND s.status = 'active'
                     ORDER BY s.last_name, s.first_name
                 ");
-                $stmt->execute([$date, $group]);
+                $stmt->execute([$date, $date, $group]);
                 jsonResponse(['date' => $date, 'group_id' => $group, 'rows' => $stmt->fetchAll()]);
             } elseif ($method === 'POST') {
                 $date = $input['date'] ?? date('Y-m-d');
@@ -4668,7 +4670,7 @@ try {
                 foreach ($allMarks as $r) $marksByGroup[(int)$r['group_id']][] = $r;
 
                 $statusEmoji = ['present' => '✅', 'absent' => '❌', 'late' => '🕐', 'excused' => 'ℹ️'];
-                $scoreStars = function(int $s): string { return str_repeat('⭐', $s); };
+                $scoreLabel = function(int $s): string { return "{$s} baho"; };
 
                 foreach ($groupsToNotify as $grp) {
                     $chatId = (int)$grp['telegram_group_chat_id'];
@@ -4686,10 +4688,11 @@ try {
                     foreach ($marksRows as $mr) $studentNames[$mr['name']] = true;
                     ksort($studentNames);
 
-                    $msg = "📋 <b>{$groupName}</b> — {$today}\n\n";
+                    $msg = "📋 <b>{$groupName}</b>\n";
+                    $msg .= "Bugungi dars natijalari:\n\n";
                     foreach ($studentNames as $name => $_) {
                         $att = isset($attByName[$name]) ? ($statusEmoji[$attByName[$name]] ?? $attByName[$name]) : '—';
-                        $mark = isset($marksByName[$name]) ? $scoreStars($marksByName[$name]) : '';
+                        $mark = isset($marksByName[$name]) ? $scoreLabel($marksByName[$name]) : '';
                         $line = "{$att} {$name}";
                         if ($mark) $line .= "  |  {$mark}";
                         $msg .= $line . "\n";
@@ -4699,9 +4702,13 @@ try {
                         $present = count(array_filter($attRows, fn($r) => $r['status'] === 'present'));
                         $absent = count(array_filter($attRows, fn($r) => $r['status'] === 'absent'));
                         $late = count(array_filter($attRows, fn($r) => $r['status'] === 'late'));
-                        $msg .= "\n📊 ✅ {$present}  ❌ {$absent}";
+                        $excused = count(array_filter($attRows, fn($r) => $r['status'] === 'excused'));
+                        $msg .= "\n📊 Jami: ✅ {$present}  ❌ {$absent}";
                         if ($late > 0) $msg .= "  🕐 {$late}";
+                        if ($excused > 0) $msg .= "  ℹ️ {$excused}";
                     }
+
+                    $msg .= "\n\n✅ Keldi  ❌ Kelmadi  🕐 Kech keldi  ℹ️ Sababli";
 
                     $result = telegramSend($chatId, $msg, 'group_daily_report', $gid);
                     if ($result['ok']) {

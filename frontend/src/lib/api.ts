@@ -1051,6 +1051,7 @@ export interface MarkRow {
   score?: number
   topic?: string
   mark_notes?: string
+  attendance_status?: string | null
 }
 
 export interface StudentMarkHistory {
