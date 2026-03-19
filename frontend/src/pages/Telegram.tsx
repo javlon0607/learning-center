@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { TimeInput } from '@/components/ui/time-input'
 import { Badge } from '@/components/ui/badge'
 import {
   Select,
@@ -639,6 +640,9 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
   const [contactInfo, setContactInfo] = useState('')
   const [backupChatId, setBackupChatId] = useState('')
   const [reportChatId, setReportChatId] = useState('')
+  const [attendanceNotifyTime, setAttendanceNotifyTime] = useState('18:00')
+  const [dailySummaryTime, setDailySummaryTime] = useState('19:00')
+  const [weeklyBackupTime, setWeeklyBackupTime] = useState('09:00')
   const contactInfoInitialized = useRef(false)
 
   const { data: settings } = useQuery({
@@ -654,6 +658,9 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
       setContactInfo(settings.contact_info ?? '')
       setBackupChatId(settings.backup_channel_chat_id ?? '')
       setReportChatId(settings.report_channel_chat_id ?? '')
+      setAttendanceNotifyTime(settings.attendance_notify_time ?? '18:00')
+      setDailySummaryTime(settings.daily_summary_time ?? '19:00')
+      setWeeklyBackupTime(settings.weekly_backup_time ?? '09:00')
     }
   }, [settings])
 
@@ -662,6 +669,9 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
       contact_info: contactInfo,
       backup_channel_chat_id: backupChatId,
       report_channel_chat_id: reportChatId,
+      attendance_notify_time: attendanceNotifyTime,
+      daily_summary_time: dailySummaryTime,
+      weekly_backup_time: weeklyBackupTime,
     }),
     onSuccess: () => {
       toast({ title: 'Contact info saved' })
@@ -815,6 +825,24 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
         </Button>
       </div>
 
+      {/* Attendance & Marks notification time */}
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-base">Attendance & Marks Notification</h3>
+        <p className="text-sm text-muted-foreground">
+          Daily attendance and marks summary is sent to each group's linked Telegram chat at the configured time.
+        </p>
+        <div className="flex items-center gap-4">
+          <div className="space-y-2">
+            <Label>Send time</Label>
+            <TimeInput value={attendanceNotifyTime} onChange={setAttendanceNotifyTime} className="w-32" />
+          </div>
+        </div>
+        <Button onClick={() => saveSettingsMutation.mutate()} disabled={saveSettingsMutation.isPending}>
+          {saveSettingsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Save
+        </Button>
+      </div>
+
       {/* Telegram Channel Settings */}
       <div className="rounded-xl border border-border/60 bg-card shadow-sm p-5 space-y-4">
         <h3 className="font-semibold text-base">Notification Channels</h3>
@@ -831,7 +859,13 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
               placeholder="-1001234567890"
               className="font-mono text-sm"
             />
-            <p className="text-xs text-muted-foreground">Weekly DB backups will be sent here (Sundays 9 AM)</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-xs text-muted-foreground flex-1">Weekly DB backups will be sent here (Sundays)</p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label className="text-xs text-muted-foreground">Time:</Label>
+                <TimeInput value={weeklyBackupTime} onChange={setWeeklyBackupTime} className="w-28" />
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Daily Report Channel Chat ID</Label>
@@ -841,7 +875,13 @@ function BotSetupTab({ toast }: { toast: ReturnType<typeof useToast>['toast'] })
               placeholder="-1001234567890"
               className="font-mono text-sm"
             />
-            <p className="text-xs text-muted-foreground">Daily income summaries will be sent here (7 PM)</p>
+            <div className="flex items-center gap-3 mt-1">
+              <p className="text-xs text-muted-foreground flex-1">Daily income summaries will be sent here</p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label className="text-xs text-muted-foreground">Time:</Label>
+                <TimeInput value={dailySummaryTime} onChange={setDailySummaryTime} className="w-28" />
+              </div>
+            </div>
           </div>
         </div>
         <Button

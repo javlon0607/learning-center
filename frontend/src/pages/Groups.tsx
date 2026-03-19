@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/use-toast'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, Search, MoreHorizontal, Eye, Pencil, Trash2, Loader2, BookOpen, Users, ChevronLeft, ChevronRight, Send } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/utils'
@@ -66,6 +67,7 @@ export function Groups() {
   const { toast } = useToast()
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active')
   const [formOpen, setFormOpen] = useState(false)
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -138,11 +140,16 @@ export function Groups() {
     },
   })
 
-  const filteredGroups = groups.filter(
-    (g) =>
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.subject?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredGroups = useMemo(() => {
+    const byTab = activeTab === 'active'
+      ? groups.filter(g => g.status === 'active')
+      : groups.filter(g => g.status === 'inactive' || g.status === 'completed')
+    return byTab.filter(
+      (g) =>
+        g.name.toLowerCase().includes(search.toLowerCase()) ||
+        g.subject?.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [groups, search, activeTab])
 
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
@@ -152,7 +159,7 @@ export function Groups() {
     [filteredGroups, page]
   )
 
-  useEffect(() => { setPage(1) }, [search])
+  useEffect(() => { setPage(1) }, [search, activeTab])
 
   const activeCount = groups.filter(g => g.status === 'active').length
   const totalStudents = groups.reduce((sum, g) => sum + (g.student_count || 0), 0)
@@ -264,7 +271,23 @@ export function Groups() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'active' | 'archived')}>
+          <TabsList>
+            <TabsTrigger value="active">
+              {t('groups.tab_active', 'Active')}
+              <span className="ml-2 text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-1.5 py-0.5 rounded-full font-medium">
+                {groups.filter(g => g.status === 'active').length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="archived">
+              {t('groups.tab_archived', 'Completed / Inactive')}
+              <span className="ml-2 text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-medium">
+                {groups.filter(g => g.status === 'inactive' || g.status === 'completed').length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -290,14 +313,14 @@ export function Groups() {
                 <TableHead>{t('groups.col_room', 'Room')}</TableHead>
                 <TableHead>{t('groups.col_students', 'Students')}</TableHead>
                 <TableHead>{t('groups.col_price', 'Price')}</TableHead>
-                <TableHead>{t('groups.col_status', 'Status')}</TableHead>
+                {activeTab === 'archived' && <TableHead>{t('groups.col_status', 'Status')}</TableHead>}
                 <TableHead className="w-[70px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredGroups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-16 text-center">
+                  <TableCell colSpan={activeTab === 'archived' ? 9 : 8} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <BookOpen className="h-10 w-10 opacity-20" />
                       <p className="font-medium">{search ? t('groups.empty_search', 'No groups match your search') : t('groups.empty_msg', 'No groups yet')}</p>
@@ -335,11 +358,13 @@ export function Groups() {
                       </span>
                     </TableCell>
                     <TableCell>{formatCurrency(group.price)}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusColors[group.status]}>
-                        {group.status === 'active' ? t('common.status_active', 'Active') : group.status === 'inactive' ? t('common.status_inactive', 'Inactive') : t('groups.form_status_completed', 'Completed')}
-                      </Badge>
-                    </TableCell>
+                    {activeTab === 'archived' && (
+                      <TableCell>
+                        <Badge variant={statusColors[group.status]}>
+                          {group.status === 'inactive' ? t('common.status_inactive', 'Inactive') : t('groups.form_status_completed', 'Completed')}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

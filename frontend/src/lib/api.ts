@@ -1166,7 +1166,7 @@ export const telegramApi = {
 }
 
 export const telegramSettingsApi = {
-  get: () => api.get<{ contact_info?: string; backup_channel_chat_id?: string; report_channel_chat_id?: string }>('/telegram-settings'),
+  get: () => api.get<{ contact_info?: string; backup_channel_chat_id?: string; report_channel_chat_id?: string; attendance_notify_time?: string; daily_summary_time?: string; weekly_backup_time?: string }>('/telegram-settings'),
   save: (data: Record<string, string>) => api.put<{ ok: boolean }>('/telegram-settings', data),
 }
 

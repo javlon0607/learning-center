@@ -3704,7 +3704,7 @@ try {
                 jsonResponse($map);
             } elseif ($method === 'PUT') {
                 $stmt = db()->prepare("INSERT INTO telegram_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value");
-                foreach (['contact_info', 'backup_channel_chat_id', 'report_channel_chat_id'] as $allowed) {
+                foreach (['contact_info', 'backup_channel_chat_id', 'report_channel_chat_id', 'attendance_notify_time', 'daily_summary_time', 'weekly_backup_time'] as $allowed) {
                     if (isset($input[$allowed])) $stmt->execute([$allowed, (string)$input[$allowed]]);
                 }
                 jsonResponse(['ok' => true]);
@@ -4632,7 +4632,7 @@ try {
             } else { jsonError('Method not allowed', 405); }
             break;
 
-        // ── Cron: Daily attendance+marks notification (6 PM) ─────────────
+        // ── Cron: Daily attendance+marks notification ────────────────────
         case 'cron-group-notifications':
             // Accept cron token OR admin JWT
             $cronToken = getenv('CRON_SECRET') ?: '';
@@ -4642,6 +4642,15 @@ try {
             else { requireRole(['admin']); }
 
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
+
+            // Time check: only run at configured time
+            try {
+                $cfgTime = db()->query("SELECT value FROM telegram_settings WHERE key = 'attendance_notify_time'")->fetchColumn();
+                if ($cfgTime && date('H:i') !== $cfgTime) {
+                    jsonResponse(['ok' => true, 'skipped' => true, 'reason' => 'Not the configured time (' . $cfgTime . ')']);
+                    break;
+                }
+            } catch (Exception $e) { /* proceed if settings unavailable */ }
 
             $today = date('Y-m-d');
             $sent = 0;
@@ -4752,8 +4761,25 @@ try {
 
             $today = date('Y-m-d');
 
-            // Get backup channel chat ID
             try { db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)"); } catch (PDOException $e) {}
+
+            // Time check: only run at configured time
+            try {
+                $cfgTime = db()->query("SELECT value FROM telegram_settings WHERE key = 'daily_summary_time'")->fetchColumn();
+                if ($cfgTime && date('H:i') !== $cfgTime) {
+                    jsonResponse(['ok' => true, 'skipped' => true, 'reason' => 'Not the configured time (' . $cfgTime . ')']);
+                    break;
+                }
+            } catch (Exception $e) { /* proceed */ }
+
+            // Deduplication: skip if already sent today
+            $alreadySent = db()->prepare("SELECT 1 FROM telegram_log WHERE trigger_type = 'daily_income_summary' AND created_at::date = ? AND status = 'sent' LIMIT 1");
+            $alreadySent->execute([$today]);
+            if ($alreadySent->fetch()) {
+                jsonResponse(['ok' => true, 'skipped' => true, 'reason' => 'Already sent today']);
+                break;
+            }
+
             $chatIdStmt = db()->prepare("SELECT value FROM telegram_settings WHERE key = 'report_channel_chat_id'");
             $chatIdStmt->execute();
             $reportChatId = $chatIdStmt->fetchColumn();
@@ -4825,6 +4851,24 @@ try {
             if ($method !== 'POST') { jsonError('Method not allowed', 405); break; }
 
             try { db()->exec("CREATE TABLE IF NOT EXISTS telegram_settings (key VARCHAR(50) PRIMARY KEY, value TEXT)"); } catch (PDOException $e) {}
+
+            // Time check: only run at configured time
+            try {
+                $cfgTime = db()->query("SELECT value FROM telegram_settings WHERE key = 'weekly_backup_time'")->fetchColumn();
+                if ($cfgTime && date('H:i') !== $cfgTime) {
+                    jsonResponse(['ok' => true, 'skipped' => true, 'reason' => 'Not the configured time (' . $cfgTime . ')']);
+                    break;
+                }
+            } catch (Exception $e) { /* proceed */ }
+
+            // Deduplication: skip if already sent this week
+            $alreadySentBackup = db()->prepare("SELECT 1 FROM telegram_log WHERE trigger_type = 'backup' AND created_at >= date_trunc('week', NOW()) AND status = 'sent' LIMIT 1");
+            $alreadySentBackup->execute();
+            if ($alreadySentBackup->fetch()) {
+                jsonResponse(['ok' => true, 'skipped' => true, 'reason' => 'Already sent this week']);
+                break;
+            }
+
             $chatIdStmt = db()->prepare("SELECT value FROM telegram_settings WHERE key = 'backup_channel_chat_id'");
             $chatIdStmt->execute();
             $backupChatId = $chatIdStmt->fetchColumn();
