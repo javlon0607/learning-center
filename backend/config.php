@@ -2014,6 +2014,32 @@ function runMigrations() {
             getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
         }
     } catch (PDOException $e) { /* ignore */ }
+
+    // Migration: translations for new UI strings (marks blocked, group search, group tabs)
+    try {
+        $m = 'translations_ui_updates_202603';
+        $done = (int)getDB()->query("SELECT COUNT(*) FROM db_migrations WHERE name='$m'")->fetchColumn();
+        if (!$done) {
+            $stmt = getDB()->prepare("INSERT INTO translations (lang, key, value) VALUES (?, ?, ?) ON CONFLICT (lang, key) DO NOTHING");
+            foreach ([
+                ['en', 'marks.blocked_absent',      'Absent'],
+                ['uz', 'marks.blocked_absent',      'Kelmagan'],
+                ['en', 'marks.blocked_excused',     'Excused'],
+                ['uz', 'marks.blocked_excused',     'Sababli'],
+                ['en', 'attendance.search_group',   'Search group...'],
+                ['uz', 'attendance.search_group',   'Guruhni qidirish...'],
+                ['en', 'attendance.no_groups_found','No groups found'],
+                ['uz', 'attendance.no_groups_found','Guruh topilmadi'],
+                ['en', 'groups.tab_active',         'Active'],
+                ['uz', 'groups.tab_active',         'Faol'],
+                ['en', 'groups.tab_archived',       'Completed / Inactive'],
+                ['uz', 'groups.tab_archived',       'Tugatilgan / Nofaol'],
+            ] as [$lang, $key, $value]) {
+                $stmt->execute([$lang, $key, $value]);
+            }
+            getDB()->exec("INSERT INTO db_migrations (name) VALUES ('$m')");
+        }
+    } catch (PDOException $e) { /* ignore */ }
 }
 
 // ── JWT helpers ──────────────────────────────────────────────────────────

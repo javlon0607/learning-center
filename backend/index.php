@@ -1468,20 +1468,6 @@ try {
                         $attendanceOld[$sid] = $oldStatus;
                         $attendanceNew[$sid] = $status;
 
-                        // Telegram: notify parent if marked absent or late
-                        if (in_array($status, ['absent', 'late'])) {
-                            try {
-                                $nameStmt = db()->prepare("SELECT first_name || ' ' || last_name AS name FROM students WHERE id = ?");
-                                $nameStmt->execute([$sid]);
-                                $studentName = $nameStmt->fetchColumn() ?: 'Student';
-                                $groupStmt = db()->prepare("SELECT name FROM groups WHERE id = ?");
-                                $groupStmt->execute([$group]);
-                                $groupName = $groupStmt->fetchColumn() ?: 'Group';
-                                $attId = $oldRow ? (int)$oldRow['id'] : 0;
-                                if (!$attId) { $getId = db()->prepare("SELECT id FROM attendance WHERE student_id=? AND group_id=? AND attendance_date=?"); $getId->execute([$sid,$group,$date]); $attId=(int)$getId->fetchColumn(); }
-                                telegramNotifyStudent($sid, "Your child {$studentName} was marked <b>{$status}</b> in {$groupName} on {$date}.", 'attendance', $attId);
-                            } catch (Exception $e) { /* ignore telegram errors */ }
-                        }
                     }
                 }
                 if (!empty($attendanceNew)) {
