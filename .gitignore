@@ -44,3 +44,10 @@ backend/telegram.crt
 docker-compose.yml
 backend/Dockerfile
 frontend/Dockerfile
+backup_prod.sql
+cookies.txt
+server.crt
+server.key
+docker-compose.yml.old
+.claude/
+frontend-build/
