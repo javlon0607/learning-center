@@ -4538,7 +4538,7 @@ try {
                 $stmt = db()->prepare("
                     SELECT e.student_id, s.first_name || ' ' || s.last_name AS student_name,
                            m.id AS mark_id, m.score, m.topic, m.notes AS mark_notes,
-                           m.updated_at AS saved_at, u.name AS marked_by_name,
+                           m.created_at AS saved_at, u.name AS marked_by_name,
                            a.status AS attendance_status
                     FROM enrollments e
                     JOIN students s ON e.student_id = s.id
