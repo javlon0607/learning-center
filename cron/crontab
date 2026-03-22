@@ -1,0 +1,8 @@
+# Attendance+marks to Telegram — 19:00 Tashkent (14:00 UTC)
+0 14 * * * wget -qO- --post-data='' --header="Authorization: Bearer ${CRON_SECRET}" --header="Content-Type: application/json" http://host.docker.internal:80/api/cron-group-notifications >> /var/log/cron.log 2>&1
+
+# Income summary — 20:30 Tashkent (15:30 UTC)
+30 15 * * * wget -qO- --post-data='' --header="Authorization: Bearer ${CRON_SECRET}" --header="Content-Type: application/json" http://host.docker.internal:80/api/cron-daily-summary >> /var/log/cron.log 2>&1
+
+# DB backup to Telegram — Sunday 9:00 AM Tashkent (04:00 UTC)
+0 4 * * 0 wget -qO- --post-data='' --header="Authorization: Bearer ${CRON_SECRET}" --header="Content-Type: application/json" http://host.docker.internal:80/api/cron-backup >> /var/log/cron.log 2>&1
