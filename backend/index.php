@@ -1425,7 +1425,7 @@ try {
                            s.phone, s.parent_phone,
                            a.id AS attendance_id, a.status AS attendance_status,
                            u.name AS marked_by_name,
-                           a.updated_at AS saved_at
+                           a.created_at AS saved_at
                     FROM enrollments e
                     JOIN students s ON e.student_id = s.id
                     LEFT JOIN attendance a ON a.student_id = e.student_id AND a.group_id = e.group_id AND a.attendance_date = ?

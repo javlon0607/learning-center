@@ -44,4 +44,3 @@ backend/telegram.crt
 docker-compose.yml
 backend/Dockerfile
 frontend/Dockerfile
-cron/
